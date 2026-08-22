@@ -284,7 +284,8 @@ export default function AssignmentsTable() {
         getRowKey={(row) => row.assignmentId}
         emptyText={isLoading ? "Loading assignments..." : "No assignments found."}
         showPagination
-        footerText={`SHOWING ${rows.length} ENTRIES`}
+        pageSize={10}
+        pageSizeOptions={[10, 20, 30]}
         toolbar={
           <div className="flex items-center gap-3">
             <label className="module-glass-control hidden h-8 w-[300px] items-center gap-2 px-3 md:flex">

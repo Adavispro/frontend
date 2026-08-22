@@ -50,6 +50,7 @@ const normalizeTopologyRecord = (kind: TopologyKind, value: unknown) => {
     return {
       ...record,
       plantId: stringId(record.plantId, stringId(record.plantCode)),
+      plantName: stringId(record.plantName, stringId(record.name, stringId(record.plantCode))),
       tenantId: stringId(record.tenantId),
     };
   }
@@ -57,6 +58,7 @@ const normalizeTopologyRecord = (kind: TopologyKind, value: unknown) => {
     return {
       ...record,
       blockId: stringId(record.blockId, stringId(record.blockCode)),
+      blockName: stringId(record.blockName, stringId(record.name, stringId(record.blockCode))),
       tenantId: stringId(record.tenantId),
       plantId: stringId(record.plantId),
     };
@@ -65,6 +67,7 @@ const normalizeTopologyRecord = (kind: TopologyKind, value: unknown) => {
     return {
       ...record,
       areaId: stringId(record.areaId, stringId(record.areaCode)),
+      areaName: stringId(record.areaName, stringId(record.name, stringId(record.areaCode))),
       tenantId: stringId(record.tenantId),
       plantId: stringId(record.plantId),
       blockId: stringId(record.blockId),
@@ -74,6 +77,7 @@ const normalizeTopologyRecord = (kind: TopologyKind, value: unknown) => {
     return {
       ...record,
       roomId: stringId(record.roomId, stringId(record.roomCode)),
+      roomName: stringId(record.roomName, stringId(record.name, stringId(record.roomCode))),
       tenantId: stringId(record.tenantId),
       plantId: stringId(record.plantId),
       areaId: stringId(record.areaId),

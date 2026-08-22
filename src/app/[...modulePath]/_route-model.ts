@@ -380,6 +380,7 @@ export function isMasterChildRoute(modulePath: ModulePath) {
     isLicenseHistoryPath(modulePath) ||
     isAuditLogsPath(modulePath) ||
     isBulkUploadPath(modulePath) ||
+    isWorkflowMdmPath(modulePath) ||
     isUserDetailPath(modulePath)
   );
 }

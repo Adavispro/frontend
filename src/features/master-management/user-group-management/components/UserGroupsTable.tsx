@@ -360,8 +360,11 @@ export default function UserGroupsTable() {
       <DataTable
         title="User Groups"
         columns={columns}
-        rows={visibleRows}
+        rows={filteredRows}
         getRowKey={(row) => row.id}
+        showPagination
+        pageSize={10}
+        pageSizeOptions={[10, 20, 30]}
         toolbar={
           <UserGroupsToolbar
             appliedFilterCount={appliedFilterCount}
@@ -370,11 +373,7 @@ export default function UserGroupsTable() {
             onSearchChange={handleSearchChange}
           />
         }
-        footerText={`Showing ${firstEntry} to ${lastEntry} of ${filteredRows.length} entries`}
-        currentPage={currentPage}
-        totalPages={totalPages}
         emptyText={isLoading ? "Loading user groups..." : "No user groups found."}
-        onPageChange={setPage}
       />
 
       <UserGroupFiltersPanel

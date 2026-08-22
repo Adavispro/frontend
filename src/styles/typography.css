@@ -144,6 +144,7 @@
     font-size: 0.5rem;     /* 8px */
     line-height: 0.625rem;
     font-weight: 500;
+    font-family: var(--font-poppins);
     color: var(--color-text-heading);
   }
 
@@ -151,6 +152,7 @@
     font-size: 0.9375rem;  /* 15px */
     line-height: 1rem;
     font-weight: 600;
+    font-family: var(--font-poppins);
     color: var(--color-text-heading);
   }
 
@@ -158,6 +160,7 @@
     font-size: 0.625rem;   /* 10px */
     line-height: 0.75rem;
     font-weight: 600;
+    font-family: var(--font-poppins);
     color: #5B938B;
   }
 
@@ -165,6 +168,7 @@
     font-size: 0.5625rem;  /* 9px */
     line-height: 0.75rem;
     font-weight: 500;
+    font-family: var(--font-poppins);
     color: var(--color-text-heading);
   }
 
@@ -172,6 +176,7 @@
     font-size: 0.5625rem;  /* 9px */
     line-height: 0.75rem;
     font-weight: 600;
+    font-family: var(--font-poppins);
     color: var(--color-primary);
   }
 

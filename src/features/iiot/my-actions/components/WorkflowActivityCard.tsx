@@ -132,9 +132,9 @@ export default function WorkflowActivityCard({
   const activeCount = (pendingMyAction || 0) + (pendingReview || 0) + (pendingApproval || 0);
   const activityPercentage = total > 0 ? Math.round((activeCount / total) * 100) : 0;
 
-  // Donut geometry constants
-  const size = 160;
-  const strokeWidth = 18;
+  // Donut geometry constants (compact to fit nicely alongside KPI cards)
+  const size = 88;
+  const strokeWidth = 10;
   const center = size / 2;
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
@@ -153,32 +153,27 @@ export default function WorkflowActivityCard({
   });
 
   return (
-    <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm flex flex-col justify-between">
+    <div className="p-4 sm:p-5 rounded-2xl bg-white border border-slate-200 shadow-sm flex flex-col justify-between h-full">
       {/* Card Header */}
-      <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
-        <div className="flex items-center gap-2">
-          <div className="h-7 w-7 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
-            <ChartDonut className="h-4 w-4" />
+      <div className="flex items-center justify-between pb-2 border-b border-slate-100 mb-2">
+        <div className="flex items-center gap-1.5">
+          <div className="h-6 w-6 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 flex-shrink-0">
+            <ChartDonut className="h-3.5 w-3.5" />
           </div>
-          <div>
-            <h2 className="text-xs font-semibold text-slate-700 uppercase tracking-wider">
-              Workflow Activity
-            </h2>
-            <span className="text-[11px] text-slate-400">
-              {total > 0 ? `${total} Total Batch Stage Tasks` : "No active workload"}
-            </span>
-          </div>
+          <h2 className="text-xs font-semibold text-slate-700 uppercase tracking-wider">
+            Workflow Activity
+          </h2>
         </div>
         {total > 0 && (
-          <span className="text-[11px] font-mono font-semibold text-indigo-600 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-full">
-            {activeCount} Active ({activityPercentage}%)
+          <span className="text-[10px] font-mono font-semibold text-indigo-600 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-full">
+            {activityPercentage}%
           </span>
         )}
       </div>
 
-      {/* Card Body: Donut on Left, Legend on Right */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-6 py-2">
-        {/* Donut Chart Container */}
+      {/* Card Body: Mini Donut Chart + Compact 2-column or list Breakdown */}
+      <div className="flex items-center justify-between gap-3 py-1">
+        {/* Mini Donut Chart */}
         <div className="relative flex-shrink-0 flex items-center justify-center">
           <svg
             width={size}
@@ -221,38 +216,41 @@ export default function WorkflowActivityCard({
 
           {/* Center Text Overlay */}
           <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
-            <span className="text-2xl font-bold font-mono text-slate-900 leading-none">
-              {isLoading ? "-" : total > 0 ? `${activityPercentage}%` : "0%"}
+            <span className="text-base font-bold font-mono text-slate-900 leading-none">
+              {isLoading ? "-" : `${total}`}
             </span>
-            <span className="text-[10px] font-medium text-slate-500 mt-1 uppercase tracking-wider">
-              {total > 0 ? "Activity" : "No Activity"}
+            <span className="text-[8px] font-medium text-slate-400 mt-0.5 uppercase tracking-wider">
+              Tasks
             </span>
           </div>
         </div>
 
-        {/* Legend on Right */}
-        <div className="flex-1 w-full space-y-2.5 sm:pl-4">
+        {/* Compact Legend on Right */}
+        <div className="flex-1 min-w-0 grid grid-cols-1 gap-1">
           {segments.map((seg) => (
             <div
               key={seg.id}
-              className="flex items-center justify-between text-xs hover:bg-slate-50/80 p-1.5 rounded-lg transition"
+              className="flex items-center justify-between text-[11px] hover:bg-slate-50 p-0.5 rounded transition"
               title={`${seg.label}: ${seg.count} tasks (${seg.percentage}%)`}
             >
-              <div className="flex items-center gap-2 min-w-0">
+              <div className="flex items-center gap-1.5 min-w-0">
                 <span
-                  className={`h-2.5 w-2.5 rounded-full flex-shrink-0 ${seg.dotClass}`}
+                  className={`h-2 w-2 rounded-full flex-shrink-0 ${seg.dotClass}`}
                   aria-hidden="true"
                 />
-                <span className="text-slate-600 font-medium truncate">
-                  {seg.label}
+                <span className="text-slate-600 font-medium truncate text-[10px]">
+                  {seg.label === "Pending My Action"
+                    ? "My Action"
+                    : seg.label === "Pending Review"
+                    ? "Review"
+                    : seg.label === "Pending Approval"
+                    ? "Approval"
+                    : "Completed"}
                 </span>
               </div>
-              <div className="flex items-center gap-2 pl-3 flex-shrink-0">
-                <span className="font-mono font-bold text-slate-900 text-xs">
-                  {seg.percentage}%
-                </span>
-                <span className="text-[10px] font-mono text-slate-400">
-                  ({seg.count})
+              <div className="flex items-center gap-1 pl-1 flex-shrink-0">
+                <span className="font-mono font-bold text-slate-800 text-[10px]">
+                  {seg.count}
                 </span>
               </div>
             </div>

@@ -391,8 +391,11 @@ export default function DepartmentsTable() {
       <DataTable
         title="Departments"
         columns={columns}
-        rows={visibleRows}
+        rows={filteredRows}
         getRowKey={(row) => row.id}
+        showPagination
+        pageSize={10}
+        pageSizeOptions={[10, 20, 30]}
         toolbar={
           <DepartmentsToolbar
             appliedFilterCount={appliedFilterCount}
@@ -401,11 +404,7 @@ export default function DepartmentsTable() {
             onSearchChange={handleSearchChange}
           />
         }
-        footerText={`Showing ${firstEntry} to ${lastEntry} of ${filteredRows.length} entries`}
-        currentPage={currentPage}
-        totalPages={totalPages}
         emptyText={isLoading ? "Loading departments..." : "No departments found."}
-        onPageChange={setPage}
       />
 
       <DepartmentFiltersPanel

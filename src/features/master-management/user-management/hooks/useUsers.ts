@@ -9,7 +9,7 @@ import type { UsersListQuery } from "../api/types";
 const PAGE_SIZE = 20;
 
 export function useUsers({
-  pageSize = PAGE_SIZE,
+  pageSize: initialPageSize = PAGE_SIZE,
   filters = {},
 }: {
   pageSize?: number;
@@ -17,6 +17,7 @@ export function useUsers({
 } = {}) {
   const { isActive, isBlocked, lifecycleStatus } = filters;
   const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(initialPageSize);
   const [usersPage, setUsersPage] = useState<UsersPage | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
@@ -45,6 +46,13 @@ export function useUsers({
     setIsLoading(true);
     setErrorMessage("");
     setPage(nextPage);
+  };
+
+  const changePageSize = (nextPageSize: number) => {
+    setIsLoading(true);
+    setErrorMessage("");
+    setPageSize(nextPageSize);
+    setPage(0);
   };
 
   const removeUser = (userId: string) => {
@@ -78,9 +86,11 @@ export function useUsers({
     errorMessage,
     isLoading,
     page,
+    pageSize,
     usersPage,
     clearError: () => setErrorMessage(""),
     setPage: changePage,
+    setPageSize: changePageSize,
     removeUser,
     replaceUser,
   };

@@ -589,8 +589,9 @@ export default function IiotMasterWorkspace({
           rows={rows as IiotMasterRecord[]}
           getRowKey={(row, index) => `${getRecordId(section, row)}-${index}`}
           emptyText={isLoading ? "Loading IIOT master data..." : "No records found."}
-          footerText={`SHOWING ${rows.length} ENTRIES`}
-          showPagination={false}
+          showPagination
+          pageSize={10}
+          pageSizeOptions={[10, 20, 30]}
           toolbar={
             <div className="flex items-center gap-3">
               <label className="module-glass-control hidden h-8 w-[290px] items-center gap-2 rounded-[4px] px-3 text-text-secondary md:flex">

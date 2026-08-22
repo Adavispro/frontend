@@ -165,8 +165,9 @@ export default function TenantsTable() {
         rows={rows}
         getRowKey={(row) => row.tenantId}
         emptyText={isLoading ? "Loading tenants..." : "No tenants found."}
-        footerText={`SHOWING ${rows.length} OF ${tenants.length} ENTRIES`}
-        showPagination={false}
+        showPagination
+        pageSize={10}
+        pageSizeOptions={[10, 20, 30]}
         toolbar={
           <div className="flex items-center gap-3">
             <label className="module-glass-control hidden h-8 w-[300px] items-center gap-2 rounded-[4px] px-3 text-text-secondary md:flex"><MagnifyingGlass size={13} /><span className="sr-only">Search tenants</span><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search Tenants" className="type-filter-value min-w-0 flex-1 bg-transparent outline-none" /></label>

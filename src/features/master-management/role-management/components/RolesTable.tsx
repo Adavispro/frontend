@@ -49,5 +49,74 @@ export default function RolesTable() {
   ], []);
   const changeStatus = async () => { if (!statusTarget) return; setIsChangingStatus(true); try { const updated = await setRoleActive(statusTarget, !statusTarget.isActive); replaceRole(updated); setNotification({ text: `Role ${statusTarget.isActive ? "deactivated" : "activated"} successfully.`, variant: "success" }); setStatusTarget(null); } catch (error) { setNotification({ text: error instanceof Error ? error.message : "Unable to update role status.", variant: "error" }); } finally { setIsChangingStatus(false); } };
 
-  return <><DataTable title="Roles List" columns={columns} rows={rows} getRowKey={(row) => row.id} emptyText={isLoading ? "Loading roles..." : "No roles found."} showPagination={false} footerText={`SHOWING ${rows.length} ENTRIES`} toolbar={<div className="flex items-center gap-3"><label className="module-glass-control hidden h-8 w-[310px] items-center gap-2 rounded-[4px] px-3 text-text-secondary md:flex"><MagnifyingGlass size={14} /><span className="sr-only">Search roles</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search Roles" className="min-w-0 flex-1 bg-transparent text-[10px] outline-none" /></label><Link href={ROUTES.masterCreateRole} className="inline-flex h-8 items-center gap-1.5 rounded-[4px] bg-primary px-4 text-[10px] font-semibold text-white shadow-[0_8px_18px_rgba(7,92,175,0.18)]"><Plus size={13} />Create Role</Link></div>} /><ConfirmDialog isOpen={Boolean(statusTarget)} title={`${statusTarget?.isActive ? "Deactivate" : "Activate"} Role`} message={`${statusTarget?.isActive ? "Deactivate" : "Activate"} ${statusTarget?.roleName || statusTarget?.name || statusTarget?.roleId || "this role"}?`} confirmLabel={statusTarget?.isActive ? "Deactivate" : "Activate"} isConfirming={isChangingStatus} onConfirm={() => void changeStatus()} onCancel={() => setStatusTarget(null)} />{editingDetails ? <EditRoleDetailsDialog role={editingDetails} onClose={() => setEditingDetails(null)} onUpdated={(role) => { replaceRole(role); setNotification({ text: "Role details updated successfully.", variant: "success" }); }} /> : null}{editingPermissions ? <EditRolePermissionsDialog role={editingPermissions} onClose={() => setEditingPermissions(null)} /> : null}<Snackbar open={Boolean(errorMessage || notification.text)} title={errorMessage || notification.variant === "error" ? "Role operation failed" : "Role updated"} message={errorMessage || notification.text} variant={errorMessage ? "error" : notification.variant} onClose={() => { clearError(); setNotification({ text: "", variant: "success" }); }} /></>;
+  return (
+    <>
+      <DataTable
+        title="Roles List"
+        columns={columns}
+        rows={rows}
+        getRowKey={(row) => row.id}
+        emptyText={isLoading ? "Loading roles..." : "No roles found."}
+        showPagination
+        pageSize={10}
+        pageSizeOptions={[10, 20, 30]}
+        toolbar={
+          <div className="flex items-center gap-3">
+            <label className="module-glass-control hidden h-8 w-[310px] items-center gap-2 rounded-[4px] px-3 text-text-secondary md:flex">
+              <MagnifyingGlass size={14} />
+              <span className="sr-only">Search roles</span>
+              <input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search Roles"
+                className="min-w-0 flex-1 bg-transparent text-[10px] outline-none"
+              />
+            </label>
+            <Link
+              href={ROUTES.masterCreateRole}
+              className="inline-flex h-8 items-center gap-1.5 rounded-[4px] bg-primary px-4 text-[10px] font-semibold text-white shadow-[0_8px_18px_rgba(7,92,175,0.18)]"
+            >
+              <Plus size={13} />
+              Create Role
+            </Link>
+          </div>
+        }
+      />
+      <ConfirmDialog
+        isOpen={Boolean(statusTarget)}
+        title={`${statusTarget?.isActive ? "Deactivate" : "Activate"} Role`}
+        message={`${statusTarget?.isActive ? "Deactivate" : "Activate"} ${statusTarget?.roleName || statusTarget?.name || statusTarget?.roleId || "this role"}?`}
+        confirmLabel={statusTarget?.isActive ? "Deactivate" : "Activate"}
+        isConfirming={isChangingStatus}
+        onConfirm={() => void changeStatus()}
+        onCancel={() => setStatusTarget(null)}
+      />
+      {editingDetails ? (
+        <EditRoleDetailsDialog
+          role={editingDetails}
+          onClose={() => setEditingDetails(null)}
+          onUpdated={(role) => {
+            replaceRole(role);
+            setNotification({ text: "Role details updated successfully.", variant: "success" });
+          }}
+        />
+      ) : null}
+      {editingPermissions ? (
+        <EditRolePermissionsDialog
+          role={editingPermissions}
+          onClose={() => setEditingPermissions(null)}
+        />
+      ) : null}
+      <Snackbar
+        open={Boolean(errorMessage || notification.text)}
+        title={errorMessage || notification.variant === "error" ? "Role operation failed" : "Role updated"}
+        message={errorMessage || notification.text}
+        variant={errorMessage ? "error" : notification.variant}
+        onClose={() => {
+          clearError();
+          setNotification({ text: "", variant: "success" });
+        }}
+      />
+    </>
+  );
 }

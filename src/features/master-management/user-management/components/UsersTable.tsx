@@ -275,14 +275,16 @@ export default function UsersTable({
     errorMessage,
     isLoading,
     page,
+    pageSize,
     removeUser,
     replaceUser,
     setPage,
+    setPageSize,
     usersPage,
   } = useUsers({
     pageSize: statusFilter || countAppliedFilters(appliedFilters) > 0
       ? 100
-      : undefined,
+      : 10,
     filters: statusFilter ? apiStatusFilters[statusFilter] : undefined,
   });
   const columns = useMemo(
@@ -417,11 +419,11 @@ export default function UsersTable({
     );
   }, [allRows, appliedFilters, search, statusFilter, idleUserIds]);
   const totalElements = isClientFiltered ? rows.length : usersPage?.totalElements ?? 0;
-  const pageSize = usersPage?.pageSize ?? 20;
-  const firstEntry = totalElements === 0 ? 0 : isClientFiltered ? 1 : page * pageSize + 1;
+  const effectivePageSize = usersPage?.pageSize ?? pageSize;
+  const firstEntry = totalElements === 0 ? 0 : isClientFiltered ? 1 : page * effectivePageSize + 1;
   const lastEntry = isClientFiltered
     ? rows.length
-    : Math.min((page + 1) * pageSize, totalElements);
+    : Math.min((page + 1) * effectivePageSize, totalElements);
   const tableTitle = isIdleView
     ? "Idle Users List"
     : statusFilter === "active"
@@ -502,10 +504,13 @@ export default function UsersTable({
         footerText={`Showing ${firstEntry} to ${lastEntry} of ${totalElements} entries`}
         currentPage={isClientFiltered ? 1 : page + 1}
         totalPages={isClientFiltered ? 1 : Math.max(usersPage?.totalPages ?? 1, 1)}
+        pageSize={isClientFiltered ? 10 : pageSize}
+        pageSizeOptions={[10, 20, 30]}
         emptyText={isLoading || isIdleLoading ? "Loading users..." : "No users found."}
         onPageChange={
           isClientFiltered ? undefined : (nextPage) => setPage(nextPage - 1)
         }
+        onPageSizeChange={isClientFiltered ? undefined : setPageSize}
       />
 
       <UserFiltersPanel

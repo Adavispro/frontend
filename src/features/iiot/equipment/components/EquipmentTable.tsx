@@ -13,11 +13,23 @@ const statusClasses: Record<EquipmentRow["status"], string> = {
   Offline: "bg-[#ECEFF3] text-[#7A8490]",
 };
 
+export const getBatchDetailHref = (row: EquipmentRow) => {
+  if (row.lastBatchNo && row.lastBatchNo !== "-" && row.lastBatchNo !== "N/A") {
+    const lot = row.lastLotNo && row.lastLotNo !== "-" && row.lastLotNo !== "N/A" ? row.lastLotNo : "01 of 05";
+    return `/iiot/batch-details/${encodeURIComponent(row.lastBatchNo)}?lotNo=${encodeURIComponent(
+      lot
+    )}&equipmentCode=${encodeURIComponent(row.id)}&returnTo=${encodeURIComponent("/iiot/equipment-overview")}`;
+  }
+  return `/iiot/equipment/${encodeURIComponent(row.id)}`;
+};
+
 const equipmentColumns: DataTableColumn<EquipmentRow>[] = [
   {
     key: "id",
     header: "Equipment ID",
-    render: (row) => row.id,
+    render: (row) => (
+      <span className="font-mono font-bold text-slate-900">{row.id}</span>
+    ),
   },
   {
     key: "status",
@@ -29,12 +41,24 @@ const equipmentColumns: DataTableColumn<EquipmentRow>[] = [
   {
     key: "lastBatchNo",
     header: "Batch No.",
-    render: (row) => row.lastBatchNo,
+    render: (row) => (
+      row.lastBatchNo && row.lastBatchNo !== "-" && row.lastBatchNo !== "N/A" ? (
+        <span className="font-mono font-bold text-slate-900">{row.lastBatchNo}</span>
+      ) : (
+        <span className="text-slate-400 font-mono">-</span>
+      )
+    ),
   },
   {
     key: "lastLotNo",
     header: "Lot No.",
-    render: (row) => row.lastLotNo,
+    render: (row) => (
+      row.lastLotNo && row.lastLotNo !== "-" && row.lastLotNo !== "N/A" ? (
+        <span className="font-mono text-slate-700">{row.lastLotNo}</span>
+      ) : (
+        <span className="text-slate-400 font-mono">-</span>
+      )
+    ),
   },
   {
     key: "plantId",
@@ -57,10 +81,10 @@ const equipmentColumns: DataTableColumn<EquipmentRow>[] = [
     disableRowLink: true,
     render: (row) => (
       <Link
-        href={`/iiot/equipment/${encodeURIComponent(row.id)}`}
-        className="font-semibold text-primary"
+        href={getBatchDetailHref(row)}
+        className="font-semibold text-indigo-600 hover:text-indigo-800 transition"
       >
-        View ›
+        View Details ›
       </Link>
     ),
   },
@@ -79,9 +103,7 @@ export default function EquipmentTable({
       columns={equipmentColumns}
       rows={rows}
       getRowKey={(row) => row.id}
-      getRowHref={(row) =>
-        `/iiot/equipment/${encodeURIComponent(row.id)}`
-      }
+      getRowHref={(row) => getBatchDetailHref(row)}
       footerText={`Showing ${rows.length === 0 ? 0 : 1} to ${rows.length} of ${rows.length} entries`}
       currentPage={1}
       totalPages={1}

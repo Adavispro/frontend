@@ -153,6 +153,12 @@ export default function DataTable<T>({
     setInternalPageSize(Math.max(1, pageSize));
   }, [pageSize]);
 
+  useEffect(() => {
+    if (isExternallyPaginated && typeof currentPage === "number") {
+      setInternalPage(currentPage);
+    }
+  }, [currentPage, isExternallyPaginated]);
+
   const normalizedPageSizeOptions = useMemo(() => {
     const options = pageSizeOptions
       .filter((value) => Number.isFinite(value) && value >= 1)
@@ -186,10 +192,12 @@ export default function DataTable<T>({
     ? pageStartIndex + effectivePageSize
     : rows.length;
 
-  const visibleRows = useMemo(
-    () => rows.slice(pageStartIndex, pageEndIndexExclusive),
-    [rows, pageStartIndex, pageEndIndexExclusive],
-  );
+  const visibleRows = useMemo(() => {
+    if (!showPagination || isExternallyPaginated) {
+      return rows;
+    }
+    return rows.slice(pageStartIndex, pageEndIndexExclusive);
+  }, [rows, showPagination, isExternallyPaginated, pageStartIndex, pageEndIndexExclusive]);
 
   const handlePageChange = (page: number) => {
     const nextPage = Math.min(Math.max(page, 1), effectiveTotalPages);
@@ -212,12 +220,12 @@ export default function DataTable<T>({
     setInternalPage(1);
   };
 
-  const computedFooterText = `Showing ${
-    rows.length === 0 ? 0 : pageStartIndex + 1
-  } to ${Math.min(pageEndIndexExclusive, rows.length)} of ${rows.length} entries`;
-  const resolvedFooterText = isExternallyPaginated
-    ? (footerText ?? computedFooterText)
-    : computedFooterText;
+  const computedFooterText = isExternallyPaginated
+    ? `Showing ${rows.length === 0 ? 0 : (effectiveCurrentPage - 1) * effectivePageSize + 1} to ${(effectiveCurrentPage - 1) * effectivePageSize + rows.length} of ${(effectiveCurrentPage - 1) * effectivePageSize + rows.length} entries`
+    : `Showing ${
+        rows.length === 0 ? 0 : pageStartIndex + 1
+      } to ${Math.min(pageEndIndexExclusive, rows.length)} of ${rows.length} entries`;
+  const resolvedFooterText = footerText ?? computedFooterText;
 
   return (
     <section
@@ -237,7 +245,7 @@ export default function DataTable<T>({
       )}
 
       <div className="flex min-h-0 w-full max-w-full flex-1 flex-col overflow-hidden rounded-lg border border-white/75 bg-white/42 shadow-[0_8px_18px_rgba(35,50,70,0.08)] backdrop-blur-md">
-        <div className="min-h-0 w-full max-w-full flex-1 overflow-x-auto overflow-y-hidden">
+        <div className="min-h-0 w-full max-w-full flex-1 overflow-x-auto overflow-y-auto">
           <table
             className={`min-w-full border-collapse text-left ${tableClassName}`}
           >
@@ -265,7 +273,9 @@ export default function DataTable<T>({
                 </tr>
               ) : null}
               {visibleRows.map((row, index) => {
-                const absoluteIndex = pageStartIndex + index;
+                const absoluteIndex = isExternallyPaginated
+                  ? (effectiveCurrentPage - 1) * effectivePageSize + index
+                  : pageStartIndex + index;
                 const rowHref = getRowHref?.(row, absoluteIndex);
 
                 return (

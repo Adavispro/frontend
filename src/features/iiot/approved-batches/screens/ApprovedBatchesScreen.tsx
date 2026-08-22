@@ -30,7 +30,6 @@ import {
 } from "@/features/iiot/equipment/api/reports.api";
 import type { BatchSummary } from "@/features/iiot/equipment/schemas/reports.schema";
 import Pagination from "@/components/ui/Pagination";
-import ApprovedBatchFilterPopover from "../components/ApprovedBatchFilterPopover";
 import { ROUTES } from "@/config/routes";
 
 export interface ApprovedBatchItem {
@@ -73,17 +72,17 @@ type SortField =
 type SortDirection = "asc" | "desc";
 
 // Helper to compute ISO date string for N days ago
-const getDefaultLast10Days = () => {
+const getDefaultLast30Days = () => {
   const now = new Date();
   const past = new Date();
-  past.setDate(now.getDate() - 10);
+  past.setDate(now.getDate() - 30);
   return {
     fromDate: past.toISOString().slice(0, 10),
     toDate: now.toISOString().slice(0, 10),
   };
 };
 
-const defaultDates = getDefaultLast10Days();
+const defaultDates = getDefaultLast30Days();
 
 const defaultFilters: ApprovedBatchFilters = {
   productCode: "ALL",
@@ -92,8 +91,8 @@ const defaultFilters: ApprovedBatchFilters = {
   equipmentType: "ALL",
   lotNo: "ALL",
   approvedBy: "ALL",
-  fromDate: defaultDates.fromDate,
-  toDate: defaultDates.toDate,
+  fromDate: "",
+  toDate: "",
   searchTerm: "",
 };
 
@@ -111,6 +110,7 @@ const toDisplayDate = (value: unknown) => {
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: "UTC",
   }).format(date);
 };
 
@@ -121,7 +121,7 @@ export default function ApprovedBatchesScreen() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [downloadingBatchNo, setDownloadingBatchNo] = useState<string | null>(null);
 
-  // Filters State (Default 10-day range)
+  // In-Page Hierarchical Explicit Filters
   const [filters, setFilters] = useState<ApprovedBatchFilters>(defaultFilters);
 
   // Sorting State: Default requirement = Most recently approved first (Approved Date DESC)
@@ -136,7 +136,8 @@ export default function ApprovedBatchesScreen() {
     setIsLoading(true);
     setErrorMessage(null);
     try {
-      const summaries = await getBatchSummaryPaginated({ status: "APPROVED" });
+      // Dynamic single-page query for latest modified approved batches
+      const summaries = await getBatchSummaryPaginated({ status: "APPROVED", limit: 50 });
       const extracted: ApprovedBatchItem[] = [];
 
       for (const summary of summaries) {
@@ -157,7 +158,7 @@ export default function ApprovedBatchesScreen() {
           const approval = (stage.approval as Record<string, unknown>) || {};
           const rawStatus = toText(approval.status || summary.overallStatus || summary.batchStatus || "PENDING").toUpperCase();
 
-          // CRITICAL: Approved Batches MUST show ONLY status = APPROVED
+          // CRITICAL: Approved Batches MUST show ONLY status = APPROVED / COMPLETED
           if (rawStatus !== "APPROVED" && rawStatus !== "COMPLETED") {
             continue;
           }
@@ -202,9 +203,6 @@ export default function ApprovedBatchesScreen() {
     loadData();
   }, [loadData]);
 
-  // Legacy Filter Popover State
-  const [isFilterOpen, setIsFilterOpen] = useState(false);
-
   // Product Code -> Product Name lookup map
   const productCodeToNameMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -216,7 +214,7 @@ export default function ApprovedBatchesScreen() {
     return map;
   }, [items]);
 
-  // Filter change handlers with dynamic dependency cascading
+  // Hierarchical Filter change handlers with dynamic cascading dependencies
   const handleFilterChange = (key: keyof ApprovedBatchFilters, value: string) => {
     setFilters((prev) => {
       const next = { ...prev, [key]: value };
@@ -229,6 +227,19 @@ export default function ApprovedBatchesScreen() {
           next.productCode = "ALL";
           next.productName = "";
         }
+        // Cascade reset down the hierarchy
+        next.batchNo = "ALL";
+        next.equipmentType = "ALL";
+        next.lotNo = "ALL";
+      } else if (key === "batchNo") {
+        next.batchNo = value;
+        next.equipmentType = "ALL";
+        next.lotNo = "ALL";
+      } else if (key === "equipmentType") {
+        next.equipmentType = value;
+        next.lotNo = "ALL";
+      } else if (key === "lotNo") {
+        next.lotNo = value;
       }
       return next;
     });
@@ -240,31 +251,47 @@ export default function ApprovedBatchesScreen() {
     setCurrentPage(1);
   };
 
-  // Dynamic Options derived from data with cascading dependencies
+  // Hierarchical Cascading Options
   const availableProductCodes = useMemo(() => {
     return Array.from(new Set(items.map((i) => i.productCode).filter(Boolean))).sort();
   }, [items]);
 
-  const scopedItemsForProduct = useMemo(() => {
+  const scopedForBatch = useMemo(() => {
     if (!filters.productCode || filters.productCode === "ALL") return items;
     return items.filter((it) => it.productCode.toUpperCase() === filters.productCode.toUpperCase());
   }, [items, filters.productCode]);
 
   const availableBatchNos = useMemo(() => {
-    return Array.from(new Set(scopedItemsForProduct.map((i) => i.batchNo).filter(Boolean))).sort();
-  }, [scopedItemsForProduct]);
+    return Array.from(new Set(scopedForBatch.map((i) => i.batchNo).filter(Boolean))).sort();
+  }, [scopedForBatch]);
+
+  const scopedForEquipment = useMemo(() => {
+    let list = scopedForBatch;
+    if (filters.batchNo && filters.batchNo !== "ALL") {
+      list = list.filter((it) => it.batchNo.toLowerCase() === filters.batchNo.toLowerCase());
+    }
+    return list;
+  }, [scopedForBatch, filters.batchNo]);
 
   const availableEquipmentTypes = useMemo(() => {
     const types = new Set<string>();
-    scopedItemsForProduct.forEach((i) => {
+    scopedForEquipment.forEach((i) => {
       if (i.equipmentType) types.add(i.equipmentType.toUpperCase());
     });
     return Array.from(types).sort();
-  }, [scopedItemsForProduct]);
+  }, [scopedForEquipment]);
+
+  const scopedForLot = useMemo(() => {
+    let list = scopedForEquipment;
+    if (filters.equipmentType && filters.equipmentType !== "ALL") {
+      list = list.filter((it) => it.equipmentType.toUpperCase() === filters.equipmentType.toUpperCase());
+    }
+    return list;
+  }, [scopedForEquipment, filters.equipmentType]);
 
   const availableLotNos = useMemo(() => {
-    return Array.from(new Set(scopedItemsForProduct.map((i) => i.lotNo).filter(Boolean))).sort();
-  }, [scopedItemsForProduct]);
+    return Array.from(new Set(scopedForLot.map((i) => i.lotNo).filter(Boolean))).sort();
+  }, [scopedForLot]);
 
   const availableApprovedBy = useMemo(() => {
     return Array.from(new Set(items.map((i) => i.approvedBy).filter(Boolean))).sort();
@@ -325,15 +352,14 @@ export default function ApprovedBatchesScreen() {
         if (item.productCode.toUpperCase() !== filters.productCode.toUpperCase()) return false;
       }
 
-      // 3. Product Name Match (only when productCode is ALL)
-      if (filters.productName.trim() && (!filters.productCode || filters.productCode === "ALL")) {
-        const query = filters.productName.trim().toLowerCase();
-        if (!item.productName.toLowerCase().includes(query)) return false;
-      }
-
-      // 4. Batch Number
+      // 3. Batch Number
       if (filters.batchNo && filters.batchNo !== "ALL") {
         if (item.batchNo.toLowerCase() !== filters.batchNo.toLowerCase()) return false;
+      }
+
+      // 4. Equipment Type
+      if (filters.equipmentType && filters.equipmentType !== "ALL") {
+        if (item.equipmentType.toUpperCase() !== filters.equipmentType.toUpperCase()) return false;
       }
 
       // 5. Lot Number
@@ -341,17 +367,12 @@ export default function ApprovedBatchesScreen() {
         if (item.lotNo.toLowerCase() !== filters.lotNo.toLowerCase()) return false;
       }
 
-      // 6. Equipment Type
-      if (filters.equipmentType && filters.equipmentType !== "ALL") {
-        if (item.equipmentType.toUpperCase() !== filters.equipmentType.toUpperCase()) return false;
-      }
-
-      // 7. Approved By
+      // 6. Approved By
       if (filters.approvedBy && filters.approvedBy !== "ALL") {
         if (item.approvedBy.toLowerCase() !== filters.approvedBy.toLowerCase()) return false;
       }
 
-      // 8. Date Range Filtering (Approved At)
+      // 7. Date Range Filtering (Approved At)
       if (filters.fromDate || filters.toDate) {
         const itemDate = new Date(item.approvedAt).getTime();
         if (!isNaN(itemDate)) {
@@ -419,305 +440,390 @@ export default function ApprovedBatchesScreen() {
   const activeFilterCount = useMemo(() => {
     let count = 0;
     if (filters.productCode && filters.productCode !== "ALL") count++;
-    if (filters.productName.trim() && (!filters.productCode || filters.productCode === "ALL")) count++;
     if (filters.batchNo && filters.batchNo !== "ALL") count++;
     if (filters.equipmentType && filters.equipmentType !== "ALL") count++;
     if (filters.lotNo && filters.lotNo !== "ALL") count++;
     if (filters.approvedBy && filters.approvedBy !== "ALL") count++;
-    if (filters.fromDate !== defaultDates.fromDate || filters.toDate !== defaultDates.toDate) count++;
+    if (filters.fromDate || filters.toDate) count++;
     if (filters.searchTerm.trim()) count++;
     return count;
   }, [filters]);
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col">
+    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col space-y-6 p-6">
       {/* Header */}
-      <div className="bg-white border-b border-slate-200 px-6 py-5">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-700">
-              <ShieldCheck className="h-6 w-6" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-slate-900 tracking-tight">
-                Approved Batches
-              </h1>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Authoritative record of QA-approved batches with controlled GxP PDF dossiers.
-              </p>
-            </div>
-          </div>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-3">
+            <ShieldCheck className="h-7 w-7 text-emerald-600" />
+            Approved Batches
+          </h1>
+          <p className="text-sm text-slate-500 mt-1">
+            Authoritative queue of QA-approved batches with controlled GxP PDF batch dossiers.
+          </p>
+        </div>
 
-          <div className="flex items-center gap-3">
-            <button
-              onClick={loadData}
-              disabled={isLoading}
-              className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition border border-slate-200 disabled:opacity-50"
-            >
-              <ArrowClockwise className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
-              <span>Refresh</span>
-            </button>
-          </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={loadData}
+            disabled={isLoading}
+            className="inline-flex items-center gap-2 px-3.5 py-2 bg-white hover:bg-slate-100 text-slate-700 rounded-lg text-sm font-medium border border-slate-200 shadow-sm transition disabled:opacity-50"
+          >
+            <ArrowClockwise className={`h-4 w-4 text-slate-600 ${isLoading ? "animate-spin" : ""}`} />
+            <span>Refresh Queue</span>
+          </button>
         </div>
       </div>
 
-      {/* Main Content Area */}
-      <div className="p-6 flex-1 space-y-5 max-w-7xl mx-auto w-full">
-        {errorMessage && (
-          <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 flex items-center gap-3 text-xs">
-            <WarningCircle className="h-5 w-5 flex-shrink-0 text-rose-600" />
-            <span>{errorMessage}</span>
-          </div>
-        )}
+      {errorMessage && (
+        <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 flex items-center gap-3 text-xs shadow-sm">
+          <WarningCircle className="h-5 w-5 flex-shrink-0 text-rose-600" />
+          <span>{errorMessage}</span>
+        </div>
+      )}
 
-        {/* Toolbar with Search and Legacy Filter Popover Button */}
-        <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="flex flex-1 items-center gap-3 w-full md:w-auto">
-            {/* Keyword Search Input */}
-            <div className="relative flex-1 max-w-md">
-              <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Search approved batches, lots, products, equipment..."
-                value={filters.searchTerm}
-                onChange={(e) => handleFilterChange("searchTerm", e.target.value)}
-                className="w-full bg-white border border-slate-300 rounded-lg pl-9 pr-4 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-              />
-              {filters.searchTerm && (
-                <button
-                  type="button"
-                  onClick={() => handleFilterChange("searchTerm", "")}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              )}
-            </div>
-
-            {/* Filter Popover Anchor & Button */}
-            <div className="relative">
+      {/* Explicit In-Page Hierarchical Filter Toolbar */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
+        {/* Top Filter Row: Search + Date Range + Clear */}
+        <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+          {/* Keyword Search Input */}
+          <div className="relative flex-1 max-w-lg">
+            <MagnifyingGlass className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search by batch, lot, product, or equipment..."
+              value={filters.searchTerm}
+              onChange={(e) => handleFilterChange("searchTerm", e.target.value)}
+              className="w-full bg-white border border-slate-300 rounded-xl pl-9 pr-8 py-2 text-xs font-medium text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 shadow-sm"
+            />
+            {filters.searchTerm && (
               <button
                 type="button"
-                onClick={() => setIsFilterOpen((prev) => !prev)}
-                className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold border transition shadow-sm ${
-                  activeFilterCount > 0
-                    ? "bg-emerald-50 border-emerald-300 text-emerald-900 hover:bg-emerald-100"
-                    : "bg-white border-slate-300 text-slate-700 hover:bg-slate-50"
-                }`}
+                onClick={() => handleFilterChange("searchTerm", "")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
               >
-                <Funnel className={`h-3.5 w-3.5 ${activeFilterCount > 0 ? "text-emerald-600" : "text-slate-500"}`} />
-                <span>Filter</span>
-                <CaretDown className="h-3 w-3 text-slate-400" />
-                {activeFilterCount > 0 && (
-                  <span className="grid h-4 min-w-4 place-items-center rounded-full bg-emerald-600 px-1 text-[10px] font-bold text-white">
-                    {activeFilterCount}
-                  </span>
-                )}
-              </button>
-
-              {/* Filter Popover */}
-              <ApprovedBatchFilterPopover
-                isOpen={isFilterOpen}
-                onClose={() => setIsFilterOpen(false)}
-                filters={filters}
-                onChange={handleFilterChange}
-                onReset={handleResetFilters}
-                availableProductCodes={availableProductCodes}
-                availableBatchNos={availableBatchNos}
-                availableEquipmentTypes={availableEquipmentTypes}
-                availableLotNos={availableLotNos}
-                activeFilterCount={activeFilterCount}
-              />
-            </div>
-
-            {activeFilterCount > 0 && (
-              <button
-                type="button"
-                onClick={handleResetFilters}
-                className="inline-flex items-center gap-1 px-2.5 py-2 text-xs font-medium text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-lg transition"
-                title="Reset filters"
-              >
-                <ArrowCounterClockwise className="h-3.5 w-3.5 text-slate-500" />
-                <span>Reset</span>
+                <X className="h-3.5 w-3.5" />
               </button>
             )}
           </div>
 
-          <span className="text-xs text-slate-500 font-medium">
-            Showing {paginatedItems.length} of {totalItems} approved batches
-          </span>
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* Approved By Dropdown */}
+            <div className="flex items-center gap-1.5">
+              <label className="text-xs font-bold text-slate-600 whitespace-nowrap">
+                Approved By:
+              </label>
+              <select
+                value={filters.approvedBy}
+                onChange={(e) => handleFilterChange("approvedBy", e.target.value)}
+                className="bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-sm"
+              >
+                <option value="ALL">All QA Approvers</option>
+                {availableApprovedBy.map((usr) => (
+                  <option key={usr} value={usr}>
+                    {usr}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Clear All Filters Button */}
+            {activeFilterCount > 0 && (
+              <button
+                type="button"
+                onClick={handleResetFilters}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-xl transition shadow-sm"
+                title="Reset all filters"
+              >
+                <ArrowCounterClockwise className="h-3.5 w-3.5 text-slate-500" />
+                <span>Clear Filters ({activeFilterCount})</span>
+              </button>
+            )}
+          </div>
         </div>
 
-        {/* Table Container */}
-        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden flex flex-col">
+        {/* Hierarchical Explicit Filter Row */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 pt-1">
+          {/* Level 1: Product Code */}
+          <div className="space-y-1">
+            <label className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
+              <Tag className="h-3.5 w-3.5 text-indigo-500" /> Product Code:
+            </label>
+            <select
+              value={filters.productCode}
+              onChange={(e) => handleFilterChange("productCode", e.target.value)}
+              className="w-full bg-slate-50 hover:bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition shadow-sm"
+            >
+              <option value="ALL">All Products</option>
+              {availableProductCodes.map((code) => (
+                <option key={code} value={code}>
+                  {code}
+                </option>
+              ))}
+            </select>
+          </div>
 
-          {/* Table */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-slate-700">
-              <thead className="bg-slate-100/70 border-b border-slate-200 text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+          {/* Product Name: Read-Only Textbox */}
+          <div className="space-y-1">
+            <label className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
+              <Flask className="h-3.5 w-3.5 text-blue-500" /> Product Name:
+            </label>
+            <input
+              type="text"
+              readOnly
+              value={filters.productName || (filters.productCode === "ALL" ? "All Products Active" : "-")}
+              placeholder="Auto-populated product name"
+              className="w-full bg-slate-100/90 border border-slate-300 text-slate-700 font-medium rounded-xl px-2.5 py-1.5 text-xs cursor-default truncate select-all focus:outline-none shadow-inner"
+              title={filters.productName || "Product name auto-populates on product code selection"}
+            />
+          </div>
+
+          {/* Level 2: Batch Number (Cascading) */}
+          <div className="space-y-1">
+            <label className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
+              <Barcode className="h-3.5 w-3.5 text-emerald-500" /> Batch Number:
+            </label>
+            <select
+              value={filters.batchNo}
+              onChange={(e) => handleFilterChange("batchNo", e.target.value)}
+              className="w-full bg-slate-50 hover:bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition shadow-sm"
+            >
+              <option value="ALL">All Batches</option>
+              {availableBatchNos.map((b) => (
+                <option key={b} value={b}>
+                  {b}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Level 3: Equipment Type (Cascading) */}
+          <div className="space-y-1">
+            <label className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
+              <Gear className="h-3.5 w-3.5 text-purple-500" /> Equipment Type:
+            </label>
+            <select
+              value={filters.equipmentType}
+              onChange={(e) => handleFilterChange("equipmentType", e.target.value)}
+              className="w-full bg-slate-50 hover:bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition shadow-sm"
+            >
+              <option value="ALL">All Equipment</option>
+              {availableEquipmentTypes.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Level 4: Lot Number (Cascading) */}
+          <div className="space-y-1">
+            <label className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
+              <Hash className="h-3.5 w-3.5 text-amber-500" /> Lot Number:
+            </label>
+            <select
+              value={filters.lotNo}
+              onChange={(e) => handleFilterChange("lotNo", e.target.value)}
+              className="w-full bg-slate-50 hover:bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition shadow-sm"
+            >
+              <option value="ALL">All Lots</option>
+              {availableLotNos.map((l) => (
+                <option key={l} value={l}>
+                  {l}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Filter Summary Counter */}
+        <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs text-slate-500 font-medium">
+          <div className="flex items-center gap-2">
+            <span>
+              Showing <strong className="text-slate-800 font-bold">{totalItems}</strong> of{" "}
+              <strong className="text-slate-800 font-bold">{items.length}</strong> approved batches
+            </span>
+            {activeFilterCount > 0 && (
+              <span className="px-2 py-0.5 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-full text-[10px] font-bold">
+                Filtered
+              </span>
+            )}
+          </div>
+          <span className="text-[11px] text-slate-400">
+            Page {safeCurrentPage} of {safeTotalPages}
+          </span>
+        </div>
+      </div>
+
+      {/* Table Container */}
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden flex flex-col">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs text-slate-700">
+            <thead className="bg-slate-50 text-[11px] font-bold text-slate-600 uppercase tracking-wider border-b border-slate-200 select-none">
+              <tr>
+                <th
+                  onClick={() => handleSortToggle("batchNo")}
+                  className="px-4 py-3.5 cursor-pointer hover:bg-slate-100 transition"
+                >
+                  <div className="flex items-center">
+                    Batch & Lot No
+                    {renderSortIndicator("batchNo")}
+                  </div>
+                </th>
+                <th
+                  onClick={() => handleSortToggle("productName")}
+                  className="px-4 py-3.5 cursor-pointer hover:bg-slate-100 transition"
+                >
+                  <div className="flex items-center">
+                    Product
+                    {renderSortIndicator("productName")}
+                  </div>
+                </th>
+                <th
+                  onClick={() => handleSortToggle("equipmentCode")}
+                  className="px-4 py-3.5 cursor-pointer hover:bg-slate-100 transition"
+                >
+                  <div className="flex items-center">
+                    Equipment
+                    {renderSortIndicator("equipmentCode")}
+                  </div>
+                </th>
+                <th
+                  onClick={() => handleSortToggle("approvedAt")}
+                  className="px-4 py-3.5 cursor-pointer hover:bg-slate-100 transition"
+                >
+                  <div className="flex items-center">
+                    Approved On
+                    {renderSortIndicator("approvedAt")}
+                  </div>
+                </th>
+                <th
+                  onClick={() => handleSortToggle("approvedBy")}
+                  className="px-4 py-3.5 cursor-pointer hover:bg-slate-100 transition"
+                >
+                  <div className="flex items-center">
+                    Approved By
+                    {renderSortIndicator("approvedBy")}
+                  </div>
+                </th>
+                <th className="px-4 py-3.5 text-center">Status</th>
+                <th className="px-4 py-3.5 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {isLoading ? (
                 <tr>
-                  <th
-                    onClick={() => handleSortToggle("batchNo")}
-                    className="px-4 py-3.5 cursor-pointer hover:bg-slate-200/60 transition"
-                  >
-                    Batch Number {renderSortIndicator("batchNo")}
-                  </th>
-                  <th className="px-4 py-3.5">Lot Number</th>
-                  <th
-                    onClick={() => handleSortToggle("productName")}
-                    className="px-4 py-3.5 cursor-pointer hover:bg-slate-200/60 transition"
-                  >
-                    Product {renderSortIndicator("productName")}
-                  </th>
-                  <th
-                    onClick={() => handleSortToggle("equipmentCode")}
-                    className="px-4 py-3.5 cursor-pointer hover:bg-slate-200/60 transition"
-                  >
-                    Equipment {renderSortIndicator("equipmentCode")}
-                  </th>
-                  <th
-                    onClick={() => handleSortToggle("approvedAt")}
-                    className="px-4 py-3.5 cursor-pointer hover:bg-slate-200/60 transition"
-                  >
-                    Approved On {renderSortIndicator("approvedAt")}
-                  </th>
-                  <th
-                    onClick={() => handleSortToggle("approvedBy")}
-                    className="px-4 py-3.5 cursor-pointer hover:bg-slate-200/60 transition"
-                  >
-                    Approved By {renderSortIndicator("approvedBy")}
-                  </th>
-                  <th className="px-4 py-3.5 text-center">Status</th>
-                  <th className="px-4 py-3.5 text-center">PDF</th>
-                  <th className="px-4 py-3.5 text-right">Actions</th>
+                  <td colSpan={7} className="px-6 py-12 text-center text-slate-500">
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      <ArrowClockwise className="h-6 w-6 animate-spin text-emerald-600" />
+                      <span>Loading approved batches...</span>
+                    </div>
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {isLoading ? (
-                  <tr>
-                    <td colSpan={9} className="px-6 py-12 text-center text-slate-500">
-                      <div className="flex items-center justify-center gap-2">
-                        <ArrowClockwise className="h-5 w-5 animate-spin text-emerald-600" />
-                        <span>Loading approved batches...</span>
-                      </div>
-                    </td>
-                  </tr>
-                ) : paginatedItems.length === 0 ? (
-                  <tr>
-                    <td colSpan={9} className="px-6 py-12 text-center text-slate-500 font-medium">
-                      <div className="flex flex-col items-center justify-center gap-2">
-                        <Funnel className="h-8 w-8 text-slate-400 opacity-60" />
-                        <span className="text-slate-700 font-semibold text-sm">
-                          No approved batches match your filter criteria
-                        </span>
-                        <span className="text-slate-500 text-xs">
-                          Try adjusting date ranges, product, or clearing active filters.
-                        </span>
-                        <button
-                          type="button"
-                          onClick={handleResetFilters}
-                          className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition shadow-sm"
-                        >
-                          <ArrowCounterClockwise className="h-3.5 w-3.5 text-emerald-600" />
-                          Reset Filters
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ) : (
-                  paginatedItems.map((item) => {
-                    const detailUrl = `${ROUTES.iiotBatchDetails}/${encodeURIComponent(
-                      item.batchNo
-                    )}?batchNo=${encodeURIComponent(item.batchNo)}&lotNo=${encodeURIComponent(
-                      item.lotNo
-                    )}&equipmentCode=${encodeURIComponent(
-                      item.equipmentCode
-                    )}&returnTo=${encodeURIComponent(ROUTES.iiotApprovedBatches)}`;
-
-                    const isDownloading = downloadingBatchNo === item.id;
-
-                    return (
-                      <tr
-                        key={item.id}
-                        className="hover:bg-slate-50/80 transition-colors group"
+              ) : paginatedItems.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-6 py-12 text-center text-slate-500 font-medium">
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      <Funnel className="h-8 w-8 text-slate-400 opacity-60" />
+                      <span className="text-slate-700 font-semibold text-sm">
+                        No approved batches match your filter criteria
+                      </span>
+                      <span className="text-slate-500 text-xs">
+                        Try adjusting product, batch, equipment, or clearing active filters.
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleResetFilters}
+                        className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition shadow-sm"
                       >
-                        <td className="px-4 py-3 font-mono font-bold text-slate-900">
-                          {item.batchNo}
-                        </td>
-                        <td className="px-4 py-3 font-mono text-slate-700">{item.lotNo}</td>
-                        <td className="px-4 py-3">
-                          <div className="font-semibold text-slate-900">{item.productName}</div>
-                          <div className="text-[10px] text-slate-400 font-mono">
-                            {item.productCode}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="font-semibold text-slate-800 font-mono">
-                            {item.equipmentCode}
-                          </div>
-                          <div className="text-[10px] text-slate-500">
-                            {item.workflowStage}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-slate-600">
-                          {toDisplayDate(item.approvedAt)}
-                        </td>
-                        <td className="px-4 py-3 font-medium text-slate-800">
-                          {item.approvedBy}
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border bg-emerald-50 text-emerald-700 border-emerald-200">
-                            <CheckCircle className="h-3 w-3" />
-                            {item.displayStatus}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-center">
+                        <ArrowCounterClockwise className="h-3.5 w-3.5 text-emerald-600" />
+                        Reset All Filters
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                paginatedItems.map((item) => {
+                  const detailUrl = `${ROUTES.iiotBatchDetails}/${encodeURIComponent(
+                    item.batchNo
+                  )}?batchNo=${encodeURIComponent(item.batchNo)}&lotNo=${encodeURIComponent(
+                    item.lotNo
+                  )}&equipmentCode=${encodeURIComponent(
+                    item.equipmentCode
+                  )}&returnTo=${encodeURIComponent(ROUTES.iiotApprovedBatches)}`;
+
+                  const isDownloading = downloadingBatchNo === item.id;
+
+                  return (
+                    <tr
+                      key={item.id}
+                      className="hover:bg-slate-50/80 transition group"
+                    >
+                      <td className="px-4 py-3 font-mono font-medium text-slate-900">
+                        <div className="font-bold text-slate-900">{item.batchNo}</div>
+                        <div className="text-[11px] text-slate-500 font-sans">{item.lotNo}</div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="font-medium text-slate-900">{item.productName}</div>
+                        <div className="text-[11px] font-mono text-slate-500">{item.productCode}</div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="font-mono font-semibold px-2 py-0.5 rounded bg-slate-100 border border-slate-200 text-slate-700 text-[11px]">
+                          {item.equipmentCode}
+                        </span>
+                        <div className="text-[10px] text-slate-500 mt-0.5">{item.workflowStage}</div>
+                      </td>
+                      <td className="px-4 py-3 text-slate-600 font-mono text-[11px]">
+                        {toDisplayDate(item.approvedAt)}
+                      </td>
+                      <td className="px-4 py-3 font-medium text-slate-800">
+                        {item.approvedBy}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold border bg-emerald-50 text-emerald-700 border-emerald-200">
+                          <CheckCircle className="h-3 w-3" />
+                          {item.displayStatus}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          {/* Compact View Details Button with Tooltip */}
+                          <button
+                            onClick={() => router.push(detailUrl)}
+                            title="View Batch Details"
+                            aria-label="View Batch Details"
+                            className="p-2 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 shadow-sm transition hover:text-indigo-600"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </button>
+
+                          {/* Compact Download PDF Button with Tooltip */}
                           <button
                             onClick={() => handleDownloadPdf(item)}
                             disabled={isDownloading}
                             title="Download GxP Batch Dossier PDF"
-                            className="p-1.5 rounded-lg text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50 border border-emerald-200 transition disabled:opacity-50 inline-flex items-center justify-center"
+                            aria-label="Download GxP Batch Dossier PDF"
+                            className="p-2 rounded-lg text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm transition disabled:opacity-50 inline-flex items-center justify-center"
                           >
                             {isDownloading ? (
-                              <SpinnerGap className="h-4 w-4 animate-spin text-emerald-600" />
+                              <SpinnerGap className="h-4 w-4 animate-spin text-white" />
                             ) : (
                               <DownloadSimple className="h-4 w-4" />
                             )}
                           </button>
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <div className="flex items-center justify-end gap-2">
-                            <button
-                              onClick={() => router.push(detailUrl)}
-                              className="px-2.5 py-1 text-xs font-semibold text-slate-700 hover:text-indigo-600 bg-slate-100 hover:bg-indigo-50 border border-slate-200 rounded-lg transition flex items-center gap-1"
-                            >
-                              <Eye className="h-3.5 w-3.5" />
-                              <span>View Details</span>
-                            </button>
-                            <button
-                              onClick={() => handleDownloadPdf(item)}
-                              disabled={isDownloading}
-                              className="px-2.5 py-1 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition shadow-sm flex items-center gap-1 disabled:opacity-50"
-                            >
-                              {isDownloading ? (
-                                <SpinnerGap className="h-3.5 w-3.5 animate-spin" />
-                              ) : (
-                                <DownloadSimple className="h-3.5 w-3.5" />
-                              )}
-                              <span>Download PDF</span>
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
 
-          {/* Pagination */}
-          <div className="p-4 border-t border-slate-200 bg-slate-50/50">
+        {/* Unified Pagination */}
+        {!isLoading && totalItems > 0 && (
+          <div className="p-3.5 border-t border-slate-200 bg-slate-50/50">
             <Pagination
               page={safeCurrentPage}
               pageSize={pageSize}
@@ -730,7 +836,7 @@ export default function ApprovedBatchesScreen() {
               pageSizeOptions={[10, 25, 50, 100]}
             />
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

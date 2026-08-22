@@ -20,6 +20,11 @@ import {
   Hash,
   Gear,
   WarningCircle,
+  PaperPlaneTilt,
+  CheckSquare,
+  Question,
+  ChatCenteredText,
+  ClockCountdown,
 } from "@phosphor-icons/react";
 import {
   getBatchSummaryPaginated,
@@ -29,8 +34,6 @@ import {
 import type { BatchSummary } from "@/features/iiot/equipment/schemas/reports.schema";
 import Pagination from "@/components/ui/Pagination";
 import { WorkflowActionModal } from "../../components/WorkflowActionModal";
-import { BatchQueueSwitcher } from "../../components/BatchQueueSwitcher";
-import PendingBatchFilterPopover from "../components/PendingBatchFilterPopover";
 import { ROUTES } from "@/config/routes";
 
 export interface PendingBatchItem {
@@ -87,6 +90,7 @@ const toDisplayDate = (value: unknown) => {
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: "UTC",
   }).format(date);
 };
 
@@ -98,10 +102,16 @@ const getStatusBadge = (status: string) => {
   if (normalized === "REVIEWER_REVIEWED" || normalized === "PENDING_APPROVAL") {
     return "bg-blue-50 text-blue-700 border-blue-200";
   }
-  if (normalized === "UNDER_REVIEW" || normalized === "IN_REVIEW") {
+  if (normalized === "UNDER_REVIEW" || normalized === "IN_REVIEW" || normalized === "CLAIMED") {
     return "bg-amber-50 text-amber-700 border-amber-200";
   }
-  if (normalized === "RETURNED_TO_OPERATOR" || normalized === "REJECTED") {
+  if (
+    normalized === "RETURNED_TO_OPERATOR" ||
+    normalized === "RETURNED" ||
+    normalized === "REJECTED" ||
+    normalized === "SENT_BACK" ||
+    normalized === "REVISION_REQUIRED"
+  ) {
     return "bg-rose-50 text-rose-700 border-rose-200";
   }
   return "bg-slate-100 text-slate-700 border-slate-200";
@@ -113,7 +123,7 @@ export default function PendingReportsScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Legacy Filter States
+  // Explicit In-Page Hierarchical Filters
   const [filters, setFilters] = useState<PendingBatchFilters>(defaultFilters);
 
   // Sorting State
@@ -134,7 +144,8 @@ export default function PendingReportsScreen() {
     setIsLoading(true);
     setErrorMessage(null);
     try {
-      const summaries = await getBatchSummaryPaginated();
+      // Fetch batch summaries (optimized to load latest 50 batches dynamically sorted by latest modified desc)
+      const summaries = await getBatchSummaryPaginated({ limit: 50 });
       const extracted: PendingBatchItem[] = [];
 
       for (const summary of summaries) {
@@ -155,16 +166,27 @@ export default function PendingReportsScreen() {
           const approval = (stage.approval as Record<string, unknown>) || {};
           const rawStatus = toText(approval.status || "PENDING").toUpperCase();
 
-          // Only show pending / active workflow stages (exclude approved, completed, and deferred)
+          // Exclude approved, completed, and deferred batches (deferred batches belong on their separate page)
           if (rawStatus === "APPROVED" || rawStatus === "COMPLETED" || rawStatus === "DEFERRED") {
             continue;
           }
 
           const sequence = typeof stage.sequenceOrder === "number" ? stage.sequenceOrder : 1;
           let displayStatus = rawStatus.replace(/_/g, " ");
-          if (rawStatus === "REVIEWER_REVIEWED") displayStatus = "Pending Approval";
-          if (rawStatus === "UNDER_REVIEW") displayStatus = "Under Review";
-          if (rawStatus === "RETURNED_TO_OPERATOR") displayStatus = "Returned to Operator";
+          if (rawStatus === "REVIEWER_REVIEWED" || rawStatus === "PENDING_APPROVAL") {
+            displayStatus = "Pending Approval";
+          } else if (rawStatus === "UNDER_REVIEW" || rawStatus === "IN_REVIEW") {
+            displayStatus = "Under Review";
+          } else if (
+            rawStatus === "RETURNED_TO_OPERATOR" ||
+            rawStatus === "RETURNED" ||
+            rawStatus === "REJECTED" ||
+            rawStatus === "SENT_BACK"
+          ) {
+            displayStatus = "Returned / Rejected";
+          } else if (rawStatus === "PENDING" || rawStatus === "NOT_STARTED") {
+            displayStatus = "Pending Submission";
+          }
 
           const id = `${summaryId}:${batchNo}:${lotNo}:${equipmentCode}:${sequence}`;
 
@@ -221,9 +243,6 @@ export default function PendingReportsScreen() {
     setTimeout(() => setSuccessMessage(null), 5000);
   };
 
-  // Legacy Filter Popover State
-  const [isFilterOpen, setIsFilterOpen] = useState(false);
-
   // Product Code -> Product Name lookup map
   const productCodeToNameMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -235,7 +254,7 @@ export default function PendingReportsScreen() {
     return map;
   }, [items]);
 
-  // Filter change handlers with dynamic dependency cascading
+  // Hierarchical Filter change handlers with cascading dependencies
   const handleFilterChange = (key: keyof PendingBatchFilters, value: string) => {
     setFilters((prev) => {
       const next = { ...prev, [key]: value };
@@ -248,6 +267,21 @@ export default function PendingReportsScreen() {
           next.productCode = "ALL";
           next.productName = "";
         }
+        // Cascade reset down the hierarchy
+        next.batchNo = "ALL";
+        next.equipmentType = "ALL";
+        next.lotNo = "ALL";
+      } else if (key === "batchNo") {
+        next.batchNo = value;
+        // Cascade reset down the hierarchy
+        next.equipmentType = "ALL";
+        next.lotNo = "ALL";
+      } else if (key === "equipmentType") {
+        next.equipmentType = value;
+        // Cascade reset down the hierarchy
+        next.lotNo = "ALL";
+      } else if (key === "lotNo") {
+        next.lotNo = value;
       }
       return next;
     });
@@ -259,31 +293,51 @@ export default function PendingReportsScreen() {
     setCurrentPage(1);
   };
 
-  // Dynamic Options derived from data with cascading dependencies
+  // Hierarchical Cascading Options derived from data
+  // Level 1: Product Codes
   const availableProductCodes = useMemo(() => {
     return Array.from(new Set(items.map((i) => i.productCode).filter(Boolean))).sort();
   }, [items]);
 
-  const scopedItemsForProduct = useMemo(() => {
+  // Level 2: Scoped for Batch Numbers based on Product Code
+  const scopedForBatch = useMemo(() => {
     if (!filters.productCode || filters.productCode === "ALL") return items;
     return items.filter((it) => it.productCode.toUpperCase() === filters.productCode.toUpperCase());
   }, [items, filters.productCode]);
 
   const availableBatchNos = useMemo(() => {
-    return Array.from(new Set(scopedItemsForProduct.map((i) => i.batchNo).filter(Boolean))).sort();
-  }, [scopedItemsForProduct]);
+    return Array.from(new Set(scopedForBatch.map((i) => i.batchNo).filter(Boolean))).sort();
+  }, [scopedForBatch]);
+
+  // Level 3: Scoped for Equipment Types based on Product + Batch
+  const scopedForEquipment = useMemo(() => {
+    let list = scopedForBatch;
+    if (filters.batchNo && filters.batchNo !== "ALL") {
+      list = list.filter((it) => it.batchNo.toLowerCase() === filters.batchNo.toLowerCase());
+    }
+    return list;
+  }, [scopedForBatch, filters.batchNo]);
 
   const availableEquipmentTypes = useMemo(() => {
     const types = new Set<string>();
-    scopedItemsForProduct.forEach((i) => {
+    scopedForEquipment.forEach((i) => {
       if (i.equipmentType) types.add(i.equipmentType.toUpperCase());
     });
     return Array.from(types).sort();
-  }, [scopedItemsForProduct]);
+  }, [scopedForEquipment]);
+
+  // Level 4: Scoped for Lot Numbers based on Product + Batch + Equipment
+  const scopedForLot = useMemo(() => {
+    let list = scopedForEquipment;
+    if (filters.equipmentType && filters.equipmentType !== "ALL") {
+      list = list.filter((it) => it.equipmentType.toUpperCase() === filters.equipmentType.toUpperCase());
+    }
+    return list;
+  }, [scopedForEquipment, filters.equipmentType]);
 
   const availableLotNos = useMemo(() => {
-    return Array.from(new Set(scopedItemsForProduct.map((i) => i.lotNo).filter(Boolean))).sort();
-  }, [scopedItemsForProduct]);
+    return Array.from(new Set(scopedForLot.map((i) => i.lotNo).filter(Boolean))).sort();
+  }, [scopedForLot]);
 
   // Filtering Logic (Server & Client Harmonized with AND semantics)
   const filteredItems = useMemo(() => {
@@ -295,48 +349,49 @@ export default function PendingReportsScreen() {
         }
       }
 
-      // 2. Product Name filter (only when productCode is ALL)
-      if (filters.productName.trim() && (!filters.productCode || filters.productCode === "ALL")) {
-        const query = filters.productName.trim().toLowerCase();
-        if (!item.productName.toLowerCase().includes(query)) {
-          return false;
-        }
-      }
-
-      // 3. Batch Number filter
+      // 2. Batch Number filter
       if (filters.batchNo && filters.batchNo !== "ALL") {
         if (item.batchNo.toLowerCase() !== filters.batchNo.toLowerCase()) {
           return false;
         }
       }
 
-      // 4. Equipment Type filter
+      // 3. Equipment Type filter
       if (filters.equipmentType && filters.equipmentType !== "ALL") {
         if (item.equipmentType.toUpperCase() !== filters.equipmentType.toUpperCase()) {
           return false;
         }
       }
 
-      // 5. Lot Number filter
+      // 4. Lot Number filter
       if (filters.lotNo && filters.lotNo !== "ALL") {
         if (item.lotNo.toLowerCase() !== filters.lotNo.toLowerCase()) {
           return false;
         }
       }
 
-      // 6. Active Status filter
+      // 5. Active Workflow Status filter (with updated Returned/Rejected mappings)
       if (filters.status && filters.status !== "ALL") {
         const matchStatus =
-          (filters.status === "PENDING" && (item.rawStatus === "PENDING" || item.rawStatus === "NOT_STARTED")) ||
-          (filters.status === "UNDER_REVIEW" && (item.rawStatus === "UNDER_REVIEW" || item.rawStatus === "IN_REVIEW")) ||
-          (filters.status === "PENDING_APPROVAL" && (item.rawStatus === "REVIEWER_REVIEWED" || item.rawStatus === "PENDING_APPROVAL")) ||
-          (filters.status === "RETURNED" && (item.rawStatus === "RETURNED_TO_OPERATOR" || item.rawStatus === "REJECTED"));
+          (filters.status === "PENDING" &&
+            (item.rawStatus === "PENDING" || item.rawStatus === "NOT_STARTED" || item.rawStatus === "DRAFT")) ||
+          (filters.status === "UNDER_REVIEW" &&
+            (item.rawStatus === "UNDER_REVIEW" || item.rawStatus === "IN_REVIEW" || item.rawStatus === "CLAIMED")) ||
+          (filters.status === "PENDING_APPROVAL" &&
+            (item.rawStatus === "REVIEWER_REVIEWED" || item.rawStatus === "PENDING_APPROVAL")) ||
+          (filters.status === "RETURNED" &&
+            (item.rawStatus === "RETURNED_TO_OPERATOR" ||
+              item.rawStatus === "RETURNED" ||
+              item.rawStatus === "REJECTED" ||
+              item.rawStatus === "SENT_BACK" ||
+              item.rawStatus === "REVISION_REQUIRED")) ||
+          (filters.status === "CLAIMED" && item.rawStatus === "CLAIMED");
         if (!matchStatus) {
           return false;
         }
       }
 
-      // 7. Fast search term filter
+      // 6. Fast search term filter
       if (filters.searchTerm.trim()) {
         const term = filters.searchTerm.trim().toLowerCase();
         const matchesTerm =
@@ -345,7 +400,8 @@ export default function PendingReportsScreen() {
           item.productCode.toLowerCase().includes(term) ||
           item.productName.toLowerCase().includes(term) ||
           item.equipmentCode.toLowerCase().includes(term) ||
-          item.workflowStage.toLowerCase().includes(term);
+          item.workflowStage.toLowerCase().includes(term) ||
+          item.displayStatus.toLowerCase().includes(term);
         if (!matchesTerm) {
           return false;
         }
@@ -402,7 +458,6 @@ export default function PendingReportsScreen() {
   const activeFilterCount = useMemo(() => {
     let count = 0;
     if (filters.productCode && filters.productCode !== "ALL") count++;
-    if (filters.productName.trim() && (!filters.productCode || filters.productCode === "ALL")) count++;
     if (filters.batchNo && filters.batchNo !== "ALL") count++;
     if (filters.equipmentType && filters.equipmentType !== "ALL") count++;
     if (filters.lotNo && filters.lotNo !== "ALL") count++;
@@ -445,7 +500,6 @@ export default function PendingReportsScreen() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <BatchQueueSwitcher currentQueue="PENDING" />
           <button
             onClick={loadData}
             disabled={isLoading}
@@ -481,89 +535,185 @@ export default function PendingReportsScreen() {
         </div>
       )}
 
-      {/* Toolbar with Search and Legacy Filter Popover Button */}
-      <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
-        <div className="flex flex-1 items-center gap-3 w-full md:w-auto">
+      {/* Explicit In-Page Hierarchical Filter Toolbar */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
+        {/* Top Filter Row: Search + Status Selector + Reset */}
+        <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 pb-3 border-b border-slate-100">
           {/* Keyword Search Input */}
-          <div className="relative flex-1 max-w-md">
-            <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <div className="relative flex-1 max-w-lg">
+            <MagnifyingGlass className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <input
               type="text"
               placeholder="Search by batch, lot, product, or equipment..."
               value={filters.searchTerm}
               onChange={(e) => handleFilterChange("searchTerm", e.target.value)}
-              className="w-full bg-white border border-slate-300 rounded-lg pl-9 pr-4 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+              className="w-full bg-white border border-slate-300 rounded-xl pl-9 pr-8 py-2 text-xs font-medium text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 shadow-sm"
             />
             {filters.searchTerm && (
               <button
                 type="button"
                 onClick={() => handleFilterChange("searchTerm", "")}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
               >
                 <X className="h-3.5 w-3.5" />
               </button>
             )}
           </div>
 
-          {/* Filter Popover Anchor & Button */}
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setIsFilterOpen((prev) => !prev)}
-              className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold border transition shadow-sm ${
-                activeFilterCount > 0
-                  ? "bg-amber-50 border-amber-300 text-amber-900 hover:bg-amber-100"
-                  : "bg-white border-slate-300 text-slate-700 hover:bg-slate-50"
-              }`}
-            >
-              <Funnel className={`h-3.5 w-3.5 ${activeFilterCount > 0 ? "text-amber-600" : "text-slate-500"}`} />
-              <span>Filter</span>
-              <CaretDown className="h-3 w-3 text-slate-400" />
-              {activeFilterCount > 0 && (
-                <span className="grid h-4 min-w-4 place-items-center rounded-full bg-amber-600 px-1 text-[10px] font-bold text-white">
-                  {activeFilterCount}
-                </span>
-              )}
-            </button>
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* Workflow Status Filter Dropdown */}
+            <div className="flex items-center gap-1.5">
+              <label htmlFor="filter-status" className="text-xs font-bold text-slate-600 whitespace-nowrap">
+                Workflow Status:
+              </label>
+              <select
+                id="filter-status"
+                value={filters.status}
+                onChange={(e) => handleFilterChange("status", e.target.value)}
+                className="bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-sm"
+              >
+                <option value="ALL">All Pending States</option>
+                <option value="PENDING">Pending Submission</option>
+                <option value="UNDER_REVIEW">Under Review</option>
+                <option value="RETURNED">Returned to Operator / Rejected</option>
+                <option value="PENDING_APPROVAL">Pending Final Approval</option>
+                <option value="CLAIMED">Claimed / Locked</option>
+              </select>
+            </div>
 
-            {/* Filter Popover */}
-            <PendingBatchFilterPopover
-              isOpen={isFilterOpen}
-              onClose={() => setIsFilterOpen(false)}
-              filters={filters}
-              onChange={handleFilterChange}
-              onReset={handleResetFilters}
-              availableProductCodes={availableProductCodes}
-              availableBatchNos={availableBatchNos}
-              availableEquipmentTypes={availableEquipmentTypes}
-              availableLotNos={availableLotNos}
-              activeFilterCount={activeFilterCount}
+            {/* Clear All Filters Button */}
+            {activeFilterCount > 0 && (
+              <button
+                type="button"
+                onClick={handleResetFilters}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-xl transition shadow-sm"
+                title="Reset all filters"
+              >
+                <ArrowCounterClockwise className="h-3.5 w-3.5 text-slate-500" />
+                <span>Clear Filters ({activeFilterCount})</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Hierarchical Explicit Filter Row (Product Code -> Product Name (Read-Only) -> Batch No -> Equipment -> Lot No) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 pt-1">
+          {/* Level 1: Product Code */}
+          <div className="space-y-1">
+            <label className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
+              <Tag className="h-3.5 w-3.5 text-indigo-500" /> Product Code:
+            </label>
+            <select
+              value={filters.productCode}
+              onChange={(e) => handleFilterChange("productCode", e.target.value)}
+              className="w-full bg-slate-50 hover:bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500 transition shadow-sm"
+            >
+              <option value="ALL">All Products</option>
+              {availableProductCodes.map((code) => (
+                <option key={code} value={code}>
+                  {code}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Product Name: Read-Only Textbox (Populates on Product Code selection) */}
+          <div className="space-y-1">
+            <label className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
+              <Flask className="h-3.5 w-3.5 text-blue-500" /> Product Name:
+            </label>
+            <input
+              type="text"
+              readOnly
+              value={filters.productName || (filters.productCode === "ALL" ? "All Products Active" : "-")}
+              placeholder="Auto-populated product name"
+              className="w-full bg-slate-100/90 border border-slate-300 text-slate-700 font-medium rounded-xl px-2.5 py-1.5 text-xs cursor-default truncate select-all focus:outline-none shadow-inner"
+              title={filters.productName || "Product name auto-populates on product code selection"}
             />
           </div>
 
-          {activeFilterCount > 0 && (
-            <button
-              type="button"
-              onClick={handleResetFilters}
-              className="inline-flex items-center gap-1 px-2.5 py-2 text-xs font-medium text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-lg transition"
-              title="Reset filters"
+          {/* Level 2: Batch Number (Cascading based on Product Code) */}
+          <div className="space-y-1">
+            <label className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
+              <Barcode className="h-3.5 w-3.5 text-emerald-500" /> Batch Number:
+            </label>
+            <select
+              value={filters.batchNo}
+              onChange={(e) => handleFilterChange("batchNo", e.target.value)}
+              className="w-full bg-slate-50 hover:bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500 transition shadow-sm"
             >
-              <ArrowCounterClockwise className="h-3.5 w-3.5 text-slate-500" />
-              <span>Reset</span>
-            </button>
-          )}
+              <option value="ALL">All Batches</option>
+              {availableBatchNos.map((b) => (
+                <option key={b} value={b}>
+                  {b}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Level 3: Equipment Type (Cascading based on Product + Batch) */}
+          <div className="space-y-1">
+            <label className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
+              <Gear className="h-3.5 w-3.5 text-purple-500" /> Equipment Type:
+            </label>
+            <select
+              value={filters.equipmentType}
+              onChange={(e) => handleFilterChange("equipmentType", e.target.value)}
+              className="w-full bg-slate-50 hover:bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500 transition shadow-sm"
+            >
+              <option value="ALL">All Equipment</option>
+              {availableEquipmentTypes.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Level 4: Lot Number (Cascading based on Product + Batch + Equipment) */}
+          <div className="space-y-1">
+            <label className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
+              <Hash className="h-3.5 w-3.5 text-amber-500" /> Lot Number:
+            </label>
+            <select
+              value={filters.lotNo}
+              onChange={(e) => handleFilterChange("lotNo", e.target.value)}
+              className="w-full bg-slate-50 hover:bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500 transition shadow-sm"
+            >
+              <option value="ALL">All Lots</option>
+              {availableLotNos.map((l) => (
+                <option key={l} value={l}>
+                  {l}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
-        <span className="text-xs text-slate-500 font-medium">
-          Showing {totalItems} of {items.length} pending batches
-        </span>
+        {/* Filter Summary & Total Records Counter */}
+        <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs text-slate-500 font-medium">
+          <div className="flex items-center gap-2">
+            <span>
+              Showing <strong className="text-slate-800 font-bold">{totalItems}</strong> of{" "}
+              <strong className="text-slate-800 font-bold">{items.length}</strong> active pending stages
+            </span>
+            {activeFilterCount > 0 && (
+              <span className="px-2 py-0.5 bg-amber-50 text-amber-800 border border-amber-200 rounded-full text-[10px] font-bold">
+                Filtered
+              </span>
+            )}
+          </div>
+          <span className="text-[11px] text-slate-400">
+            Page {safeCurrentPage} of {safeTotalPages}
+          </span>
+        </div>
       </div>
 
       {/* Pending Batches Table */}
-      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+      <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs text-slate-700">
-            <thead className="bg-slate-50 text-[11px] font-semibold text-slate-600 uppercase tracking-wider border-b border-slate-200 select-none">
+            <thead className="bg-slate-50 text-[11px] font-bold text-slate-600 uppercase tracking-wider border-b border-slate-200 select-none">
               <tr>
                 <th
                   onClick={() => handleSortToggle("batchNo")}
@@ -696,7 +846,8 @@ export default function PendingReportsScreen() {
                       {toDisplayDate(item.pendingSince)}
                     </td>
                     <td className="py-3 px-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
+                      <div className="flex items-center justify-end gap-1.5">
+                        {/* Compact View Details Button with Tooltip */}
                         <button
                           onClick={() => {
                             const detailUrl = `${ROUTES.iiotBatchDetails}/${item.batchNo}?lotNo=${encodeURIComponent(
@@ -706,20 +857,45 @@ export default function PendingReportsScreen() {
                             )}&returnTo=${encodeURIComponent(ROUTES.iiotPendingBatches)}`;
                             router.push(detailUrl);
                           }}
-                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 font-medium text-xs shadow-sm transition"
+                          title="View Batch Details"
+                          aria-label="View Batch Details"
+                          className="p-2 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 shadow-sm transition hover:text-indigo-600 inline-flex items-center justify-center"
                         >
-                          <Eye className="h-3.5 w-3.5 text-slate-500" /> Details
+                          <Eye className="h-4 w-4" />
                         </button>
 
                         {item.allowedActions.map((action) => {
-                          const isApprove = action.actionType === "APPROVE";
-                          const isReject = action.actionType === "REJECT";
-                          const isJustify = action.actionType === "JUSTIFY";
+                          const code = (action.actionCode || "").toUpperCase();
+                          const type = (action.actionType || "").toUpperCase();
+                          const isApprove = type === "APPROVE" || code.includes("APPROVE");
+                          const isReject = type === "REJECT" || type === "RETURN" || code.includes("REQUEST_ADDITIONAL") || code.includes("REJECT");
+                          const isJustify = type === "JUSTIFY" || type === "RESPONSE" || code.includes("RESPONSE");
+                          const isApprovalSubmit = code.includes("APPROVAL");
+                          const isDefer = type === "DEFER" || code.includes("DEFER");
 
                           let buttonStyle = "bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm";
                           if (isApprove) buttonStyle = "bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm";
-                          if (isReject) buttonStyle = "bg-rose-600 hover:bg-rose-700 text-white shadow-sm";
-                          if (isJustify) buttonStyle = "bg-amber-600 hover:bg-amber-700 text-white shadow-sm";
+                          else if (isReject) buttonStyle = "bg-rose-600 hover:bg-rose-700 text-white shadow-sm";
+                          else if (isJustify) buttonStyle = "bg-amber-600 hover:bg-amber-700 text-white shadow-sm";
+                          else if (isApprovalSubmit) buttonStyle = "bg-blue-600 hover:bg-blue-700 text-white shadow-sm";
+                          else if (isDefer) buttonStyle = "bg-purple-600 hover:bg-purple-700 text-white shadow-sm";
+
+                          const title = action.displayName || action.actionName || action.actionCode;
+
+                          let IconComponent = Lock;
+                          if (code.includes("REVIEW") && (code.includes("SUBMIT") || code.includes("SEND"))) {
+                            IconComponent = PaperPlaneTilt;
+                          } else if (code.includes("APPROVAL") && (code.includes("SUBMIT") || code.includes("SEND"))) {
+                            IconComponent = CheckSquare;
+                          } else if (isReject) {
+                            IconComponent = Question;
+                          } else if (isJustify) {
+                            IconComponent = ChatCenteredText;
+                          } else if (isApprove) {
+                            IconComponent = CheckCircle;
+                          } else if (isDefer) {
+                            IconComponent = ClockCountdown;
+                          }
 
                           return (
                             <button
@@ -729,10 +905,11 @@ export default function PendingReportsScreen() {
                                 setSelectedItem(item);
                                 setIsModalOpen(true);
                               }}
-                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium text-xs transition ${buttonStyle}`}
+                              title={title}
+                              aria-label={title}
+                              className={`p-2 rounded-lg transition inline-flex items-center justify-center ${buttonStyle}`}
                             >
-                              <Lock className="h-3 w-3 opacity-80" />
-                              {action.displayName || action.actionName || action.actionCode}
+                              <IconComponent className="h-4 w-4" />
                             </button>
                           );
                         })}
@@ -747,17 +924,19 @@ export default function PendingReportsScreen() {
 
         {/* Table Footer with Reusable Unified Pagination Component */}
         {!isLoading && totalItems > 0 && (
-          <Pagination
-            page={safeCurrentPage}
-            pageSize={pageSize}
-            totalRecords={totalItems}
-            onPageChange={(p) => setCurrentPage(p)}
-            onPageSizeChange={(sz) => {
-              setPageSize(sz);
-              setCurrentPage(1);
-            }}
-            pageSizeOptions={[10, 25, 50, 100]}
-          />
+          <div className="p-3.5 border-t border-slate-200 bg-slate-50/50">
+            <Pagination
+              page={safeCurrentPage}
+              pageSize={pageSize}
+              totalRecords={totalItems}
+              onPageChange={(p) => setCurrentPage(p)}
+              onPageSizeChange={(sz) => {
+                setPageSize(sz);
+                setCurrentPage(1);
+              }}
+              pageSizeOptions={[10, 25, 50, 100]}
+            />
+          </div>
         )}
       </div>
 

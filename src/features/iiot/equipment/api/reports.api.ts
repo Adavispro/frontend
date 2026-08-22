@@ -445,6 +445,8 @@ export interface WorkflowActionHistoryItem {
   responseNotes?: string;
   esignatureVerified?: boolean;
   esignatureReason?: string;
+  tenantId?: string;
+  plantId?: string;
   timestamp: string;
 }
 
@@ -649,11 +651,59 @@ export const getWorkflowAuditTrail = async (
 export const getWorkflowInstanceAndHistory = async (
   params: { batchNo: string; lotNo: string; equipmentCode: string; tenantId?: string; plantId?: string },
   signal?: AbortSignal,
-): Promise<{ instance: unknown; history: WorkflowActionHistoryItem[] }> => {
-  const response = await apiClient<BackendApiResponse<{ instance: unknown; history: WorkflowActionHistoryItem[] }>>(
+): Promise<{ instance: Record<string, unknown> | null; history: WorkflowActionHistoryItem[] }> => {
+  const response = await apiClient<BackendApiResponse<{ instance: Record<string, unknown> | null; history: WorkflowActionHistoryItem[] }>>(
     withQuery(resourcePath("workflow/instance"), params),
     { signal },
   );
   return response.data || { instance: null, history: [] };
 };
+
+export const claimWorkflowTask = async (
+  payload: { batchNo: string; lotNo: string; equipmentCode: string; userRole?: string; tenantId?: string; plantId?: string },
+): Promise<{ success: boolean; message: string; assignedTo?: string; activeReviewer?: string; activeReviewerRole?: string; claimedAt?: string }> => {
+  const response = await apiClient<BackendApiResponse<{ success: boolean; message: string; assignedTo?: string; activeReviewer?: string; activeReviewerRole?: string; claimedAt?: string }>>(
+    resourcePath("workflow/claim-task"),
+    {
+      method: "POST",
+      body: payload,
+    },
+  );
+  return response.data || { success: false, message: "Failed to claim task" };
+};
+
+export const unclaimWorkflowTask = async (
+  payload: { batchNo: string; lotNo: string; equipmentCode: string; tenantId?: string },
+): Promise<{ success: boolean; message: string }> => {
+  const response = await apiClient<BackendApiResponse<{ success: boolean; message: string }>>(
+    resourcePath("workflow/unclaim-task"),
+    {
+      method: "POST",
+      body: payload,
+    },
+  );
+  return response.data || { success: false, message: "Failed to release task" };
+};
+
+export async function getIiotTopology(signal?: AbortSignal) {
+  try {
+    const response = await apiClient<BackendApiResponse<{
+      plants?: Array<{ plantId: string; plantName: string; tenantId?: string }>;
+      blocks?: Array<{ blockId: string; blockName: string; plantId?: string; tenantId?: string }>;
+      areas?: Array<{ areaId: string; areaName: string; plantId?: string; blockId?: string; tenantId?: string }>;
+      rooms?: Array<{ roomId: string; roomName: string; plantId?: string; areaId?: string; tenantId?: string }>;
+    }>>(resourcePath("topology"), { signal });
+    if (response.success && response.data) {
+      return {
+        plants: response.data.plants ?? [],
+        blocks: response.data.blocks ?? [],
+        areas: response.data.areas ?? [],
+        rooms: response.data.rooms ?? [],
+      };
+    }
+  } catch {
+    // Graceful fallback
+  }
+  return { plants: [], blocks: [], areas: [], rooms: [] };
+}
 

@@ -303,8 +303,9 @@ export default function PlantTopologyWorkspace() {
         rows={rows}
         getRowKey={(row, index) => rowKey(kind, row, index)}
         emptyText={isLoading ? `Loading ${kind}...` : `No ${kind} found for this tenant.`}
-        footerText={`SHOWING ${rows.length} ENTRIES`}
-        showPagination={false}
+        showPagination
+        pageSize={10}
+        pageSizeOptions={[10, 20, 30]}
         toolbar={<div className="flex flex-wrap items-center justify-end gap-3"><label className="module-glass-control hidden h-8 w-[260px] items-center gap-2 rounded-[4px] px-3 text-text-secondary md:flex"><MagnifyingGlass size={13} /><span className="sr-only">Search {kind}</span><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder={`Search ${kind}`} className="type-filter-value min-w-0 flex-1 bg-transparent outline-none" /></label>{filterControls}<Button size="sm" rounded="rounded-[4px]" textSize="text-[10px]" paddingX="px-4" paddingY="py-0" className="h-8 shadow-[0_8px_18px_rgba(7,92,175,0.18)]" disabled={!tenantId} prefixIcon={<Plus size={12} />} onClick={() => router.push(`${ROUTES.masterCreateTopology}?view=${kind}&tenantId=${encodeURIComponent(tenantId)}`)}>Create {labelFor(kind)}</Button></div>}
       />
 

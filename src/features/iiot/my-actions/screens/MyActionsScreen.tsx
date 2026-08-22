@@ -16,12 +16,19 @@ import {
   Lock,
   CaretUp,
   CaretDown,
+  ChartDonut,
+  UserPlus,
+  PaperPlaneTilt,
+  Question,
+  ChatCenteredText,
+  ClockCountdown,
 } from "@phosphor-icons/react";
 import { useLoginContext } from "@/features/auth/hooks/useCurrentUser";
 import {
   getBatchSummaryPaginated,
   getWorkflowDashboardCounts,
   getAllowedActions,
+  claimWorkflowTask,
   deduplicateAllowedActions,
   type AllowedWorkflowAction,
   type WorkflowDashboardCounts,
@@ -106,6 +113,7 @@ export default function MyActionsScreen() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [equipmentTypeFilter, setEquipmentTypeFilter] = useState("ALL");
+  const [showActivityChart, setShowActivityChart] = useState(false);
 
   // Multi-Selection State
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
@@ -116,7 +124,7 @@ export default function MyActionsScreen() {
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(5);
 
   // Modal State (Single & Bulk)
   const [modalAction, setModalAction] = useState<AllowedWorkflowAction | null>(null);
@@ -135,8 +143,8 @@ export default function MyActionsScreen() {
       const dashboardCounts = await getWorkflowDashboardCounts();
       setCounts(dashboardCounts);
 
-      // 2. Fetch batch summaries
-      const batchSummaries = await getBatchSummaryPaginated();
+      // 2. Fetch batch summaries (optimized to load latest 50 batches dynamically)
+      const batchSummaries = await getBatchSummaryPaginated({ limit: 50 });
 
       // 3. Extract items across stages and query dynamic allowed actions
       const extracted: MyActionItem[] = [];
@@ -234,6 +242,24 @@ export default function MyActionsScreen() {
     setModalAction(action);
     setSelectedItem(item);
     setIsModalOpen(true);
+  };
+
+  const handleQuickClaim = async (item: MyActionItem) => {
+    try {
+      const userRole = (loginContext?.roles?.[0] as Record<string, unknown>)?.roleCode as string || "PRODUCTION_REVIEWER";
+      const res = await claimWorkflowTask({
+        batchNo: item.batchNo,
+        lotNo: item.lotNo,
+        equipmentCode: item.equipmentCode,
+        userRole: userRole,
+        tenantId: "TNT-0001",
+      });
+      setSuccessMessage(res.message || `Task ${item.batchNo} assigned to you!`);
+      loadData();
+      setTimeout(() => setSuccessMessage(null), 5000);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Failed to claim task");
+    }
   };
 
   const handleActionSuccess = () => {
@@ -434,22 +460,22 @@ export default function MyActionsScreen() {
   }, [selectedItems]);
 
   return (
-    <div className="flex-1 space-y-6 p-6 bg-slate-50 text-slate-900 min-h-screen">
+    <div className="flex-1 space-y-4 p-4 sm:p-5 bg-slate-50 text-slate-900 min-h-screen">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-200 pb-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-3">
-            <CheckSquare className="h-7 w-7 text-indigo-600" />
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2.5">
+            <CheckSquare className="h-6 w-6 sm:h-7 sm:w-7 text-indigo-600" />
             My Actionable Batch Tasks
           </h1>
-          <p className="text-sm text-slate-500 mt-1">
+          <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
             Dynamic Level 2 (L2) batch operations queue. Actions are evaluated dynamically by the Workflow MDM State Engine.
           </p>
         </div>
         <button
           onClick={loadData}
           disabled={isLoading}
-          className="inline-flex items-center gap-2 px-3.5 py-2 bg-white hover:bg-slate-100 text-slate-700 rounded-lg text-sm font-medium border border-slate-200 shadow-sm transition"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 rounded-lg text-xs sm:text-sm font-medium border border-slate-200 shadow-sm transition self-start md:self-auto"
         >
           <ArrowClockwise className={`h-4 w-4 text-slate-600 ${isLoading ? "animate-spin" : ""}`} />
           Refresh
@@ -457,98 +483,99 @@ export default function MyActionsScreen() {
       </div>
 
       {successMessage && (
-        <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-sm font-medium flex items-center gap-2 shadow-sm animate-in fade-in duration-300">
-          <CheckCircle className="h-5 w-5 text-emerald-600 flex-shrink-0" />
+        <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs sm:text-sm font-medium flex items-center gap-2 shadow-sm animate-in fade-in duration-300">
+          <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-emerald-600 flex-shrink-0" />
           <span>{successMessage}</span>
         </div>
       )}
 
-      {/* Metric Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center justify-between">
+      {/* Metric Cards Grid (4 KPI Cards) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div className="p-3.5 sm:p-4 rounded-xl bg-white border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
-            <span className="text-xs text-slate-500 font-semibold uppercase tracking-wider block">
+            <span className="text-[11px] text-slate-500 font-semibold uppercase tracking-wider block">
               Actionable by Me
             </span>
-            <span className="text-3xl font-bold text-indigo-600 font-mono mt-1 block">
+            <span className="text-xl sm:text-2xl font-bold text-indigo-600 font-mono mt-0.5 block">
               {counts.pendingMyAction}
             </span>
-            <span className="text-[11px] text-slate-400 mt-1 block">Requires your role sign-off</span>
+            <span className="text-[10px] text-slate-400 mt-0.5 block">Requires your role sign-off</span>
           </div>
-          <div className="h-12 w-12 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
-            <UserCheck className="h-6 w-6" />
+          <div className="h-10 w-10 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 flex-shrink-0">
+            <UserCheck className="h-5 w-5" />
           </div>
         </div>
 
-        <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center justify-between">
+        <div className="p-3.5 sm:p-4 rounded-xl bg-white border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
-            <span className="text-xs text-slate-500 font-semibold uppercase tracking-wider block">
+            <span className="text-[11px] text-slate-500 font-semibold uppercase tracking-wider block">
               Under Review
             </span>
-            <span className="text-3xl font-bold text-amber-600 font-mono mt-1 block">
+            <span className="text-xl sm:text-2xl font-bold text-amber-600 font-mono mt-0.5 block">
               {counts.pendingReview}
             </span>
-            <span className="text-[11px] text-slate-400 mt-1 block">Stages in peer review</span>
+            <span className="text-[10px] text-slate-400 mt-0.5 block">Stages in peer review</span>
           </div>
-          <div className="h-12 w-12 rounded-xl bg-amber-50 border border-amber-100 flex items-center justify-center text-amber-600">
-            <Clock className="h-6 w-6" />
+          <div className="h-10 w-10 rounded-lg bg-amber-50 border border-amber-100 flex items-center justify-center text-amber-600 flex-shrink-0">
+            <Clock className="h-5 w-5" />
           </div>
         </div>
 
-        <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center justify-between">
+        <div className="p-3.5 sm:p-4 rounded-xl bg-white border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
-            <span className="text-xs text-slate-500 font-semibold uppercase tracking-wider block">
+            <span className="text-[11px] text-slate-500 font-semibold uppercase tracking-wider block">
               Pending QA Approval
             </span>
-            <span className="text-3xl font-bold text-blue-600 font-mono mt-1 block">
+            <span className="text-xl sm:text-2xl font-bold text-blue-600 font-mono mt-0.5 block">
               {counts.pendingApproval}
             </span>
-            <span className="text-[11px] text-slate-400 mt-1 block">Awaiting formal release</span>
+            <span className="text-[10px] text-slate-400 mt-0.5 block">Awaiting formal release</span>
           </div>
-          <div className="h-12 w-12 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600">
-            <ShieldCheck className="h-6 w-6" />
+          <div className="h-10 w-10 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 flex-shrink-0">
+            <ShieldCheck className="h-5 w-5" />
           </div>
         </div>
 
-        <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center justify-between">
+        <div className="p-3.5 sm:p-4 rounded-xl bg-white border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
-            <span className="text-xs text-slate-500 font-semibold uppercase tracking-wider block">
+            <span className="text-[11px] text-slate-500 font-semibold uppercase tracking-wider block">
               Completed Actions
             </span>
-            <span className="text-3xl font-bold text-emerald-600 font-mono mt-1 block">
+            <span className="text-xl sm:text-2xl font-bold text-emerald-600 font-mono mt-0.5 block">
               {counts.completedActions}
             </span>
-            <span className="text-[11px] text-slate-400 mt-1 block">Approved batch stages</span>
+            <span className="text-[10px] text-slate-400 mt-0.5 block">Approved batch stages</span>
           </div>
-          <div className="h-12 w-12 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600">
-            <CheckCircle className="h-6 w-6" />
+          <div className="h-10 w-10 rounded-lg bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600 flex-shrink-0">
+            <CheckCircle className="h-5 w-5" />
           </div>
         </div>
+
+        {showActivityChart && (
+          <WorkflowActivityCard counts={counts} isLoading={isLoading} />
+        )}
       </div>
 
-      {/* 5th Visual Workflow Activity Analytics Card */}
-      <WorkflowActivityCard counts={counts} isLoading={isLoading} />
-
       {/* Filter and Search Bar */}
-      <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
-        <div className="flex flex-1 items-center gap-3 w-full md:w-auto">
+      <div className="p-3 bg-white border border-slate-200 rounded-xl shadow-sm flex flex-col md:flex-row items-center justify-between gap-3">
+        <div className="flex flex-1 items-center gap-2.5 w-full md:w-auto">
           <div className="relative flex-1 max-w-md">
-            <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
             <input
               type="text"
               placeholder="Search batch, lot, product, or equipment..."
               value={searchTerm}
               onChange={(e) => handleSearchChange(e.target.value)}
-              className="w-full bg-white border border-slate-300 rounded-lg pl-9 pr-4 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              className="w-full bg-white border border-slate-300 rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
             />
           </div>
 
           <div className="flex items-center gap-2">
-            <Funnel className="h-4 w-4 text-slate-500" />
+            <Funnel className="h-3.5 w-3.5 text-slate-500" />
             <select
               value={statusFilter}
               onChange={(e) => handleStatusFilterChange(e.target.value)}
-              className="bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
               <option value="ALL">All Statuses</option>
               <option value="MY_ACTION">Actionable by Me</option>
@@ -562,7 +589,7 @@ export default function MyActionsScreen() {
             <select
               value={equipmentTypeFilter}
               onChange={(e) => handleEquipmentFilterChange(e.target.value)}
-              className="bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
               <option value="ALL">All Equipment</option>
               <option value="RMG">RMG (Granulator)</option>
@@ -574,27 +601,27 @@ export default function MyActionsScreen() {
               <button
                 type="button"
                 onClick={handleResetFilters}
-                className="inline-flex items-center gap-1 px-2.5 py-2 text-xs font-medium text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-lg transition"
+                className="inline-flex items-center gap-1 px-2 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-lg transition"
                 title="Reset filters"
               >
-                <ArrowCounterClockwise className="h-3.5 w-3.5 text-slate-500" />
+                <ArrowCounterClockwise className="h-3 w-3 text-slate-500" />
                 Reset
               </button>
             )}
           </div>
         </div>
 
-        <span className="text-xs text-slate-500 font-medium">
-          Showing {totalRecords} of {items.length} batch stage tasks
+        <span className="text-[11px] text-slate-500 font-medium self-end md:self-auto">
+          Showing {totalRecords} of {items.length} tasks
         </span>
       </div>
 
       {/* Dynamic Bulk Action Toolbar */}
       {selectedTaskIds.size > 0 && (
-        <div className="p-3.5 bg-indigo-50/90 border border-indigo-200 rounded-xl flex flex-wrap items-center justify-between gap-3 animate-in fade-in duration-200 shadow-sm">
-          <div className="flex items-center gap-3">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-600 text-white rounded-lg text-xs font-bold font-mono shadow-sm">
-              <CheckSquare className="h-4 w-4" />
+        <div className="p-3 bg-indigo-50/90 border border-indigo-200 rounded-xl flex flex-wrap items-center justify-between gap-2.5 animate-in fade-in duration-200 shadow-sm">
+          <div className="flex items-center gap-2.5">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-indigo-600 text-white rounded-md text-xs font-bold font-mono shadow-sm">
+              <CheckSquare className="h-3.5 w-3.5" />
               {selectedTaskIds.size} Selected
             </span>
             <span className="text-xs text-indigo-950 font-medium">
@@ -607,7 +634,7 @@ export default function MyActionsScreen() {
               onClick={handleClearSelection}
               className="text-xs font-semibold text-indigo-700 hover:text-indigo-900 hover:underline ml-2"
             >
-              Clear Selection
+              Clear
             </button>
           </div>
 
@@ -627,16 +654,16 @@ export default function MyActionsScreen() {
                   <button
                     key={`bulk-btn-${action.actionCode}`}
                     onClick={() => handleOpenBulkActionModal(action)}
-                    className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${buttonStyle}`}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition ${buttonStyle}`}
                   >
-                    <Lock className="h-3.5 w-3.5 opacity-90" />
+                    <Lock className="h-3 w-3 opacity-90" />
                     {action.displayName || action.actionName || action.actionCode} ({selectedTaskIds.size})
                   </button>
                 );
               })
             ) : (
-              <span className="text-xs text-amber-800 bg-amber-100/90 border border-amber-200 px-3 py-1.5 rounded-lg font-medium">
-                No common action is available for the selected tasks.
+              <span className="text-xs text-amber-800 bg-amber-100/90 border border-amber-200 px-2.5 py-1 rounded-lg font-medium">
+                No common action is available for selected tasks.
               </span>
             )}
           </div>
@@ -647,9 +674,9 @@ export default function MyActionsScreen() {
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs text-slate-700">
-            <thead className="bg-slate-50 text-[11px] font-semibold text-slate-600 uppercase tracking-wider border-b border-slate-200 select-none">
+            <thead className="bg-slate-50 text-[10px] font-semibold text-slate-600 uppercase tracking-wider border-b border-slate-200 select-none">
               <tr>
-                <th className="py-3.5 px-4 w-10 text-center">
+                <th className="py-2.5 px-3 w-10 text-center">
                   <input
                     type="checkbox"
                     checked={isAllVisibleSelected}
@@ -658,12 +685,12 @@ export default function MyActionsScreen() {
                     }}
                     onChange={handleToggleSelectAllVisible}
                     aria-label="Select all visible batch tasks"
-                    className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                    className="h-3.5 w-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                   />
                 </th>
                 <th
                   onClick={() => handleSortToggle("batchNo")}
-                  className="py-3.5 px-4 cursor-pointer hover:bg-slate-100/80 transition"
+                  className="py-2.5 px-3 cursor-pointer hover:bg-slate-100/80 transition"
                 >
                   <div className="flex items-center">
                     Batch & Lot No
@@ -672,7 +699,7 @@ export default function MyActionsScreen() {
                 </th>
                 <th
                   onClick={() => handleSortToggle("productName")}
-                  className="py-3.5 px-4 cursor-pointer hover:bg-slate-100/80 transition"
+                  className="py-2.5 px-3 cursor-pointer hover:bg-slate-100/80 transition"
                 >
                   <div className="flex items-center">
                     Product
@@ -681,7 +708,7 @@ export default function MyActionsScreen() {
                 </th>
                 <th
                   onClick={() => handleSortToggle("equipmentCode")}
-                  className="py-3.5 px-4 cursor-pointer hover:bg-slate-100/80 transition"
+                  className="py-2.5 px-3 cursor-pointer hover:bg-slate-100/80 transition"
                 >
                   <div className="flex items-center">
                     Equipment
@@ -690,7 +717,7 @@ export default function MyActionsScreen() {
                 </th>
                 <th
                   onClick={() => handleSortToggle("workflowStage")}
-                  className="py-3.5 px-4 cursor-pointer hover:bg-slate-100/80 transition"
+                  className="py-2.5 px-3 cursor-pointer hover:bg-slate-100/80 transition"
                 >
                   <div className="flex items-center">
                     Stage
@@ -699,7 +726,7 @@ export default function MyActionsScreen() {
                 </th>
                 <th
                   onClick={() => handleSortToggle("rawStatus")}
-                  className="py-3.5 px-4 cursor-pointer hover:bg-slate-100/80 transition"
+                  className="py-2.5 px-3 cursor-pointer hover:bg-slate-100/80 transition"
                 >
                   <div className="flex items-center">
                     Workflow Status
@@ -708,33 +735,33 @@ export default function MyActionsScreen() {
                 </th>
                 <th
                   onClick={() => handleSortToggle("lastActionAt")}
-                  className="py-3.5 px-4 cursor-pointer hover:bg-slate-100/80 transition"
+                  className="py-2.5 px-3 cursor-pointer hover:bg-slate-100/80 transition"
                 >
                   <div className="flex items-center">
                     Last Modified
                     {renderSortIndicator("lastActionAt")}
                   </div>
                 </th>
-                <th className="py-3.5 px-4 text-right">Dynamic Actions</th>
+                <th className="py-2.5 px-3 text-right">Dynamic Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {isLoading ? (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-slate-500 font-medium">
+                  <td colSpan={8} className="py-8 text-center text-slate-500 font-medium">
                     <div className="flex flex-col items-center justify-center gap-2">
-                      <ArrowClockwise className="h-6 w-6 animate-spin text-indigo-600" />
-                      <span>Resolving dynamic state machine authorizations...</span>
+                      <ArrowClockwise className="h-5 w-5 animate-spin text-indigo-600" />
+                      <span className="text-xs">Resolving dynamic state machine authorizations...</span>
                     </div>
                   </td>
                 </tr>
               ) : paginatedItems.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-slate-500 font-medium">
+                  <td colSpan={8} className="py-8 text-center text-slate-500 font-medium">
                     <div className="flex flex-col items-center justify-center gap-1">
-                      <CheckCircle className="h-8 w-8 text-emerald-500 opacity-60" />
-                      <span className="text-slate-700 font-semibold text-sm">No action items in queue</span>
-                      <span className="text-slate-500 text-xs">
+                      <CheckCircle className="h-6 w-6 text-emerald-500 opacity-60" />
+                      <span className="text-slate-700 font-semibold text-xs">No action items in queue</span>
+                      <span className="text-slate-500 text-[11px]">
                         {searchTerm || statusFilter !== "ALL" || equipmentTypeFilter !== "ALL"
                           ? "No tasks match your filter criteria. Try adjusting your filters."
                           : "All batches are up to date for your role authorization."}
@@ -743,9 +770,9 @@ export default function MyActionsScreen() {
                         <button
                           type="button"
                           onClick={handleResetFilters}
-                          className="mt-2 inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg transition"
+                          className="mt-1.5 inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg transition"
                         >
-                          <ArrowCounterClockwise className="h-3.5 w-3.5 text-indigo-600" />
+                          <ArrowCounterClockwise className="h-3 w-3 text-indigo-600" />
                           Clear Filters
                         </button>
                       )}
@@ -762,47 +789,60 @@ export default function MyActionsScreen() {
                       key={item.id}
                       className={`transition group ${isSelected ? "bg-indigo-50/60" : "hover:bg-slate-50/80"}`}
                     >
-                      <td className="py-3 px-4 w-10 text-center">
+                      <td className="py-2.5 px-3 w-10 text-center">
                         <input
                           type="checkbox"
                           checked={isSelected}
                           onChange={() => handleToggleItemSelection(item.id)}
                           aria-label={`Select task for batch ${item.batchNo} stage ${item.equipmentCode}`}
-                          className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                          className="h-3.5 w-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                         />
                       </td>
-                      <td className="py-3 px-4 font-mono font-medium text-slate-900">
-                        <div className="font-bold text-slate-900">{item.batchNo}</div>
-                        <div className="text-[11px] text-slate-500 font-sans">{item.lotNo}</div>
+                      <td className="py-2.5 px-3 font-mono font-medium text-slate-900">
+                        <div className="font-bold text-slate-900 text-xs">{item.batchNo}</div>
+                        <div className="text-[10px] text-slate-500 font-sans">{item.lotNo}</div>
                       </td>
-                      <td className="py-3 px-4">
-                        <div className="font-medium text-slate-900">{item.productName}</div>
-                        <div className="text-[11px] font-mono text-slate-500">{item.productCode}</div>
+                      <td className="py-2.5 px-3">
+                        <div className="font-medium text-slate-900 text-xs">{item.productName}</div>
+                        <div className="text-[10px] font-mono text-slate-500">{item.productCode}</div>
                       </td>
-                      <td className="py-3 px-4">
-                        <span className="font-mono font-semibold px-2 py-0.5 rounded bg-slate-100 border border-slate-200 text-slate-700 text-[11px]">
+                      <td className="py-2.5 px-3">
+                        <span className="font-mono font-semibold px-1.5 py-0.5 rounded bg-slate-100 border border-slate-200 text-slate-700 text-[10px]">
                           {item.equipmentCode}
                         </span>
                       </td>
-                      <td className="py-3 px-4">
-                        <div className="text-slate-700 font-medium">{item.workflowStage}</div>
+                      <td className="py-2.5 px-3">
+                        <div className="text-slate-700 font-medium text-xs">{item.workflowStage}</div>
                       </td>
-                      <td className="py-3 px-4">
-                        <span
-                          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold border ${getStatusBadge(
-                            item.rawStatus
-                          )}`}
-                        >
-                          {item.displayStatus}
-                        </span>
+                      <td className="py-2.5 px-3">
+                        {item.rawStatus === "UNDER_REVIEW" || item.rawStatus === "IN_REVIEW" ? (
+                          <span
+                            className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 animate-pulse shadow-xs"
+                            title="A reviewer is currently processing this batch to prevent duplicate group efforts."
+                          >
+                            <span className="relative flex h-2 w-2">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-600"></span>
+                            </span>
+                            {item.displayStatus}
+                          </span>
+                        ) : (
+                          <span
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${getStatusBadge(
+                              item.rawStatus
+                            )}`}
+                          >
+                            {item.displayStatus}
+                          </span>
+                        )}
                       </td>
-                      <td className="py-3 px-4 text-slate-500 font-mono text-[11px]">
+                      <td className="py-2.5 px-3 text-slate-500 font-mono text-[10px]">
                         <div>{toDisplayDate(item.lastActionAt)}</div>
-                        <div className="text-[10px] text-slate-400 font-sans">by {item.lastAction}</div>
+                        <div className="text-[9px] text-slate-400 font-sans">by {item.lastAction}</div>
                       </td>
-                      <td className="py-3 px-4 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          {/* Canonical View Details Button */}
+                      <td className="py-2.5 px-3 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          {/* Canonical Compact View Details Button with Tooltip */}
                           <button
                             onClick={() => {
                               const detailUrl = `${ROUTES.iiotBatchDetails}/${item.batchNo}?lotNo=${encodeURIComponent(
@@ -812,31 +852,68 @@ export default function MyActionsScreen() {
                               )}&returnTo=${encodeURIComponent(ROUTES.iiotMyActions)}`;
                               router.push(detailUrl);
                             }}
-                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 font-medium text-xs shadow-sm transition"
+                            className="p-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 shadow-sm transition hover:text-indigo-600 inline-flex items-center justify-center"
                             title="View Batch Details"
+                            aria-label="View Batch Details"
                           >
-                            <Eye className="h-3.5 w-3.5 text-slate-500" /> Details
+                            <Eye className="h-3.5 w-3.5" />
                           </button>
 
-                          {/* Dynamically configured deduplicated row actions from Workflow MDM */}
+                          {/* Compact Assign to Me Button with Tooltip */}
+                          {(item.rawStatus === "UNDER_REVIEW" || item.rawStatus === "IN_REVIEW" || item.rawStatus === "PENDING_APPROVAL") && (
+                            <button
+                              onClick={() => handleQuickClaim(item)}
+                              className="p-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 shadow-sm transition inline-flex items-center justify-center"
+                              title="Claim this batch for your review"
+                              aria-label="Claim this batch for your review"
+                            >
+                              <UserPlus className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+
+                          {/* Dynamically configured deduplicated row actions as compact icon buttons */}
                           {deduplicatedActions.map((action) => {
-                            const isApprove = action.actionType === "APPROVE";
-                            const isReject = action.actionType === "REJECT";
-                            const isJustify = action.actionType === "JUSTIFY";
+                            const code = (action.actionCode || "").toUpperCase();
+                            const type = (action.actionType || "").toUpperCase();
+                            const isApprove = type === "APPROVE" || code.includes("APPROVE");
+                            const isReject = type === "REJECT" || type === "RETURN" || code.includes("REQUEST_ADDITIONAL") || code.includes("REJECT");
+                            const isJustify = type === "JUSTIFY" || type === "RESPONSE" || code.includes("RESPONSE");
+                            const isApprovalSubmit = code.includes("APPROVAL");
+                            const isDefer = type === "DEFER" || code.includes("DEFER");
 
                             let buttonStyle = "bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm";
                             if (isApprove) buttonStyle = "bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm";
-                            if (isReject) buttonStyle = "bg-rose-600 hover:bg-rose-700 text-white shadow-sm";
-                            if (isJustify) buttonStyle = "bg-amber-600 hover:bg-amber-700 text-white shadow-sm";
+                            else if (isReject) buttonStyle = "bg-rose-600 hover:bg-rose-700 text-white shadow-sm";
+                            else if (isJustify) buttonStyle = "bg-amber-600 hover:bg-amber-700 text-white shadow-sm";
+                            else if (isApprovalSubmit) buttonStyle = "bg-blue-600 hover:bg-blue-700 text-white shadow-sm";
+                            else if (isDefer) buttonStyle = "bg-purple-600 hover:bg-purple-700 text-white shadow-sm";
+
+                            const title = action.displayName || action.actionName || action.actionCode;
+
+                            let IconComponent = Lock;
+                            if (code.includes("REVIEW") && (code.includes("SUBMIT") || code.includes("SEND"))) {
+                              IconComponent = PaperPlaneTilt;
+                            } else if (code.includes("APPROVAL") && (code.includes("SUBMIT") || code.includes("SEND"))) {
+                              IconComponent = CheckSquare;
+                            } else if (isReject) {
+                              IconComponent = Question;
+                            } else if (isJustify) {
+                              IconComponent = ChatCenteredText;
+                            } else if (isApprove) {
+                              IconComponent = CheckCircle;
+                            } else if (isDefer) {
+                              IconComponent = ClockCountdown;
+                            }
 
                             return (
                               <button
                                 key={action.actionCode}
                                 onClick={() => handleOpenActionModal(action, item)}
-                                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium text-xs transition ${buttonStyle}`}
+                                title={title}
+                                aria-label={title}
+                                className={`p-1.5 rounded-lg transition inline-flex items-center justify-center ${buttonStyle}`}
                               >
-                                <Lock className="h-3 w-3 opacity-80" />
-                                {action.displayName || action.actionName || action.actionCode}
+                                <IconComponent className="h-3.5 w-3.5" />
                               </button>
                             );
                           })}
@@ -861,7 +938,7 @@ export default function MyActionsScreen() {
               setPageSize(sz);
               setCurrentPage(1);
             }}
-            pageSizeOptions={[10, 25, 50, 100]}
+            pageSizeOptions={[5, 10, 20, 50]}
           />
         )}
       </div>

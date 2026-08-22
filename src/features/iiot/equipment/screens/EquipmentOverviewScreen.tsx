@@ -7,7 +7,7 @@ import LineChart from "@/components/charts/LineChart";
 import { Snackbar } from "@/components/ui";
 import { getAllTopologyRecords } from "@/features/master-management/plant-topology/api/topology.api";
 import type { Area, Block, Plant, Room } from "@/features/master-management/shared/schemas";
-import { getEquipmentLiveStatuses } from "../api/reports.api";
+import { getEquipmentLiveStatuses, getBatchSummaryPaginated, getIiotTopology } from "../api/reports.api";
 import EquipmentFilterSection, {
   type EquipmentFilterOptions,
   type EquipmentFilterValues,
@@ -250,48 +250,43 @@ function EquipmentHealthCard({ counts }: { counts: EquipmentCounts }) {
       legendOrder: 2,
     },
     {
-      label: "Offline",
-      value: counts.offline,
-      displayValue: percentOf(counts.offline, counts.all),
-      color: "#9FA3A6",
-      gradientTo: "#B8BBBD",
-      legendOrder: 4,
+      label: "Critical",
+      value: counts["communication-error"],
+      displayValue: percentOf(counts["communication-error"], counts.all),
+      color: "#EF6A70",
+      gradientTo: "#FF9A9B",
+      legendOrder: 3,
     },
     {
       label: "Healthy",
       value: counts.running,
       displayValue: healthyPercent,
       color: "#2FB1A6",
-      gradientTo: "#89D4CD",
+      gradientTo: "#8FD1CA",
       legendOrder: 1,
     },
-    {
-      label: "Critical",
-      value: counts["communication-error"],
-      displayValue: percentOf(counts["communication-error"], counts.all),
-      color: "#FF8588",
-      gradientTo: "#EF646E",
-      legendOrder: 3,
-    },
   ];
-  const chartSegments =
-    counts.all > 0
-      ? segments
-      : segments.map((segment) =>
-          segment.label === "Offline" ? { ...segment, value: 1 } : segment,
-        );
 
   return (
-    <article className="module-glass-panel min-w-0 rounded-xl p-4 shadow-[0_14px_26px_rgba(35,50,70,0.14)]">
-      <h2 className="type-table-title">Equipment Health</h2>
-      <div className="mt-6 min-w-0 px-2 xl:px-6">
+    <article className="module-glass-card rounded-[8px] p-4 text-text-primary">
+      <h3 className="type-card-title text-text-heading">
+        Equipment Health Score
+      </h3>
+      <div className="mt-4 flex items-center justify-between gap-3">
+        <div className="flex flex-col gap-1">
+          <p className="type-metric-large text-text-heading">
+            {healthyPercent}%
+          </p>
+          <p className="type-caption text-text-secondary">
+            Operational Reliability
+          </p>
+        </div>
         <DoughnutChart
-          segments={chartSegments}
-          centerValue={`${healthyPercent}%`}
-          centerLabel="Healthy"
-          size={112}
-          strokeWidth={15}
-          gapDegrees={4}
+          segments={segments}
+          centerValue={`${counts.all}`}
+          centerLabel="Total Units"
+          size={130}
+          strokeWidth={14}
         />
       </div>
     </article>
@@ -303,21 +298,14 @@ function StatusDistributionCard({ counts }: { counts: EquipmentCounts }) {
   const maxValue = roundChartMax(
     Math.max(...items.map((item) => item.value), 0),
   );
-  const ticks = Array.from({ length: 5 }, (_, index) =>
-    Math.round(maxValue - (maxValue / 5) * index),
-  ).filter((tick) => tick > 0);
 
   return (
-    <article className="module-glass-panel min-w-0 rounded-xl p-4 shadow-[0_14px_26px_rgba(35,50,70,0.14)]">
-      <h2 className="type-table-title">Status Distribution</h2>
+    <article className="module-glass-card rounded-[8px] p-4 text-text-primary">
+      <h3 className="type-card-title text-text-heading">
+        Status Distribution
+      </h3>
       <div className="mt-6">
-        <BarChart
-          items={items}
-          maxValue={maxValue}
-          ticks={ticks}
-          height={130}
-          tooltipValueFormatter={(value) => `${value} equipment`}
-        />
+        <BarChart items={items} maxValue={maxValue} height={130} />
       </div>
     </article>
   );
@@ -332,10 +320,13 @@ function PerformanceTrendCard({
   const chartPoints = useMemo(() => aggregateTrendPoints(points, period), [points, period]);
 
   return (
-    <article className="module-glass-panel min-w-0 rounded-xl p-4 shadow-[0_14px_26px_rgba(35,50,70,0.14)]">
+    <article className="module-glass-card rounded-[8px] p-4 text-text-primary">
       <div className="flex items-center justify-between gap-3">
-        <h2 className="type-table-title">Equipment Status Trend</h2>
+        <h3 className="type-card-title text-text-heading">
+          Performance Trend
+        </h3>
         <select
+          aria-label="Performance trend period"
           value={period}
           onChange={(event) => setPeriod(event.target.value as TrendViewPeriod)}
           className="module-glass-control type-filter-button h-7 rounded-[4px] px-2 text-text-heading"
@@ -467,6 +458,7 @@ const getEquipmentFilterOptions = (
 
   const filteredRooms = topology.rooms.filter((row) => {
     if (values.plantId !== "all" && row.plantId !== values.plantId) return false;
+    if (values.blockId !== "all" && "blockId" in row && (row as unknown as { blockId: string }).blockId !== values.blockId) return false;
     if (values.areaId !== "all" && row.areaId !== values.areaId) return false;
     return true;
   });
@@ -519,35 +511,104 @@ export default function EquipmentOverviewScreen() {
 
     Promise.allSettled([
       getEquipmentLiveStatuses({}, controller.signal),
+      getBatchSummaryPaginated({ limit: 100 }),
+      getIiotTopology(controller.signal),
       getAllTopologyRecords("plants", controller.signal, { skipPlantSelection: true }),
       getAllTopologyRecords("blocks", controller.signal, { skipPlantSelection: true }),
       getAllTopologyRecords("areas", controller.signal, { skipPlantSelection: true }),
       getAllTopologyRecords("rooms", controller.signal, { skipPlantSelection: true }),
     ])
-      .then(([statusesResult, plantsResult, blocksResult, areasResult, roomsResult]) => {
+      .then(([statusesResult, batchesResult, iiotTopoResult, plantsResult, blocksResult, areasResult, roomsResult]) => {
         if (controller.signal.aborted) return;
 
-        if (statusesResult.status !== "fulfilled") {
-          throw statusesResult.reason;
+        const statuses =
+          statusesResult.status === "fulfilled" ? statusesResult.value : [];
+
+        // Merge topology from MDM and IIoT topology endpoints
+        const iiotTopo = iiotTopoResult.status === "fulfilled" ? iiotTopoResult.value : { plants: [], blocks: [], areas: [], rooms: [] };
+
+        const plantMap = new Map<string, Plant>();
+        (plantsResult.status === "fulfilled" ? (plantsResult.value as Plant[]) : []).forEach((p) => plantMap.set(p.plantId, p));
+        (iiotTopo.plants as Plant[]).forEach((p) => { if (p.plantId && !plantMap.has(p.plantId)) plantMap.set(p.plantId, p); });
+
+        const blockMap = new Map<string, Block>();
+        (blocksResult.status === "fulfilled" ? (blocksResult.value as Block[]) : []).forEach((b) => blockMap.set(b.blockId, b));
+        (iiotTopo.blocks as Block[]).forEach((b) => { if (b.blockId && !blockMap.has(b.blockId)) blockMap.set(b.blockId, b); });
+
+        const areaMap = new Map<string, Area>();
+        (areasResult.status === "fulfilled" ? (areasResult.value as Area[]) : []).forEach((a) => areaMap.set(a.areaId, a));
+        (iiotTopo.areas as Area[]).forEach((a) => { if (a.areaId && !areaMap.has(a.areaId)) areaMap.set(a.areaId, a); });
+
+        const roomMap = new Map<string, Room>();
+        (roomsResult.status === "fulfilled" ? (roomsResult.value as Room[]) : []).forEach((r) => roomMap.set(r.roomId, r));
+        (iiotTopo.rooms as Room[]).forEach((r) => { if (r.roomId && !roomMap.has(r.roomId)) roomMap.set(r.roomId, r); });
+
+        // Map latest batch & lot per equipment from active batch summaries
+        const latestBatchByEquipment = new Map<string, { batchNo: string; lotNo: string }>();
+        if (batchesResult.status === "fulfilled") {
+          const summaries = batchesResult.value;
+          summaries.forEach((summary) => {
+            const bNo = summary.batchNo || "";
+            const lNo = summary.lotNo || "";
+            const stages = (summary.stages as Array<Record<string, unknown>>) || [];
+            stages.forEach((st) => {
+              const eq = String(st.equipmentCode || st.equipmentId || "").toUpperCase();
+              if (eq && !latestBatchByEquipment.has(eq) && bNo) {
+                latestBatchByEquipment.set(eq, { batchNo: bNo, lotNo: String(st.lotNo || lNo || "01 of 05") });
+              }
+            });
+            const mainEq = String(summary.equipmentId || "").toUpperCase();
+            if (mainEq && !latestBatchByEquipment.has(mainEq) && bNo) {
+              latestBatchByEquipment.set(mainEq, { batchNo: bNo, lotNo: lNo || "01 of 05" });
+            }
+          });
         }
 
-        const statuses = statusesResult.value;
-        const plants =
-          plantsResult.status === "fulfilled" ? (plantsResult.value as Plant[]) : [];
-        const blocks =
-          blocksResult.status === "fulfilled" ? (blocksResult.value as Block[]) : [];
-        const areas =
-          areasResult.status === "fulfilled" ? (areasResult.value as Area[]) : [];
-        const rooms =
-          roomsResult.status === "fulfilled" ? (roomsResult.value as Room[]) : [];
-        setTopology({ plants, blocks, areas, rooms });
+        const normalizedRows = statuses.map((status) => {
+          const row = normalizeLiveStatusToEquipmentRow(status);
+          const eqKey = (row.id || "").toUpperCase();
+          const batchInfo = latestBatchByEquipment.get(eqKey);
+          if (batchInfo) {
+            if (!row.lastBatchNo || row.lastBatchNo === "-" || row.lastBatchNo === "N/A") {
+              row.lastBatchNo = batchInfo.batchNo;
+            }
+            if (!row.lastLotNo || row.lastLotNo === "-" || row.lastLotNo === "N/A") {
+              row.lastLotNo = batchInfo.lotNo;
+            }
+          }
 
-        const normalizedRows = statuses.map(normalizeLiveStatusToEquipmentRow);
+          // Fallback topology registration from equipment row metadata
+          if (row.plantId && row.plantId !== "-" && !plantMap.has(row.plantId)) {
+            plantMap.set(row.plantId, { plantId: row.plantId, plantName: row.plantName || row.plantId, tenantId: "TNT-0001", plantCode: row.plantId, address: {}, timezone: "UTC", type: "Manufacturing", isActive: true, createdAt: "", updatedAt: "" });
+          }
+          if (row.blockId && row.blockId !== "-" && !blockMap.has(row.blockId)) {
+            blockMap.set(row.blockId, { blockId: row.blockId, blockName: row.blockName || row.blockId, plantId: row.plantId, tenantId: "TNT-0001", blockCode: row.blockId, displayOrder: 1, isActive: true, createdAt: "", updatedAt: "" });
+          }
+          if (row.areaId && row.areaId !== "-" && !areaMap.has(row.areaId)) {
+            areaMap.set(row.areaId, { areaId: row.areaId, areaName: row.areaName || row.areaId, blockId: row.blockId, plantId: row.plantId, tenantId: "TNT-0001", areaCode: row.areaId, displayOrder: 1, isActive: true, createdAt: "", updatedAt: "" });
+          }
+          if (row.roomNo && row.roomNo !== "-" && !roomMap.has(row.roomNo)) {
+            roomMap.set(row.roomNo, { roomId: row.roomNo, roomName: row.roomName || row.roomNo, areaId: row.areaId, plantId: row.plantId, tenantId: "TNT-0001", roomCode: row.roomNo, classification: "ISO_8", isActive: true, createdAt: "", updatedAt: "" });
+          }
+
+          return row;
+        });
+
+        const plants = Array.from(plantMap.values());
+        const blocks = Array.from(blockMap.values());
+        const areas = Array.from(areaMap.values());
+        const rooms = Array.from(roomMap.values());
+
+        setTopology({ plants, blocks, areas, rooms });
         setAllRows(
           withTopologyLabels(normalizedRows, { plants, blocks, areas, rooms }),
         );
         setLiveStatuses(statuses);
-        setErrorMessage("");
+        setErrorMessage(
+          statusesResult.status === "fulfilled"
+            ? ""
+            : "Equipment status is unavailable. Master topology filters are still available.",
+        );
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted) return;

@@ -87,8 +87,9 @@ export default function LicenseHistoryTable() {
         rows={rows}
         getRowKey={(row) => row.id}
         emptyText={!tenantId && context ? "No tenant context is assigned to this user." : isLoading ? "Loading license history..." : "No license history found."}
-        footerText={`SHOWING ${rows.length} OF ${history.length} ENTRIES`}
-        showPagination={false}
+        showPagination
+        pageSize={10}
+        pageSizeOptions={[10, 20, 30]}
         toolbar={
           <div className="flex items-center gap-3">
             <label className="module-glass-control hidden h-8 w-[290px] items-center gap-2 rounded-[4px] px-3 text-text-secondary md:flex">

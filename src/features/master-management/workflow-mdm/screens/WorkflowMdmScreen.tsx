@@ -23,6 +23,7 @@ import {
   FloppyDisk,
   CheckSquare,
 } from "@phosphor-icons/react";
+import TablePagination from "@/components/table/TablePagination";
 import {
   getWorkflowDefinitions,
   getWorkflowConfig,
@@ -86,6 +87,19 @@ export default function WorkflowMdmScreen() {
 
   const [isAssignmentModalOpen, setIsAssignmentModalOpen] = useState(false);
   const [editingAssignment, setEditingAssignment] = useState<Partial<WorkflowAssignmentItem> | null>(null);
+
+  // Tab Pagination States
+  const [stagesPage, setStagesPage] = useState(1);
+  const [stagesPageSize, setStagesPageSize] = useState(10);
+
+  const [actionsPage, setActionsPage] = useState(1);
+  const [actionsPageSize, setActionsPageSize] = useState(10);
+
+  const [transitionsPage, setTransitionsPage] = useState(1);
+  const [transitionsPageSize, setTransitionsPageSize] = useState(10);
+
+  const [assignmentsPage, setAssignmentsPage] = useState(1);
+  const [assignmentsPageSize, setAssignmentsPageSize] = useState(10);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -877,7 +891,11 @@ export default function WorkflowMdmScreen() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {config.stages.map((stg) => (
+                    {(() => {
+                      const totalStagesPages = Math.max(1, Math.ceil((config.stages.length || 0) / stagesPageSize));
+                      const safeStagesPage = Math.min(stagesPage, totalStagesPages);
+                      const visibleStages = (config.stages || []).slice((safeStagesPage - 1) * stagesPageSize, safeStagesPage * stagesPageSize);
+                      return visibleStages.map((stg) => (
                       <tr key={stg.stageId} className="hover:bg-slate-50/80 transition">
                         <td className="py-3 px-4 font-mono font-bold text-slate-900">{stg.sequence}</td>
                         <td className="py-3 px-4 font-mono font-semibold text-indigo-600">{stg.stageCode}</td>
@@ -916,9 +934,37 @@ export default function WorkflowMdmScreen() {
                           </div>
                         </td>
                       </tr>
-                    ))}
+                    ));
+                    })()}
                   </tbody>
                 </table>
+                <div className="flex shrink-0 items-center justify-between gap-3 border-t border-slate-200 px-4 py-3 bg-slate-50/60 rounded-b-xl">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="text-xs text-slate-600">
+                      Showing {config.stages.length === 0 ? 0 : (Math.min(stagesPage, Math.max(1, Math.ceil(config.stages.length / stagesPageSize))) - 1) * stagesPageSize + 1} to {Math.min(Math.min(stagesPage, Math.max(1, Math.ceil(config.stages.length / stagesPageSize))) * stagesPageSize, config.stages.length)} of {config.stages.length} entries
+                    </span>
+                    <label className="text-xs text-slate-600 flex items-center gap-2 whitespace-nowrap">
+                      Rows per page
+                      <select
+                        value={stagesPageSize}
+                        onChange={(e) => {
+                          setStagesPageSize(Number(e.target.value));
+                          setStagesPage(1);
+                        }}
+                        className="rounded-md border border-[#D9E2EE] bg-white px-2 py-1 text-slate-800 text-xs outline-none"
+                      >
+                        {[5, 10, 20].map((size) => (
+                          <option key={size} value={size}>{size}</option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                  <TablePagination
+                    currentPage={Math.min(stagesPage, Math.max(1, Math.ceil(config.stages.length / stagesPageSize)))}
+                    totalPages={Math.max(1, Math.ceil(config.stages.length / stagesPageSize))}
+                    onPageChange={setStagesPage}
+                  />
+                </div>
               </div>
             </div>
           )}
@@ -967,7 +1013,11 @@ export default function WorkflowMdmScreen() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {config.actions.map((act) => (
+                    {(() => {
+                      const totalActionsPages = Math.max(1, Math.ceil((config.actions.length || 0) / actionsPageSize));
+                      const safeActionsPage = Math.min(actionsPage, totalActionsPages);
+                      const visibleActions = (config.actions || []).slice((safeActionsPage - 1) * actionsPageSize, safeActionsPage * actionsPageSize);
+                      return visibleActions.map((act) => (
                       <tr key={act.actionId} className="hover:bg-slate-50/80 transition">
                         <td className="py-3 px-4 font-mono font-semibold text-indigo-600">{act.actionCode}</td>
                         <td className="py-3 px-4 font-medium text-slate-900">{act.displayName || act.actionName}</td>
@@ -1031,9 +1081,37 @@ export default function WorkflowMdmScreen() {
                           </div>
                         </td>
                       </tr>
-                    ))}
+                    ));
+                    })()}
                   </tbody>
                 </table>
+                <div className="flex shrink-0 items-center justify-between gap-3 border-t border-slate-200 px-4 py-3 bg-slate-50/60 rounded-b-xl">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="text-xs text-slate-600">
+                      Showing {config.actions.length === 0 ? 0 : (Math.min(actionsPage, Math.max(1, Math.ceil(config.actions.length / actionsPageSize))) - 1) * actionsPageSize + 1} to {Math.min(Math.min(actionsPage, Math.max(1, Math.ceil(config.actions.length / actionsPageSize))) * actionsPageSize, config.actions.length)} of {config.actions.length} entries
+                    </span>
+                    <label className="text-xs text-slate-600 flex items-center gap-2 whitespace-nowrap">
+                      Rows per page
+                      <select
+                        value={actionsPageSize}
+                        onChange={(e) => {
+                          setActionsPageSize(Number(e.target.value));
+                          setActionsPage(1);
+                        }}
+                        className="rounded-md border border-[#D9E2EE] bg-white px-2 py-1 text-slate-800 text-xs outline-none"
+                      >
+                        {[5, 10, 20].map((size) => (
+                          <option key={size} value={size}>{size}</option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                  <TablePagination
+                    currentPage={Math.min(actionsPage, Math.max(1, Math.ceil(config.actions.length / actionsPageSize)))}
+                    totalPages={Math.max(1, Math.ceil(config.actions.length / actionsPageSize))}
+                    onPageChange={setActionsPage}
+                  />
+                </div>
               </div>
             </div>
           )}
@@ -1076,7 +1154,11 @@ export default function WorkflowMdmScreen() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {config.transitions.map((t) => (
+                    {(() => {
+                      const totalTransitionsPages = Math.max(1, Math.ceil((config.transitions.length || 0) / transitionsPageSize));
+                      const safeTransitionsPage = Math.min(transitionsPage, totalTransitionsPages);
+                      const visibleTransitions = (config.transitions || []).slice((safeTransitionsPage - 1) * transitionsPageSize, safeTransitionsPage * transitionsPageSize);
+                      return visibleTransitions.map((t) => (
                       <tr key={t.transitionId} className="hover:bg-slate-50/80 transition">
                         <td className="py-3 px-4 font-mono text-slate-500">{t.transitionId}</td>
                         <td className="py-3 px-4 font-medium text-slate-900">{t.fromStageCode}</td>
@@ -1106,9 +1188,37 @@ export default function WorkflowMdmScreen() {
                           </div>
                         </td>
                       </tr>
-                    ))}
+                    ));
+                    })()}
                   </tbody>
                 </table>
+                <div className="flex shrink-0 items-center justify-between gap-3 border-t border-slate-200 px-4 py-3 bg-slate-50/60 rounded-b-xl">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="text-xs text-slate-600">
+                      Showing {config.transitions.length === 0 ? 0 : (Math.min(transitionsPage, Math.max(1, Math.ceil(config.transitions.length / transitionsPageSize))) - 1) * transitionsPageSize + 1} to {Math.min(Math.min(transitionsPage, Math.max(1, Math.ceil(config.transitions.length / transitionsPageSize))) * transitionsPageSize, config.transitions.length)} of {config.transitions.length} entries
+                    </span>
+                    <label className="text-xs text-slate-600 flex items-center gap-2 whitespace-nowrap">
+                      Rows per page
+                      <select
+                        value={transitionsPageSize}
+                        onChange={(e) => {
+                          setTransitionsPageSize(Number(e.target.value));
+                          setTransitionsPage(1);
+                        }}
+                        className="rounded-md border border-[#D9E2EE] bg-white px-2 py-1 text-slate-800 text-xs outline-none"
+                      >
+                        {[5, 10, 20].map((size) => (
+                          <option key={size} value={size}>{size}</option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                  <TablePagination
+                    currentPage={Math.min(transitionsPage, Math.max(1, Math.ceil(config.transitions.length / transitionsPageSize)))}
+                    totalPages={Math.max(1, Math.ceil(config.transitions.length / transitionsPageSize))}
+                    onPageChange={setTransitionsPage}
+                  />
+                </div>
               </div>
             </div>
           )}
@@ -1151,7 +1261,11 @@ export default function WorkflowMdmScreen() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {config.assignments.map((a) => (
+                    {(() => {
+                      const totalAssignmentsPages = Math.max(1, Math.ceil((config.assignments.length || 0) / assignmentsPageSize));
+                      const safeAssignmentsPage = Math.min(assignmentsPage, totalAssignmentsPages);
+                      const visibleAssignments = (config.assignments || []).slice((safeAssignmentsPage - 1) * assignmentsPageSize, safeAssignmentsPage * assignmentsPageSize);
+                      return visibleAssignments.map((a) => (
                       <tr key={a.assignmentId} className="hover:bg-slate-50/80 transition">
                         <td className="py-3 px-4 font-mono text-slate-500">{a.assignmentId}</td>
                         <td className="py-3 px-4 font-semibold text-indigo-600">{a.stageCode}</td>
@@ -1183,9 +1297,37 @@ export default function WorkflowMdmScreen() {
                           </div>
                         </td>
                       </tr>
-                    ))}
+                    ));
+                    })()}
                   </tbody>
                 </table>
+                <div className="flex shrink-0 items-center justify-between gap-3 border-t border-slate-200 px-4 py-3 bg-slate-50/60 rounded-b-xl">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="text-xs text-slate-600">
+                      Showing {config.assignments.length === 0 ? 0 : (Math.min(assignmentsPage, Math.max(1, Math.ceil(config.assignments.length / assignmentsPageSize))) - 1) * assignmentsPageSize + 1} to {Math.min(Math.min(assignmentsPage, Math.max(1, Math.ceil(config.assignments.length / assignmentsPageSize))) * assignmentsPageSize, config.assignments.length)} of {config.assignments.length} entries
+                    </span>
+                    <label className="text-xs text-slate-600 flex items-center gap-2 whitespace-nowrap">
+                      Rows per page
+                      <select
+                        value={assignmentsPageSize}
+                        onChange={(e) => {
+                          setAssignmentsPageSize(Number(e.target.value));
+                          setAssignmentsPage(1);
+                        }}
+                        className="rounded-md border border-[#D9E2EE] bg-white px-2 py-1 text-slate-800 text-xs outline-none"
+                      >
+                        {[5, 10, 20].map((size) => (
+                          <option key={size} value={size}>{size}</option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                  <TablePagination
+                    currentPage={Math.min(assignmentsPage, Math.max(1, Math.ceil(config.assignments.length / assignmentsPageSize)))}
+                    totalPages={Math.max(1, Math.ceil(config.assignments.length / assignmentsPageSize))}
+                    onPageChange={setAssignmentsPage}
+                  />
+                </div>
               </div>
             </div>
           )}
