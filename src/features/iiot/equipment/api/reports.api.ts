@@ -309,11 +309,15 @@ export const getWorkflowAssignees = async (
   params: { targetStatus?: string; tenantId?: string; plantId?: string } = {},
   signal?: AbortSignal,
 ): Promise<WorkflowAssignee[]> => {
-  const response = await apiClient<BackendApiResponse<WorkflowAssignee[]>>(
-    withQuery(resourcePath("workflow/assignees"), params),
-    { signal },
-  );
-  return response.data || [];
+  try {
+    const response = await apiClient<BackendApiResponse<WorkflowAssignee[]>>(
+      withQuery(resourcePath("workflow/assignees"), params),
+      { signal },
+    );
+    return response.data || [];
+  } catch {
+    return [];
+  }
 };
 
 export interface BulkApprovalItem {
@@ -488,11 +492,15 @@ export const getAllowedActions = async (
   params: { batchNo: string; lotNo: string; equipmentCode: string; tenantId?: string; plantId?: string },
   signal?: AbortSignal,
 ): Promise<AllowedWorkflowAction[]> => {
-  const response = await apiClient<BackendApiResponse<AllowedWorkflowAction[]>>(
-    withQuery(resourcePath("workflow/allowed-actions"), params),
-    { signal },
-  );
-  return deduplicateAllowedActions(response.data || []);
+  try {
+    const response = await apiClient<BackendApiResponse<AllowedWorkflowAction[]>>(
+      withQuery(resourcePath("workflow/allowed-actions"), params),
+      { signal },
+    );
+    return deduplicateAllowedActions(response.data || []);
+  } catch {
+    return [];
+  }
 };
 
 export interface BulkActionTaskItem {
@@ -625,38 +633,55 @@ export const getWorkflowDashboardCounts = async (
   params: { tenantId?: string; plantId?: string } = {},
   signal?: AbortSignal,
 ): Promise<WorkflowDashboardCounts> => {
-  const response = await apiClient<BackendApiResponse<WorkflowDashboardCounts>>(
-    withQuery(resourcePath("workflow/dashboard-counts"), params),
-    { signal },
-  );
-  return response.data || {
-    pendingMyAction: 0,
-    pendingReview: 0,
-    pendingApproval: 0,
-    completedActions: 0,
-  };
+  try {
+    const response = await apiClient<BackendApiResponse<WorkflowDashboardCounts>>(
+      withQuery(resourcePath("workflow/dashboard-counts"), params),
+      { signal },
+    );
+    return response.data || {
+      pendingMyAction: 0,
+      pendingReview: 0,
+      pendingApproval: 0,
+      completedActions: 0,
+    };
+  } catch {
+    return {
+      pendingMyAction: 0,
+      pendingReview: 0,
+      pendingApproval: 0,
+      completedActions: 0,
+    };
+  }
 };
 
 export const getWorkflowAuditTrail = async (
   params: { batchNo?: string; lotNo?: string; equipmentCode?: string; tenantId?: string } = {},
   signal?: AbortSignal,
 ): Promise<WorkflowAuditEvent[]> => {
-  const response = await apiClient<BackendApiResponse<WorkflowAuditEvent[]>>(
-    withQuery(resourcePath("workflow/audit-trail"), params),
-    { signal },
-  );
-  return response.data || [];
+  try {
+    const response = await apiClient<BackendApiResponse<WorkflowAuditEvent[]>>(
+      withQuery(resourcePath("workflow/audit-trail"), params),
+      { signal },
+    );
+    return response.data || [];
+  } catch {
+    return [];
+  }
 };
 
 export const getWorkflowInstanceAndHistory = async (
   params: { batchNo: string; lotNo: string; equipmentCode: string; tenantId?: string; plantId?: string },
   signal?: AbortSignal,
 ): Promise<{ instance: Record<string, unknown> | null; history: WorkflowActionHistoryItem[] }> => {
-  const response = await apiClient<BackendApiResponse<{ instance: Record<string, unknown> | null; history: WorkflowActionHistoryItem[] }>>(
-    withQuery(resourcePath("workflow/instance"), params),
-    { signal },
-  );
-  return response.data || { instance: null, history: [] };
+  try {
+    const response = await apiClient<BackendApiResponse<{ instance: Record<string, unknown> | null; history: WorkflowActionHistoryItem[] }>>(
+      withQuery(resourcePath("workflow/instance"), params),
+      { signal },
+    );
+    return response.data || { instance: null, history: [] };
+  } catch {
+    return { instance: null, history: [] };
+  }
 };
 
 export const claimWorkflowTask = async (
