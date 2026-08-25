@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { DownloadSimple, UploadSimple, CheckCircle, WarningCircle, ArrowClockwise, FileCsv } from "@phosphor-icons/react";
+import { DownloadSimple, UploadSimple, CheckCircle, WarningCircle, ArrowClockwise, FileCsv, Info } from "@phosphor-icons/react";
 import { Snackbar } from "@/components/ui";
 
 const ENTITY_OPTIONS = [
@@ -16,7 +16,7 @@ const ENTITY_OPTIONS = [
 ];
 
 export default function BulkUploadScreen() {
-  const [selectedType, setSelectedType] = useState<string>("USER");
+  const [selectedType, setSelectedType] = useState<string>("DEPARTMENT");
   const [uploadMode, setUploadMode] = useState<"UPDATE" | "TRUNCATE_AND_LOAD">("UPDATE");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState<boolean>(false);
@@ -39,7 +39,7 @@ export default function BulkUploadScreen() {
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
-      setNotification({ message: `Downloaded ${selectedType} template CSV`, variant: "success" });
+      setNotification({ message: `Downloaded ${selectedType} template CSV (business fields only)`, variant: "success" });
     } catch (err: any) {
       setNotification({ message: err.message || "Failed to download template", variant: "error" });
     }
@@ -72,7 +72,7 @@ export default function BulkUploadScreen() {
         setUploadResult(json.data);
         if (json.data.errorCount === 0) {
           setNotification({
-            message: `Successfully processed ${json.data.successCount} ${selectedType} records!`,
+            message: `Successfully processed ${json.data.successCount} ${selectedType} records! (Created: ${json.data.createdCount || 0}, Updated: ${json.data.updatedCount || 0})`,
             variant: "success",
           });
         } else {
@@ -95,11 +95,11 @@ export default function BulkUploadScreen() {
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center pb-4 border-b border-gray-200">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-gray-200">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Master Data Bulk Upload & Sync</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Standardized CSV bulk import with schema validation, update modes, and audit logging.
+            Standardized CSV bulk import with automatic sequence ID generation, schema validation, and audit trails.
           </p>
         </div>
         <button
@@ -109,6 +109,14 @@ export default function BulkUploadScreen() {
           <DownloadSimple size={18} />
           Download {selectedType} Template
         </button>
+      </div>
+
+      {/* Auto-generation Information Banner */}
+      <div className="bg-blue-50/70 border border-blue-200/80 rounded-xl p-4 flex items-start gap-3 text-blue-900 text-sm">
+        <Info size={20} className="text-blue-600 shrink-0 mt-0.5" />
+        <div>
+          <span className="font-semibold">Automatic System ID Generation:</span> Templates contain business fields only (e.g. Code, Name, Email, Description). Internal database identifiers (such as <code className="bg-blue-100/70 px-1 py-0.5 rounded text-xs">DEP-0001</code>, <code className="bg-blue-100/70 px-1 py-0.5 rounded text-xs">ROLE-0001</code>, <code className="bg-blue-100/70 px-1 py-0.5 rounded text-xs">USR-0001</code>) are automatically generated upon insertion.
+        </div>
       </div>
 
       {/* Main Grid */}
@@ -151,7 +159,7 @@ export default function BulkUploadScreen() {
                 <div>
                   <span className="text-sm font-medium text-gray-900">UPDATE (Upsert / Merge)</span>
                   <p className="text-xs text-gray-500 mt-0.5">
-                    Inserts new records and updates matching identifiers without deleting existing records.
+                    Inserts new records with auto-generated IDs and updates existing records matching business codes.
                   </p>
                 </div>
               </label>
@@ -168,7 +176,7 @@ export default function BulkUploadScreen() {
                 <div>
                   <span className="text-sm font-medium text-red-700">TRUNCATE & LOAD (Full Replace)</span>
                   <p className="text-xs text-red-500 mt-0.5">
-                    Clears all existing tenant records in this collection and loads only the rows in the CSV.
+                    Clears all existing tenant records in this collection and loads fresh records with sequential IDs.
                   </p>
                 </div>
               </label>
@@ -245,43 +253,86 @@ export default function BulkUploadScreen() {
         </div>
       </div>
 
-      {/* Upload Results & Error Breakdown */}
+      {/* Upload Results & Item Breakdown */}
       {uploadResult && (
-        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm space-y-4">
-          <div className="flex items-center justify-between pb-4 border-b border-gray-100">
+        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm space-y-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-gray-100">
             <div className="flex items-center gap-3">
               {uploadResult.status === "SUCCESS" ? (
-                <CheckCircle size={28} className="text-emerald-500" />
+                <CheckCircle size={28} className="text-emerald-500 shrink-0" />
               ) : (
-                <WarningCircle size={28} className="text-amber-500" />
+                <WarningCircle size={28} className="text-amber-500 shrink-0" />
               )}
               <div>
                 <h2 className="text-lg font-bold text-gray-900">
-                  {uploadResult.status === "SUCCESS" ? "Upload Succeeded" : "Upload Validation Results"}
+                  {uploadResult.status === "SUCCESS" ? "Upload Completed Successfully" : "Upload Validation Results"}
                 </h2>
                 <p className="text-sm text-gray-500">{uploadResult.message}</p>
               </div>
             </div>
 
-            <div className="flex gap-4">
+            <div className="flex flex-wrap gap-3">
               <div className="text-center px-4 py-1.5 bg-gray-50 rounded-lg border border-gray-100">
                 <span className="block text-xs text-gray-500 font-medium">Total Rows</span>
                 <span className="text-base font-bold text-gray-800">{uploadResult.totalRows}</span>
               </div>
               <div className="text-center px-4 py-1.5 bg-emerald-50 rounded-lg border border-emerald-100">
-                <span className="block text-xs text-emerald-600 font-medium">Ingested</span>
-                <span className="text-base font-bold text-emerald-700">{uploadResult.successCount}</span>
+                <span className="block text-xs text-emerald-600 font-medium">Created (New IDs)</span>
+                <span className="text-base font-bold text-emerald-700">{uploadResult.createdCount ?? 0}</span>
+              </div>
+              <div className="text-center px-4 py-1.5 bg-blue-50 rounded-lg border border-blue-100">
+                <span className="block text-xs text-blue-600 font-medium">Updated</span>
+                <span className="text-base font-bold text-blue-700">{uploadResult.updatedCount ?? 0}</span>
               </div>
               <div className="text-center px-4 py-1.5 bg-red-50 rounded-lg border border-red-100">
                 <span className="block text-xs text-red-600 font-medium">Errors</span>
-                <span className="text-base font-bold text-red-700">{uploadResult.errorCount}</span>
+                <span className="text-base font-bold text-red-700">{uploadResult.errorCount ?? 0}</span>
               </div>
             </div>
           </div>
 
+          {/* Processed Items Table */}
+          {uploadResult.items && uploadResult.items.length > 0 && (
+            <div>
+              <h3 className="text-sm font-semibold text-gray-800 mb-2">Ingestion Breakdown & Generated System IDs:</h3>
+              <div className="overflow-x-auto rounded-lg border border-gray-200">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-gray-50 text-gray-700 text-xs font-semibold uppercase">
+                    <tr>
+                      <th className="px-4 py-2.5">Row #</th>
+                      <th className="px-4 py-2.5">Business Key / Code</th>
+                      <th className="px-4 py-2.5">Action</th>
+                      <th className="px-4 py-2.5">Assigned System ID</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 text-gray-700 bg-white font-mono text-xs">
+                    {uploadResult.items.map((item: any, idx: number) => (
+                      <tr key={idx} className="hover:bg-gray-50/50">
+                        <td className="px-4 py-2 text-gray-500 font-semibold">{item.rowNumber}</td>
+                        <td className="px-4 py-2 text-gray-800 font-medium">{item.businessKey}</td>
+                        <td className="px-4 py-2">
+                          <span
+                            className={`inline-flex items-center px-2 py-0.5 rounded-full font-sans text-xs font-medium ${
+                              item.action === "CREATED"
+                                ? "bg-emerald-100 text-emerald-800"
+                                : "bg-blue-100 text-blue-800"
+                            }`}
+                          >
+                            {item.action}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2 font-bold text-gray-900">{item.id}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
           {/* Errors Table if any */}
           {uploadResult.errors && uploadResult.errors.length > 0 && (
-            <div className="mt-4">
+            <div>
               <h3 className="text-sm font-semibold text-red-700 mb-2">Row-Level Error Details:</h3>
               <div className="overflow-x-auto rounded-lg border border-red-100">
                 <table className="w-full text-left text-sm">

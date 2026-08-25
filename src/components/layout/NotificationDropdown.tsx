@@ -45,6 +45,7 @@ export default function NotificationDropdown() {
     unreadCount,
     isLoading,
     error,
+    currentPlantId,
     refreshNotifications,
     refreshUnreadCount,
     markAsRead,
@@ -55,34 +56,52 @@ export default function NotificationDropdown() {
   const [activeTab, setActiveTab] = useState<"ALL" | "UNREAD">("ALL");
   const panelRef = useRef<HTMLDivElement>(null);
 
-  const handleToggle = () => {
+  const handleToggle = (e: React.MouseEvent) => {
+    e.stopPropagation();
     if (!isOpen) {
-      void refreshNotifications({ unreadOnly: activeTab === "UNREAD" });
+      void refreshNotifications({ unreadOnly: activeTab === "UNREAD", plantId: currentPlantId });
+      void refreshUnreadCount(currentPlantId);
     }
     setIsOpen((prev) => !prev);
   };
 
   const handleTabChange = (tab: "ALL" | "UNREAD") => {
     setActiveTab(tab);
-    void refreshNotifications({ unreadOnly: tab === "UNREAD" });
+    void refreshNotifications({ unreadOnly: tab === "UNREAD", plantId: currentPlantId });
   };
 
-  const handleNotificationClick = async (item: NotificationItem) => {
+  const handleNotificationClick = (item: NotificationItem, e: React.MouseEvent) => {
+    e.stopPropagation();
     if (!item.isRead) {
-      await markAsRead(item.notificationId);
+      void markAsRead(item.notificationId);
     }
     setIsOpen(false);
 
-    // Deep link routing based on entity and workflow state
+    // Deep link navigation
+    if (item.deepLink && item.deepLink.startsWith("/")) {
+      router.push(item.deepLink);
+      return;
+    }
+
     const state = item.workflowState?.toUpperCase() || "";
-    if (state === "APPROVED") {
-      router.push(ROUTES.iiotApprovedBatches);
-    } else if (state === "UNDER_REVIEW" || state === "REVIEWER_REVIEWED") {
-      router.push(ROUTES.iiotMyActions);
-    } else if (state === "REJECTED" || state === "PENDING") {
-      router.push(ROUTES.iiotPendingReports);
+    const eventCode = item.eventCode?.toUpperCase() || "";
+    const type = item.type?.toUpperCase() || "";
+
+    if (type === "ALARM" || eventCode.includes("ALARM")) {
+      const eqParam = item.equipmentCode ? `?equipmentId=${encodeURIComponent(item.equipmentCode)}` : "";
+      router.push(`/iiot/reports/alarm-events${eqParam}`);
+    } else if (state === "APPROVED") {
+      const batchParam = item.batchNo ? `?batchNo=${encodeURIComponent(item.batchNo)}` : "";
+      router.push(`${ROUTES.iiotApprovedBatches}${batchParam}`);
+    } else if (state === "DEFERRED") {
+      const batchParam = item.batchNo ? `?batchNo=${encodeURIComponent(item.batchNo)}` : "";
+      router.push(`${ROUTES.iiotDeferredBatches}${batchParam}`);
+    } else if (state === "REJECTED" || state === "RETURNED_TO_OPERATOR" || state === "RETURNED" || state === "PENDING") {
+      const batchParam = item.batchNo ? `?batchNo=${encodeURIComponent(item.batchNo)}` : "";
+      router.push(`${ROUTES.iiotPendingReports}${batchParam}`);
     } else {
-      router.push(ROUTES.iiotMyActions);
+      const batchParam = item.batchNo ? `?batchNo=${encodeURIComponent(item.batchNo)}` : "";
+      router.push(`${ROUTES.iiotMyActions}${batchParam}`);
     }
   };
 
@@ -150,6 +169,11 @@ export default function NotificationDropdown() {
                   {unreadCount} unread
                 </span>
               ) : null}
+              {currentPlantId ? (
+                <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-mono text-gray-500">
+                  {currentPlantId}
+                </span>
+              ) : null}
             </div>
 
             <div className="flex items-center gap-1.5">
@@ -157,8 +181,8 @@ export default function NotificationDropdown() {
                 type="button"
                 aria-label="Refresh notifications"
                 onClick={() => {
-                  void refreshNotifications({ unreadOnly: activeTab === "UNREAD" });
-                  void refreshUnreadCount();
+                  void refreshNotifications({ unreadOnly: activeTab === "UNREAD", plantId: currentPlantId });
+                  void refreshUnreadCount(currentPlantId);
                 }}
                 className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
               >
@@ -220,7 +244,7 @@ export default function NotificationDropdown() {
                 {error}
                 <button
                   type="button"
-                  onClick={() => void refreshNotifications()}
+                  onClick={() => void refreshNotifications({ plantId: currentPlantId })}
                   className="mt-2 block w-full text-blue-600 underline"
                 >
                   Retry
@@ -230,7 +254,7 @@ export default function NotificationDropdown() {
               <div className="py-10 text-center">
                 <CheckCircle size={28} weight="duotone" className="mx-auto text-gray-300" />
                 <p className="mt-2 text-xs font-medium text-gray-500">You're all caught up!</p>
-                <p className="mt-0.5 text-[11px] text-gray-400">No {activeTab === "UNREAD" ? "unread " : ""}notifications.</p>
+                <p className="mt-0.5 text-[11px] text-gray-400">No {activeTab === "UNREAD" ? "unread " : ""}notifications in this plant.</p>
               </div>
             ) : (
               displayedNotifications.map((item) => {
@@ -258,7 +282,7 @@ export default function NotificationDropdown() {
                   <div
                     key={item.notificationId}
                     data-notification-id={item.notificationId}
-                    onClick={() => void handleNotificationClick(item)}
+                    onClick={(e) => handleNotificationClick(item, e)}
                     className={`group relative flex cursor-pointer items-start gap-3 p-3 transition-colors hover:bg-blue-50/40 ${
                       !item.isRead ? "bg-blue-50/20" : ""
                     }`}
@@ -289,6 +313,11 @@ export default function NotificationDropdown() {
                         {item.batchNo ? (
                           <span className="rounded bg-gray-100 px-1 py-0.2 text-[9px] font-medium text-gray-600">
                             {item.batchNo}
+                          </span>
+                        ) : null}
+                        {item.equipmentCode ? (
+                          <span className="rounded bg-gray-100 px-1 py-0.2 text-[9px] font-medium text-gray-600 font-mono">
+                            {item.equipmentCode}
                           </span>
                         ) : null}
                       </div>

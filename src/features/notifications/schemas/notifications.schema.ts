@@ -21,6 +21,7 @@ export const notificationItemSchema = z.object({
   createdAt: z.string(),
   readAt: z.string().optional().nullable(),
   actorUserId: z.string().optional().nullable(),
+  deepLink: z.string().optional().nullable(),
 });
 
 export type NotificationItem = z.infer<typeof notificationItemSchema>;

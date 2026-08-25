@@ -46,6 +46,7 @@ const shouldAttachPlantSelection = (path: string) =>
     !path.startsWith("/api/master-management/mdm/tenants") &&
     !path.startsWith("/api/master-management/iiot/")) ||
   path.startsWith("/api/iiot/") ||
+  path.startsWith("/api/notifications") ||
   path.startsWith("/api/audit/");
 
 const appendPlantQuery = (path: string, plantId: string) => {

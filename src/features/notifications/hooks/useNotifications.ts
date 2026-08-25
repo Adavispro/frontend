@@ -8,17 +8,42 @@ import {
   markNotificationAsRead,
 } from "../api/notifications.api";
 import type { NotificationItem } from "../schemas/notifications.schema";
+import {
+  readSelectedPlantId,
+  SELECTED_PLANT_CHANGED_EVENT,
+} from "@/utils/plantSelection";
 
 export function useNotifications() {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState<number>(0);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>("");
+  const [currentPlantId, setCurrentPlantId] = useState<string>("");
   const isFetchingRef = useRef(false);
+  const plantIdRef = useRef<string>("");
 
-  const fetchCount = useCallback(async () => {
+  useEffect(() => {
+    const initialPlant = readSelectedPlantId();
+    setCurrentPlantId(initialPlant);
+    plantIdRef.current = initialPlant;
+
+    const handlePlantChanged = (event: Event) => {
+      const customEvent = event as CustomEvent<{ plantId?: string }>;
+      const nextPlant = customEvent.detail?.plantId ?? readSelectedPlantId();
+      setCurrentPlantId(nextPlant);
+      plantIdRef.current = nextPlant;
+    };
+
+    window.addEventListener(SELECTED_PLANT_CHANGED_EVENT, handlePlantChanged);
+    return () => {
+      window.removeEventListener(SELECTED_PLANT_CHANGED_EVENT, handlePlantChanged);
+    };
+  }, []);
+
+  const fetchCount = useCallback(async (plantId?: string) => {
+    const targetPlant = plantId !== undefined ? plantId : plantIdRef.current;
     try {
-      const data = await getUnreadCount();
+      const data = await getUnreadCount({ plantId: targetPlant });
       if (data && typeof data.unreadCount === "number") {
         setUnreadCount(data.unreadCount);
       }
@@ -28,14 +53,16 @@ export function useNotifications() {
   }, []);
 
   const loadList = useCallback(
-    async (params: { unreadOnly?: boolean; page?: number; limit?: number } = {}) => {
+    async (params: { unreadOnly?: boolean; page?: number; limit?: number; plantId?: string } = {}) => {
       if (isFetchingRef.current) return;
       isFetchingRef.current = true;
       setIsLoading(true);
       setError("");
 
+      const targetPlant = params.plantId !== undefined ? params.plantId : plantIdRef.current;
+
       try {
-        const data = await getNotifications(params);
+        const data = await getNotifications({ ...params, plantId: targetPlant });
         if (data && Array.isArray(data.items)) {
           setNotifications(data.items);
           setUnreadCount(data.unreadCount ?? 0);
@@ -53,7 +80,7 @@ export function useNotifications() {
 
   const handleMarkAsRead = useCallback(async (notificationId: string) => {
     try {
-      await markNotificationAsRead(notificationId);
+      await markNotificationAsRead(notificationId, { plantId: plantIdRef.current });
       setNotifications((prev) =>
         prev.map((item) =>
           item.notificationId === notificationId ? { ...item, isRead: true } : item,
@@ -67,7 +94,7 @@ export function useNotifications() {
 
   const handleMarkAllAsRead = useCallback(async () => {
     try {
-      await markAllNotificationsAsRead();
+      await markAllNotificationsAsRead({ plantId: plantIdRef.current });
       setNotifications((prev) => prev.map((item) => ({ ...item, isRead: true })));
       setUnreadCount(0);
     } catch {
@@ -75,12 +102,17 @@ export function useNotifications() {
     }
   }, []);
 
-  // Poll unread count periodically
+  // Refresh notifications and unread count when plant changes
   useEffect(() => {
-    void fetchCount();
+    void fetchCount(currentPlantId);
+    void loadList({ plantId: currentPlantId });
+  }, [currentPlantId, fetchCount, loadList]);
+
+  // Periodic poll for unread notifications (every 20s)
+  useEffect(() => {
     const interval = setInterval(() => {
-      void fetchCount();
-    }, 15000);
+      void fetchCount(plantIdRef.current);
+    }, 20000);
 
     return () => clearInterval(interval);
   }, [fetchCount]);
@@ -90,6 +122,7 @@ export function useNotifications() {
     unreadCount,
     isLoading,
     error,
+    currentPlantId,
     refreshNotifications: loadList,
     refreshUnreadCount: fetchCount,
     markAsRead: handleMarkAsRead,

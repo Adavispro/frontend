@@ -10,12 +10,15 @@ const allowedRoots = new Set([
   "critical-parameters",
   "critical-parameter-limits",
   "equipment-live-status",
+  "equipment-master",
   "reports",
   "source-mappings",
   "ingestion",
   "analytics",
   "workflow",
   "batch-reports",
+  "topology",
+  "live",
 ]);
 
 const errorResponse = (status: number, message: string, errorCode: string) =>
