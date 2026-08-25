@@ -344,9 +344,18 @@ export default function MyActionsScreen() {
   };
 
   const filteredItems = useMemo(() => {
-    const userRoles = (loginContext?.roles || []).map((r) =>
-      typeof r === "string" ? r.toUpperCase() : ((r as Record<string, unknown>).roleCode as string || "").toUpperCase()
-    );
+    const rawRoles = (loginContext?.roles as Array<unknown>) || [];
+    const userRoles = rawRoles.map((r) => {
+      if (typeof r === "string") return r.toUpperCase();
+      if (r && typeof r === "object") {
+        const code =
+          (r as Record<string, unknown>).roleCode ??
+          (r as Record<string, unknown>).role ??
+          (r as Record<string, unknown>).name;
+        return typeof code === "string" ? code.toUpperCase() : "";
+      }
+      return "";
+    });
     const isApprover = userRoles.some((r) => r.includes("APPROVER") || r.includes("ADMIN"));
     const isReviewer = userRoles.some((r) => r.includes("REVIEWER") || r.includes("ADMIN"));
     const isOperator = userRoles.some((r) => r.includes("OPERATOR") || r.includes("ADMIN"));
