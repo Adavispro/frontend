@@ -135,18 +135,26 @@ export default function MyActionsScreen() {
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
 
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [actionsCache, setActionsCache] = useState<Record<string, AllowedWorkflowAction[]>>({});
+  const [isResolvingPageActions, setIsResolvingPageActions] = useState(false);
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
-      // 1. Fetch dashboard counts
-      const dashboardCounts = await getWorkflowDashboardCounts();
+      // 1. Fetch dashboard counts & batch summaries in parallel
+      const [dashboardCounts, batchSummaries] = await Promise.all([
+        getWorkflowDashboardCounts().catch(() => ({
+          pendingMyAction: 0,
+          pendingReview: 0,
+          pendingApproval: 0,
+          completedActions: 0,
+        })),
+        getBatchSummaryPaginated({ limit: 50 }).catch(() => []),
+      ]);
+
       setCounts(dashboardCounts);
 
-      // 2. Fetch batch summaries (optimized to load latest 50 batches dynamically)
-      const batchSummaries = await getBatchSummaryPaginated({ limit: 50 });
-
-      // 3. Extract items across stages and query dynamic allowed actions
+      // 2. Extract items across stages immediately (0 blocking sequential calls)
       const extracted: MyActionItem[] = [];
 
       for (const summary of batchSummaries) {
@@ -174,18 +182,6 @@ export default function MyActionsScreen() {
           // Canonical unique row key
           const id = `${summaryId}:${batchNo}:${lotNo}:${equipmentCode}:${sequence}`;
 
-          let allowedActions: AllowedWorkflowAction[] = [];
-          try {
-            const rawAllowed = await getAllowedActions({
-              batchNo,
-              lotNo,
-              equipmentCode,
-            });
-            allowedActions = deduplicateAllowedActions(rawAllowed);
-          } catch (err) {
-            console.error(`Failed allowed actions for ${id}`, err);
-          }
-
           extracted.push({
             id,
             batchNo,
@@ -200,7 +196,7 @@ export default function MyActionsScreen() {
             displayStatus,
             lastAction: toText(approval.transitionedBy || stage.operatorName || "-"),
             lastActionAt: toText(approval.transitionedAt || stage.stageEndAt || summary.updatedAt),
-            allowedActions,
+            allowedActions: [],
             summaryRef: summary,
           });
         }
@@ -348,6 +344,13 @@ export default function MyActionsScreen() {
   };
 
   const filteredItems = useMemo(() => {
+    const userRoles = (loginContext?.roles || []).map((r) =>
+      typeof r === "string" ? r.toUpperCase() : ((r as Record<string, unknown>).roleCode as string || "").toUpperCase()
+    );
+    const isApprover = userRoles.some((r) => r.includes("APPROVER") || r.includes("ADMIN"));
+    const isReviewer = userRoles.some((r) => r.includes("REVIEWER") || r.includes("ADMIN"));
+    const isOperator = userRoles.some((r) => r.includes("OPERATOR") || r.includes("ADMIN"));
+
     return items.filter((item) => {
       const matchSearch =
         !searchTerm ||
@@ -357,9 +360,16 @@ export default function MyActionsScreen() {
         item.productName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         item.equipmentCode.toLowerCase().includes(searchTerm.toLowerCase());
 
+      const itemActions = actionsCache[item.id] || item.allowedActions || [];
+      const hasDynamicActions = itemActions.length > 0;
+      const isRoleActionable =
+        (isApprover && (item.rawStatus === "REVIEWER_REVIEWED" || item.rawStatus === "PENDING_APPROVAL")) ||
+        (isReviewer && (item.rawStatus === "UNDER_REVIEW" || item.rawStatus === "IN_REVIEW")) ||
+        (isOperator && (item.rawStatus === "RETURNED_TO_OPERATOR" || item.rawStatus === "PENDING"));
+
       const matchStatus =
         statusFilter === "ALL" ||
-        (statusFilter === "MY_ACTION" && item.allowedActions.length > 0) ||
+        (statusFilter === "MY_ACTION" && (hasDynamicActions || isRoleActionable)) ||
         (statusFilter === "PENDING" && (item.rawStatus === "PENDING" || item.rawStatus === "NOT_STARTED")) ||
         (statusFilter === "UNDER_REVIEW" && (item.rawStatus === "UNDER_REVIEW" || item.rawStatus === "IN_REVIEW")) ||
         (statusFilter === "PENDING_APPROVAL" && (item.rawStatus === "REVIEWER_REVIEWED" || item.rawStatus === "PENDING_APPROVAL")) ||
@@ -372,7 +382,7 @@ export default function MyActionsScreen() {
 
       return matchSearch && matchStatus && matchEquipment;
     });
-  }, [items, searchTerm, statusFilter, equipmentTypeFilter]);
+  }, [items, searchTerm, statusFilter, equipmentTypeFilter, actionsCache, loginContext]);
 
   // Sorting
   const sortedItems = useMemo(() => {
@@ -418,6 +428,51 @@ export default function MyActionsScreen() {
     return sortedItems.slice(start, start + pageSize);
   }, [sortedItems, safeCurrentPage, pageSize]);
 
+  // Fast parallel resolution of allowed actions only for visible page items
+  useEffect(() => {
+    if (paginatedItems.length === 0) return;
+
+    const unCachedItems = paginatedItems.filter((it) => !actionsCache[it.id]);
+    if (unCachedItems.length === 0) return;
+
+    let isSubscribed = true;
+    setIsResolvingPageActions(true);
+
+    Promise.all(
+      unCachedItems.map(async (item) => {
+        try {
+          const raw = await getAllowedActions({
+            batchNo: item.batchNo,
+            lotNo: item.lotNo,
+            equipmentCode: item.equipmentCode,
+          });
+          return { id: item.id, actions: deduplicateAllowedActions(raw) };
+        } catch {
+          return { id: item.id, actions: [] };
+        }
+      })
+    )
+      .then((results) => {
+        if (!isSubscribed) return;
+        setActionsCache((prev) => {
+          const updated = { ...prev };
+          for (const res of results) {
+            updated[res.id] = res.actions;
+          }
+          return updated;
+        });
+      })
+      .finally(() => {
+        if (isSubscribed) {
+          setIsResolvingPageActions(false);
+        }
+      });
+
+    return () => {
+      isSubscribed = false;
+    };
+  }, [paginatedItems, actionsCache]);
+
   const selectedItems = useMemo(() => {
     return items.filter((it) => selectedTaskIds.has(it.id));
   }, [items, selectedTaskIds]);
@@ -447,17 +502,17 @@ export default function MyActionsScreen() {
   const commonAllowedActions = useMemo(() => {
     if (selectedItems.length === 0) return [];
 
-    const firstItemActions = deduplicateAllowedActions(selectedItems[0].allowedActions || []);
+    const firstItemActions = deduplicateAllowedActions(actionsCache[selectedItems[0].id] || selectedItems[0].allowedActions || []);
     if (firstItemActions.length === 0) return [];
 
     return firstItemActions.filter((firstAction) => {
       const firstCode = (firstAction.actionCode || "").toUpperCase();
-      return selectedItems.every((item) => {
-        const itemActions = deduplicateAllowedActions(item.allowedActions || []);
-        return itemActions.some((act) => (act.actionCode || "").toUpperCase() === firstCode);
+      return selectedItems.every((otherItem) => {
+        const otherActions = deduplicateAllowedActions(actionsCache[otherItem.id] || otherItem.allowedActions || []);
+        return otherActions.some((act) => (act.actionCode || "").toUpperCase() === firstCode);
       });
     });
-  }, [selectedItems]);
+  }, [selectedItems, actionsCache]);
 
   return (
     <div className="flex-1 space-y-4 p-4 sm:p-5 bg-slate-50 text-slate-900 min-h-screen">
@@ -782,7 +837,8 @@ export default function MyActionsScreen() {
               ) : (
                 paginatedItems.map((item) => {
                   const isSelected = selectedTaskIds.has(item.id);
-                  const deduplicatedActions = deduplicateAllowedActions(item.allowedActions || []);
+                  const itemActions = actionsCache[item.id] || item.allowedActions || [];
+                  const deduplicatedActions = deduplicateAllowedActions(itemActions);
 
                   return (
                     <tr

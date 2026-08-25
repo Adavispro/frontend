@@ -137,7 +137,7 @@ export default function ApprovedBatchesScreen() {
     setErrorMessage(null);
     try {
       // Dynamic single-page query for latest modified approved batches
-      const summaries = await getBatchSummaryPaginated({ status: "APPROVED", limit: 50 });
+      const summaries = await getBatchSummaryPaginated({ status: "APPROVED", limit: 50 }).catch(() => []);
       const extracted: ApprovedBatchItem[] = [];
 
       for (const summary of summaries) {

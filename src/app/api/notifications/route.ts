@@ -35,14 +35,38 @@ export async function GET(request: Request) {
     forwardHeaders["X-Selected-Plant-Id"] = selectedPlantId;
   }
 
-  const { response, result } = await serverApiClient<unknown>(
-    SERVER_API_CONFIG.gatewayUrl,
-    upstreamPath,
-    {
-      method: "GET",
-      headers: forwardHeaders,
-    },
-  );
+  try {
+    const { response, result } = await serverApiClient<unknown>(
+      SERVER_API_CONFIG.gatewayUrl,
+      upstreamPath,
+      {
+        method: "GET",
+        headers: forwardHeaders,
+      },
+    );
 
-  return NextResponse.json(result, { status: response.status });
+    if (!response.ok) {
+      return NextResponse.json(
+        {
+          success: true,
+          data: { items: [], total: 0, unreadCount: 0 },
+          message: "Fallback list",
+          timestamp: new Date().toISOString(),
+        },
+        { status: 200 },
+      );
+    }
+
+    return NextResponse.json(result, { status: response.status });
+  } catch {
+    return NextResponse.json(
+      {
+        success: true,
+        data: { items: [], total: 0, unreadCount: 0 },
+        message: "Notifications service unavailable",
+        timestamp: new Date().toISOString(),
+      },
+      { status: 200 },
+    );
+  }
 }

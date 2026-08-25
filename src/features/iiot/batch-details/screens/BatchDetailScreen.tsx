@@ -729,6 +729,42 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
     return { startMs, endMs };
   }, [batchSummary, targetEquipmentCode, cppRecords]);
 
+  const currentStage = useMemo(() => {
+    const rawStages = (batchSummary?.stages as Array<Record<string, unknown>>) || [];
+    const eqCode = (targetEquipmentCode || "G5RMG").toUpperCase();
+    return (
+      rawStages.find((s) => toText(s.equipmentCode || s.equipmentId).toUpperCase() === eqCode) ||
+      rawStages.find((s) => toText(s.equipmentType).toUpperCase() === eqCode.slice(-3)) ||
+      rawStages[0] ||
+      null
+    );
+  }, [batchSummary, targetEquipmentCode]);
+
+  const resolvedOperator = useMemo(() => {
+    const rawOperator = toText(
+      currentStage?.operatorName ||
+      currentStage?.operator ||
+      batchSummary?.operatorName ||
+      (cppRecords[0]?.meta as Record<string, unknown>)?.operatorName ||
+      (cppRecords[0] as Record<string, unknown>)?.user_name
+    );
+
+    if (!rawOperator || rawOperator === "Operator User 01") {
+      const eqCode = (targetEquipmentCode || "").toUpperCase();
+      if (eqCode.endsWith("FBD")) return "Production Operator 2";
+      if (eqCode.endsWith("OGB")) return "Production Operator 3";
+      return "Production Operator 1";
+    }
+
+    if (rawOperator === "PRODUCTION_OPERATOR_1") return "Production Operator 1";
+    if (rawOperator === "PRODUCTION_OPERATOR_2") return "Production Operator 2";
+    if (rawOperator === "PRODUCTION_OPERATOR_3") return "Production Operator 3";
+    if (rawOperator === "PRODUCTION_REVIEWER_1") return "Production Reviewer 1";
+    if (rawOperator === "QA_APPROVER_1") return "QA Approver 1";
+
+    return rawOperator.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  }, [currentStage, batchSummary, cppRecords, targetEquipmentCode]);
+
   // Evaluates whether an event/alarm timestamp occurred within this batch's execution timeframe
   const isWithinBatchTimeRange = useCallback(
     (timestampStr?: string | null): boolean => {
@@ -1390,7 +1426,13 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
             <div className="text-xs font-bold text-slate-900 font-mono mt-1">
               {queryEquipmentCode || toText(batchSummary?.equipmentId) || "G5RMG"}
             </div>
-            <span className="text-[10px] text-slate-400 mt-1 block">Rapid Mixer Granulator</span>
+            <span className="text-[10px] text-slate-400 mt-1 block">
+              {(queryEquipmentCode || toText(batchSummary?.equipmentId) || "").toUpperCase().endsWith("FBD")
+                ? "Fluid Bed Dryer"
+                : (queryEquipmentCode || toText(batchSummary?.equipmentId) || "").toUpperCase().endsWith("OGB")
+                ? "Oscillating Granulator Blender"
+                : "Rapid Mixer Granulator"}
+            </span>
           </div>
 
           <div className="p-3.5 rounded-xl bg-slate-50/70 border border-slate-200/80">
@@ -1398,7 +1440,6 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
             <div className="text-xs font-bold text-slate-900 mt-1">
               {toText(batchSummary?.batchSize) || "120.00"} {toText(batchSummary?.unit) || "KG"}
             </div>
-            <span className="text-[10px] text-slate-400 mt-1 block">Yield: 99.4%</span>
           </div>
 
           <div className="p-3.5 rounded-xl bg-slate-50/70 border border-slate-200/80">
@@ -1419,10 +1460,9 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
 
           <div className="p-3.5 rounded-xl bg-slate-50/70 border border-slate-200/80">
             <span className="text-[11px] text-slate-500 font-bold uppercase tracking-wider block">Operator</span>
-            <div className="text-xs font-bold text-slate-900 mt-1 truncate">
-              {toText(batchSummary?.operatorName) || "Operator User 01"}
+            <div className="text-xs font-bold text-slate-900 mt-1 truncate" title={resolvedOperator}>
+              {resolvedOperator}
             </div>
-            <span className="text-[10px] text-slate-400 mt-1 block">Shift A &bull; Line 01</span>
           </div>
         </div>
       </div>

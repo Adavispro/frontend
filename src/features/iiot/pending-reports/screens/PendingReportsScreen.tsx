@@ -139,13 +139,14 @@ export default function PendingReportsScreen() {
   const [selectedItem, setSelectedItem] = useState<PendingBatchItem | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [actionsCache, setActionsCache] = useState<Record<string, AllowedWorkflowAction[]>>({});
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
     setErrorMessage(null);
     try {
       // Fetch batch summaries (optimized to load latest 50 batches dynamically sorted by latest modified desc)
-      const summaries = await getBatchSummaryPaginated({ limit: 50 });
+      const summaries = await getBatchSummaryPaginated({ limit: 50 }).catch(() => []);
       const extracted: PendingBatchItem[] = [];
 
       for (const summary of summaries) {
@@ -190,17 +191,6 @@ export default function PendingReportsScreen() {
 
           const id = `${summaryId}:${batchNo}:${lotNo}:${equipmentCode}:${sequence}`;
 
-          let allowedActions: AllowedWorkflowAction[] = [];
-          try {
-            allowedActions = await getAllowedActions({
-              batchNo,
-              lotNo,
-              equipmentCode,
-            });
-          } catch (err) {
-            console.error(`Failed allowed actions for ${id}`, err);
-          }
-
           extracted.push({
             id,
             batchNo,
@@ -214,7 +204,7 @@ export default function PendingReportsScreen() {
             rawStatus,
             displayStatus,
             pendingSince: toText(approval.transitionedAt || stage.stageEndAt || summary.updatedAt),
-            allowedActions,
+            allowedActions: [],
             summaryRef: summary,
           });
         }
@@ -454,6 +444,44 @@ export default function PendingReportsScreen() {
     const start = (safeCurrentPage - 1) * pageSize;
     return sortedItems.slice(start, start + pageSize);
   }, [sortedItems, safeCurrentPage, pageSize]);
+
+  // Parallel resolution of allowed actions only for visible page items
+  useEffect(() => {
+    if (paginatedItems.length === 0) return;
+
+    const unCachedItems = paginatedItems.filter((it) => !actionsCache[it.id]);
+    if (unCachedItems.length === 0) return;
+
+    let isSubscribed = true;
+
+    Promise.all(
+      unCachedItems.map(async (item) => {
+        try {
+          const raw = await getAllowedActions({
+            batchNo: item.batchNo,
+            lotNo: item.lotNo,
+            equipmentCode: item.equipmentCode,
+          });
+          return { id: item.id, actions: deduplicateAllowedActions(raw) };
+        } catch {
+          return { id: item.id, actions: [] };
+        }
+      })
+    ).then((results) => {
+      if (!isSubscribed) return;
+      setActionsCache((prev) => {
+        const updated = { ...prev };
+        for (const res of results) {
+          updated[res.id] = res.actions;
+        }
+        return updated;
+      });
+    });
+
+    return () => {
+      isSubscribed = false;
+    };
+  }, [paginatedItems, actionsCache]);
 
   const activeFilterCount = useMemo(() => {
     let count = 0;
@@ -864,7 +892,7 @@ export default function PendingReportsScreen() {
                           <Eye className="h-4 w-4" />
                         </button>
 
-                        {item.allowedActions.map((action) => {
+                        {(actionsCache[item.id] || item.allowedActions || []).map((action) => {
                           const code = (action.actionCode || "").toUpperCase();
                           const type = (action.actionType || "").toUpperCase();
                           const isApprove = type === "APPROVE" || code.includes("APPROVE");
