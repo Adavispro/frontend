@@ -70,7 +70,7 @@ async function proxy(
       });
 
       const contentType = upstreamRes.headers.get("content-type") || "";
-      if (contentType.includes("application/pdf")) {
+      if (upstreamRes.ok && contentType.includes("application/pdf")) {
         const disposition =
           upstreamRes.headers.get("content-disposition") ||
           `attachment; filename="Batch_Dossier_${path[1] || "Report"}.pdf"`;
@@ -83,6 +83,16 @@ async function proxy(
           },
         });
       }
+
+      // If upstream returned an error (JSON or text)
+      const errText = await upstreamRes.text();
+      let errBody: Record<string, unknown> = { success: false, message: "PDF generation failed." };
+      try {
+        errBody = JSON.parse(errText);
+      } catch {
+        errBody.message = errText || "PDF generation failed.";
+      }
+      return NextResponse.json(errBody, { status: upstreamRes.status || 500 });
     } catch (err) {
       console.error("PDF stream proxy failed", err);
       return errorResponse(503, "The IIOT PDF service is unavailable.", "IIOT_SERVICE_UNAVAILABLE");

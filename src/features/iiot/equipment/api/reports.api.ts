@@ -603,6 +603,7 @@ export const downloadBatchPdfBlob = async (
   const url = `${resourcePath(`batch-reports/${encodeURIComponent(batchNo)}/pdf`)}?${query.toString()}`;
   const response = await fetch(url, {
     method: "GET",
+    credentials: "include",
     headers: {
       Accept: "application/pdf, application/json",
     },

@@ -658,7 +658,10 @@ export default function MyActionsScreen() {
               <option value="ALL">All Equipment</option>
               <option value="RMG">RMG (Granulator)</option>
               <option value="FBD">FBD (Dryer)</option>
+              <option value="BLE">BLE (Blender)</option>
               <option value="OGB">OGB (Blender)</option>
+              <option value="COAT">COAT (Auto Coater)</option>
+              <option value="CIP">CIP (Clean In Place)</option>
             </select>
 
             {(searchTerm || statusFilter !== "ALL" || equipmentTypeFilter !== "ALL") && (

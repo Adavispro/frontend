@@ -29,6 +29,7 @@ import {
 import {
   getBatchSummaryPaginated,
   getAllowedActions,
+  deduplicateAllowedActions,
   type AllowedWorkflowAction,
 } from "@/features/iiot/equipment/api/reports.api";
 import type { BatchSummary } from "@/features/iiot/equipment/schemas/reports.schema";

@@ -93,20 +93,22 @@ export function isApprovedBatchesPath(modulePath: ModulePath) {
 }
 
 export function isBatchDetailsPath(modulePath: ModulePath) {
+  const norm = modulePath[0] === "modules" ? modulePath.slice(1) : modulePath;
   return (
-    modulePath[0] === "iiot" &&
-    modulePath[1] === "batch-details" &&
-    modulePath.length >= 2
+    norm[0] === "iiot" &&
+    norm[1] === "batch-details" &&
+    norm.length >= 2
   );
 }
 
 export function getBatchDetailsId(modulePath: ModulePath) {
+  const norm = modulePath[0] === "modules" ? modulePath.slice(1) : modulePath;
   if (
-    modulePath[0] === "iiot" &&
-    modulePath[1] === "batch-details" &&
-    modulePath.length >= 3
+    norm[0] === "iiot" &&
+    norm[1] === "batch-details" &&
+    norm.length >= 3
   ) {
-    return decodeURIComponent(modulePath[2]);
+    return decodeURIComponent(norm[2]);
   }
   return undefined;
 }
