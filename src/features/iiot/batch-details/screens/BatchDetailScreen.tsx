@@ -62,6 +62,7 @@ import DynamicProcessTrendChart, {
 } from "../components/DynamicProcessTrendChart";
 import Pagination from "@/components/ui/Pagination";
 import { WorkflowActionModal } from "../../components/WorkflowActionModal";
+import { evaluateParameterStatus } from "@/features/iiot/equipment/utils/parameter-status";
 import { ROUTES } from "@/config/routes";
 import { getSafeReturnTo } from "@/utils/navigation";
 
@@ -1235,19 +1236,18 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
           }).format(obsDate)
         : "-";
 
-      // Status Threshold Evaluation
+      // Status Threshold Evaluation using dynamic parameter status rules
       let status: TrendPointStatus = "NORMAL";
       if (rawVal === undefined || rawVal === null || rawVal === "") {
         status = "NO_DATA";
       } else if (limits) {
-        if (limits.upperCriticalLimit !== undefined && val >= limits.upperCriticalLimit) {
+        const evaluation = evaluateParameterStatus(val, limits.lowerCriticalLimit, limits.upperCriticalLimit);
+        if (evaluation.status === "OUT_OF_RANGE") {
           status = "CRITICAL";
-        } else if (limits.lowerCriticalLimit !== undefined && val <= limits.lowerCriticalLimit) {
-          status = "CRITICAL";
-        } else if (limits.upperWarningLimit !== undefined && val >= limits.upperWarningLimit) {
-          status = "WARNING";
-        } else if (limits.lowerWarningLimit !== undefined && val <= limits.lowerWarningLimit) {
-          status = "WARNING";
+        } else if (evaluation.status === "INVALID") {
+          status = "NO_DATA";
+        } else {
+          status = "NORMAL";
         }
       }
 
@@ -2296,27 +2296,18 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
                             )}
                             {activeCols.map((col) => {
                               const val = m[col.key] ?? getMetricValue(m, col.key);
-                              const numVal = typeof val === "number" ? val : parseFloat(String(val));
                               const meta = resolveMetricLimits(col.key, targetEquipmentCode, paramLimits, criticalParams);
                               const lim = meta.limits;
-                              let statusClass = "text-slate-900 font-bold font-mono";
-                              if (!isNaN(numVal) && lim) {
-                                if (
-                                  (lim.upperCriticalLimit !== undefined && numVal > lim.upperCriticalLimit) ||
-                                  (lim.lowerCriticalLimit !== undefined && numVal < lim.lowerCriticalLimit)
-                                ) {
-                                  statusClass = "text-rose-700 font-black font-mono bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200";
-                                } else if (
-                                  (lim.upperWarningLimit !== undefined && numVal > lim.upperWarningLimit) ||
-                                  (lim.lowerWarningLimit !== undefined && numVal < lim.lowerWarningLimit)
-                                ) {
-                                  statusClass = "text-amber-700 font-bold font-mono bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200";
-                                }
-                              }
+                              const evaluation = evaluateParameterStatus(
+                                val,
+                                lim?.lowerCriticalLimit,
+                                lim?.upperCriticalLimit
+                              );
+
                               return (
                                 <td key={col.key} className="py-2.5 px-3.5 whitespace-nowrap">
-                                  <span className={statusClass}>
-                                    {!isNaN(numVal) ? numVal.toFixed(2) : (val != null && val !== "" ? String(val) : "-")}
+                                  <span className={evaluation.statusClass}>
+                                    {evaluation.formattedValue}
                                   </span>
                                 </td>
                               );

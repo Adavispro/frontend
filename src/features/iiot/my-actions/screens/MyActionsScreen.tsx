@@ -27,6 +27,7 @@ import { useLoginContext } from "@/features/auth/hooks/useCurrentUser";
 import {
   getBatchSummaryPaginated,
   getWorkflowDashboardCounts,
+  getMyActions,
   getAllowedActions,
   claimWorkflowTask,
   deduplicateAllowedActions,
@@ -141,68 +142,99 @@ export default function MyActionsScreen() {
   const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
-      // 1. Fetch dashboard counts & batch summaries in parallel
-      const [dashboardCounts, batchSummaries] = await Promise.all([
+      // 1. Fetch dashboard counts & my actions in parallel
+      const [dashboardCounts, myActionsList] = await Promise.all([
         getWorkflowDashboardCounts().catch(() => ({
           pendingMyAction: 0,
           pendingReview: 0,
           pendingApproval: 0,
           completedActions: 0,
         })),
-        getBatchSummaryPaginated({ limit: 50 }).catch(() => []),
+        getMyActions().catch(() => []),
       ]);
 
       setCounts(dashboardCounts);
 
-      // 2. Extract items across stages immediately (0 blocking sequential calls)
-      const extracted: MyActionItem[] = [];
+      if (myActionsList && myActionsList.length > 0) {
+        const extracted: MyActionItem[] = [];
+        const initialCache: Record<string, AllowedWorkflowAction[]> = {};
 
-      for (const summary of batchSummaries) {
-        const batchNo = toText(summary.batchNo);
-        const lotNo = toText(summary.lotNo);
-        const productCode = toText(summary.productCode);
-        const productName = toText(summary.productName);
-        const stages = (summary.stages as Array<Record<string, unknown>>) || [];
-        const summaryId = toText(
-          summary.id || (summary as Record<string, unknown>)._id || `${summary.lineId || "LINE"}_${batchNo}`
-        );
-
-        for (const stage of stages) {
-          const equipmentCode = toText(stage.equipmentCode || stage.equipmentId);
-          const equipmentType = toText(stage.equipmentType || equipmentCode.slice(-3));
-          const approval = (stage.approval as Record<string, unknown>) || {};
-          const rawStatus = toText(approval.status || "PENDING").toUpperCase();
-          const sequence = typeof stage.sequenceOrder === "number" ? stage.sequenceOrder : 1;
-
-          let displayStatus = rawStatus.replace(/_/g, " ");
-          if (rawStatus === "REVIEWER_REVIEWED") displayStatus = "Pending Approval";
-          if (rawStatus === "UNDER_REVIEW") displayStatus = "Under Review";
-          if (rawStatus === "RETURNED_TO_OPERATOR") displayStatus = "Returned to Operator";
-
-          // Canonical unique row key
-          const id = `${summaryId}:${batchNo}:${lotNo}:${equipmentCode}:${sequence}`;
+        for (const item of myActionsList) {
+          const itemActions = deduplicateAllowedActions(item.allowedActions || []);
+          initialCache[item.id] = itemActions;
 
           extracted.push({
-            id,
-            batchNo,
-            lotNo,
-            productCode,
-            productName: productName || "Allopurinol / Standard",
-            equipmentCode,
-            equipmentType,
-            workflowStage: `Stage ${sequence} (${equipmentType})`,
-            stageSequence: sequence,
-            rawStatus,
-            displayStatus,
-            lastAction: toText(approval.transitionedBy || stage.operatorName || "-"),
-            lastActionAt: toText(approval.transitionedAt || stage.stageEndAt || summary.updatedAt),
-            allowedActions: [],
-            summaryRef: summary,
+            id: item.id,
+            batchNo: item.batchNo,
+            lotNo: item.lotNo,
+            productCode: item.productCode,
+            productName: item.productName || "Finasteride USP 5 mg",
+            equipmentCode: item.equipmentCode,
+            equipmentType: item.equipmentType,
+            workflowStage: item.workflowStage,
+            stageSequence: item.stageSequence,
+            rawStatus: item.rawStatus,
+            displayStatus: item.displayStatus,
+            lastAction: item.lastAction || "-",
+            lastActionAt: item.lastActionAt || "",
+            allowedActions: itemActions,
+            summaryRef: (item.summaryRef as BatchSummary) || undefined,
           });
         }
-      }
 
-      setItems(extracted);
+        setActionsCache((prev) => ({ ...prev, ...initialCache }));
+        setItems(extracted);
+      } else {
+        // Fallback to extracting from batch summaries if my-actions returns empty
+        const batchSummaries = await getBatchSummaryPaginated({ limit: 50 }).catch(() => []);
+        const extracted: MyActionItem[] = [];
+
+        for (const summary of batchSummaries) {
+          const batchNo = toText(summary.batchNo);
+          const lotNo = toText(summary.lotNo);
+          const productCode = toText(summary.productCode);
+          const productName = toText(summary.productName);
+          const stages = (summary.stages as Array<Record<string, unknown>>) || [];
+          const summaryId = toText(
+            summary.id || (summary as Record<string, unknown>)._id || `${summary.lineId || "LINE"}_${batchNo}`
+          );
+
+          for (const stage of stages) {
+            const equipmentCode = toText(stage.equipmentCode || stage.equipmentId);
+            const equipmentType = toText(stage.equipmentType || equipmentCode.slice(-3));
+            const approval = (stage.approval as Record<string, unknown>) || {};
+            const rawStatus = toText(approval.status || "PENDING").toUpperCase();
+            const sequence = typeof stage.sequenceOrder === "number" ? stage.sequenceOrder : 1;
+
+            let displayStatus = rawStatus.replace(/_/g, " ");
+            if (rawStatus === "REVIEWER_REVIEWED") displayStatus = "Pending Approval";
+            if (rawStatus === "UNDER_REVIEW") displayStatus = "Under Review";
+            if (rawStatus === "RETURNED_TO_OPERATOR") displayStatus = "Returned to Operator";
+
+            const id = `${summaryId}:${batchNo}:${lotNo}:${equipmentCode}:${sequence}`;
+
+            extracted.push({
+              id,
+              batchNo,
+              lotNo,
+              productCode,
+              productName: productName || "Finasteride USP 5 mg",
+              equipmentCode,
+              equipmentType,
+              workflowStage: `Stage ${sequence} (${equipmentType})`,
+              stageSequence: sequence,
+              rawStatus,
+              displayStatus,
+              lastAction: toText(approval.transitionedBy || stage.operatorName || "-"),
+              lastActionAt: toText(approval.transitionedAt || stage.stageEndAt || summary.updatedAt),
+              allowedActions: [],
+              summaryRef: summary,
+            });
+          }
+        }
+
+        setItems(extracted);
+      }
     } catch (err) {
       console.error("Failed to load My Actions data", err);
     } finally {
@@ -299,6 +331,26 @@ export default function MyActionsScreen() {
   const handleClearSelection = () => {
     setSelectedTaskIds(new Set());
   };
+
+  // Status-specific counts for quick badge display
+  const statusCounts = useMemo(() => {
+    let pendingSubmission = 0;
+    let underReview = 0;
+    let pendingApproval = 0;
+    let returned = 0;
+    let approved = 0;
+
+    for (const item of items) {
+      const s = item.rawStatus;
+      if (s === "PENDING" || s === "NOT_STARTED") pendingSubmission++;
+      else if (s === "UNDER_REVIEW" || s === "IN_REVIEW") underReview++;
+      else if (s === "REVIEWER_REVIEWED" || s === "PENDING_APPROVAL") pendingApproval++;
+      else if (s === "RETURNED_TO_OPERATOR" || s === "REJECTED" || s === "RETURNED") returned++;
+      else if (s === "APPROVED" || s === "COMPLETED") approved++;
+    }
+
+    return { pendingSubmission, underReview, pendingApproval, returned, approved };
+  }, [items]);
 
   // Filter Handlers with automatic reset to page 1
   const handleSearchChange = (val: string) => {
@@ -553,9 +605,15 @@ export default function MyActionsScreen() {
         </div>
       )}
 
-      {/* Metric Cards Grid (4 KPI Cards) */}
+      {/* Metric Cards Grid (4 KPI Cards - Clickable Filters) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <div className="p-3.5 sm:p-4 rounded-xl bg-white border border-slate-200 shadow-sm flex items-center justify-between">
+        <button
+          type="button"
+          onClick={() => handleStatusFilterChange(statusFilter === "MY_ACTION" ? "ALL" : "MY_ACTION")}
+          className={`p-3.5 sm:p-4 rounded-xl bg-white border text-left shadow-sm flex items-center justify-between transition hover:shadow-md cursor-pointer ${
+            statusFilter === "MY_ACTION" ? "border-indigo-500 ring-2 ring-indigo-500/20 bg-indigo-50/20" : "border-slate-200 hover:border-indigo-200"
+          }`}
+        >
           <div>
             <span className="text-[11px] text-slate-500 font-semibold uppercase tracking-wider block">
               Actionable by Me
@@ -568,9 +626,15 @@ export default function MyActionsScreen() {
           <div className="h-10 w-10 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 flex-shrink-0">
             <UserCheck className="h-5 w-5" />
           </div>
-        </div>
+        </button>
 
-        <div className="p-3.5 sm:p-4 rounded-xl bg-white border border-slate-200 shadow-sm flex items-center justify-between">
+        <button
+          type="button"
+          onClick={() => handleStatusFilterChange(statusFilter === "UNDER_REVIEW" ? "ALL" : "UNDER_REVIEW")}
+          className={`p-3.5 sm:p-4 rounded-xl bg-white border text-left shadow-sm flex items-center justify-between transition hover:shadow-md cursor-pointer ${
+            statusFilter === "UNDER_REVIEW" ? "border-amber-500 ring-2 ring-amber-500/20 bg-amber-50/20" : "border-slate-200 hover:border-amber-200"
+          }`}
+        >
           <div>
             <span className="text-[11px] text-slate-500 font-semibold uppercase tracking-wider block">
               Under Review
@@ -583,9 +647,15 @@ export default function MyActionsScreen() {
           <div className="h-10 w-10 rounded-lg bg-amber-50 border border-amber-100 flex items-center justify-center text-amber-600 flex-shrink-0">
             <Clock className="h-5 w-5" />
           </div>
-        </div>
+        </button>
 
-        <div className="p-3.5 sm:p-4 rounded-xl bg-white border border-slate-200 shadow-sm flex items-center justify-between">
+        <button
+          type="button"
+          onClick={() => handleStatusFilterChange(statusFilter === "PENDING_APPROVAL" ? "ALL" : "PENDING_APPROVAL")}
+          className={`p-3.5 sm:p-4 rounded-xl bg-white border text-left shadow-sm flex items-center justify-between transition hover:shadow-md cursor-pointer ${
+            statusFilter === "PENDING_APPROVAL" ? "border-blue-500 ring-2 ring-blue-500/20 bg-blue-50/20" : "border-slate-200 hover:border-blue-200"
+          }`}
+        >
           <div>
             <span className="text-[11px] text-slate-500 font-semibold uppercase tracking-wider block">
               Pending QA Approval
@@ -598,9 +668,15 @@ export default function MyActionsScreen() {
           <div className="h-10 w-10 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 flex-shrink-0">
             <ShieldCheck className="h-5 w-5" />
           </div>
-        </div>
+        </button>
 
-        <div className="p-3.5 sm:p-4 rounded-xl bg-white border border-slate-200 shadow-sm flex items-center justify-between">
+        <button
+          type="button"
+          onClick={() => handleStatusFilterChange(statusFilter === "APPROVED" ? "ALL" : "APPROVED")}
+          className={`p-3.5 sm:p-4 rounded-xl bg-white border text-left shadow-sm flex items-center justify-between transition hover:shadow-md cursor-pointer ${
+            statusFilter === "APPROVED" ? "border-emerald-500 ring-2 ring-emerald-500/20 bg-emerald-50/20" : "border-slate-200 hover:border-emerald-200"
+          }`}
+        >
           <div>
             <span className="text-[11px] text-slate-500 font-semibold uppercase tracking-wider block">
               Completed Actions
@@ -613,7 +689,7 @@ export default function MyActionsScreen() {
           <div className="h-10 w-10 rounded-lg bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600 flex-shrink-0">
             <CheckCircle className="h-5 w-5" />
           </div>
-        </div>
+        </button>
 
         {showActivityChart && (
           <WorkflowActivityCard counts={counts} isLoading={isLoading} />
@@ -639,15 +715,15 @@ export default function MyActionsScreen() {
             <select
               value={statusFilter}
               onChange={(e) => handleStatusFilterChange(e.target.value)}
-              className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
-              <option value="ALL">All Statuses</option>
-              <option value="MY_ACTION">Actionable by Me</option>
-              <option value="PENDING">Pending Submission</option>
-              <option value="UNDER_REVIEW">Under Review</option>
-              <option value="PENDING_APPROVAL">Pending Approval</option>
-              <option value="RETURNED">Returned / Rejected</option>
-              <option value="APPROVED">Approved / Completed</option>
+              <option value="ALL">All Statuses ({items.length})</option>
+              <option value="MY_ACTION">Actionable by Me ({counts.pendingMyAction})</option>
+              <option value="PENDING">Pending Submission ({statusCounts.pendingSubmission})</option>
+              <option value="UNDER_REVIEW">Under Review ({counts.pendingReview})</option>
+              <option value="PENDING_APPROVAL">Pending Approval ({counts.pendingApproval})</option>
+              <option value="RETURNED">Returned / Rejected ({statusCounts.returned})</option>
+              <option value="APPROVED">Approved / Completed ({counts.completedActions})</option>
             </select>
 
             <select
@@ -825,24 +901,44 @@ export default function MyActionsScreen() {
               ) : paginatedItems.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="py-8 text-center text-slate-500 font-medium">
-                    <div className="flex flex-col items-center justify-center gap-1">
+                    <div className="flex flex-col items-center justify-center gap-1.5">
                       <CheckCircle className="h-6 w-6 text-emerald-500 opacity-60" />
-                      <span className="text-slate-700 font-semibold text-xs">No action items in queue</span>
-                      <span className="text-slate-500 text-[11px]">
-                        {searchTerm || statusFilter !== "ALL" || equipmentTypeFilter !== "ALL"
-                          ? "No tasks match your filter criteria. Try adjusting your filters."
+                      <span className="text-slate-700 font-semibold text-xs">No action items found</span>
+                      <span className="text-slate-500 text-[11px] max-w-md">
+                        {statusFilter !== "ALL" || equipmentTypeFilter !== "ALL" || searchTerm
+                          ? `No batch tasks match your filter criteria (${statusFilter === "PENDING_APPROVAL" ? "Pending Approval: 0 tasks" : statusFilter === "UNDER_REVIEW" ? "Under Review: 0 tasks" : "0 tasks"}).`
                           : "All batches are up to date for your role authorization."}
                       </span>
-                      {(searchTerm || statusFilter !== "ALL" || equipmentTypeFilter !== "ALL") && (
-                        <button
-                          type="button"
-                          onClick={handleResetFilters}
-                          className="mt-1.5 inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg transition"
-                        >
-                          <ArrowCounterClockwise className="h-3 w-3 text-indigo-600" />
-                          Clear Filters
-                        </button>
-                      )}
+                      <div className="flex flex-wrap items-center justify-center gap-2 mt-2">
+                        {statusCounts.pendingSubmission > 0 && statusFilter !== "PENDING" && (
+                          <button
+                            type="button"
+                            onClick={() => handleStatusFilterChange("PENDING")}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg transition"
+                          >
+                            Show Pending Submission ({statusCounts.pendingSubmission})
+                          </button>
+                        )}
+                        {counts.pendingMyAction > 0 && statusFilter !== "MY_ACTION" && (
+                          <button
+                            type="button"
+                            onClick={() => handleStatusFilterChange("MY_ACTION")}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg transition"
+                          >
+                            Show Actionable by Me ({counts.pendingMyAction})
+                          </button>
+                        )}
+                        {(searchTerm || statusFilter !== "ALL" || equipmentTypeFilter !== "ALL") && (
+                          <button
+                            type="button"
+                            onClick={handleResetFilters}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-lg transition"
+                          >
+                            <ArrowCounterClockwise className="h-3 w-3 text-slate-500" />
+                            Show All ({items.length})
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </td>
                 </tr>

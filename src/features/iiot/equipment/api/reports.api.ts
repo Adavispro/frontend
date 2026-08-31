@@ -503,6 +503,70 @@ export const getAllowedActions = async (
   }
 };
 
+export interface WorkflowTaskItemResponse {
+  id: string;
+  batchNo: string;
+  lotNo: string;
+  productCode: string;
+  productName: string;
+  equipmentCode: string;
+  equipmentType: string;
+  workflowStage: string;
+  stageSequence: number;
+  rawStatus: string;
+  displayStatus: string;
+  lastAction?: string;
+  lastActionAt?: string;
+  pendingSince?: string;
+  allowedActions?: AllowedWorkflowAction[];
+  summaryRef?: Record<string, unknown>;
+}
+
+export const getMyActions = async (
+  query: {
+    status?: string;
+    equipmentType?: string;
+    search?: string;
+    tenantId?: string;
+    plantId?: string;
+  } = {},
+  signal?: AbortSignal,
+): Promise<WorkflowTaskItemResponse[]> => {
+  try {
+    const response = await apiClient<BackendApiResponse<WorkflowTaskItemResponse[]>>(
+      withQuery(resourcePath("workflow/my-actions"), query),
+      { signal },
+    );
+    return response.data || [];
+  } catch {
+    return [];
+  }
+};
+
+export const getPendingBatches = async (
+  query: {
+    productCode?: string;
+    batchNo?: string;
+    equipmentType?: string;
+    lotNo?: string;
+    status?: string;
+    search?: string;
+    tenantId?: string;
+    plantId?: string;
+  } = {},
+  signal?: AbortSignal,
+): Promise<WorkflowTaskItemResponse[]> => {
+  try {
+    const response = await apiClient<BackendApiResponse<WorkflowTaskItemResponse[]>>(
+      withQuery(resourcePath("workflow/pending-batches"), query),
+      { signal },
+    );
+    return response.data || [];
+  } catch {
+    return [];
+  }
+};
+
 export interface BulkActionTaskItem {
   batchNo: string;
   lotNo?: string;

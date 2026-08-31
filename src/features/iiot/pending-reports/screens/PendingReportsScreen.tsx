@@ -28,6 +28,7 @@ import {
 } from "@phosphor-icons/react";
 import {
   getBatchSummaryPaginated,
+  getPendingBatches,
   getAllowedActions,
   deduplicateAllowedActions,
   type AllowedWorkflowAction,
@@ -146,72 +147,104 @@ export default function PendingReportsScreen() {
     setIsLoading(true);
     setErrorMessage(null);
     try {
-      // Fetch batch summaries (optimized to load latest 50 batches dynamically sorted by latest modified desc)
-      const summaries = await getBatchSummaryPaginated({ limit: 50 }).catch(() => []);
-      const extracted: PendingBatchItem[] = [];
+      const pendingList = await getPendingBatches().catch(() => []);
 
-      for (const summary of summaries) {
-        const batchNo = toText(summary.batchNo);
-        const lotNo = toText(summary.lotNo);
-        const productCode = toText(summary.productCode);
-        const productName = toText(summary.productName);
-        const stages = (summary.stages as Array<Record<string, unknown>>) || [];
-        const summaryId = toText(
-          summary.id ||
-            (summary as Record<string, unknown>)._id ||
-            `${summary.lineId || "LINE"}_${batchNo}`
-        );
+      if (pendingList && pendingList.length > 0) {
+        const extracted: PendingBatchItem[] = [];
+        const initialCache: Record<string, AllowedWorkflowAction[]> = {};
 
-        for (const stage of stages) {
-          const equipmentCode = toText(stage.equipmentCode || stage.equipmentId);
-          const equipmentType = toText(stage.equipmentType || equipmentCode.slice(-3)).toUpperCase();
-          const approval = (stage.approval as Record<string, unknown>) || {};
-          const rawStatus = toText(approval.status || "PENDING").toUpperCase();
-
-          // Exclude approved, completed, and deferred batches (deferred batches belong on their separate page)
-          if (rawStatus === "APPROVED" || rawStatus === "COMPLETED" || rawStatus === "DEFERRED") {
-            continue;
-          }
-
-          const sequence = typeof stage.sequenceOrder === "number" ? stage.sequenceOrder : 1;
-          let displayStatus = rawStatus.replace(/_/g, " ");
-          if (rawStatus === "REVIEWER_REVIEWED" || rawStatus === "PENDING_APPROVAL") {
-            displayStatus = "Pending Approval";
-          } else if (rawStatus === "UNDER_REVIEW" || rawStatus === "IN_REVIEW") {
-            displayStatus = "Under Review";
-          } else if (
-            rawStatus === "RETURNED_TO_OPERATOR" ||
-            rawStatus === "RETURNED" ||
-            rawStatus === "REJECTED" ||
-            rawStatus === "SENT_BACK"
-          ) {
-            displayStatus = "Returned / Rejected";
-          } else if (rawStatus === "PENDING" || rawStatus === "NOT_STARTED") {
-            displayStatus = "Pending Submission";
-          }
-
-          const id = `${summaryId}:${batchNo}:${lotNo}:${equipmentCode}:${sequence}`;
+        for (const item of pendingList) {
+          const itemActions = deduplicateAllowedActions(item.allowedActions || []);
+          initialCache[item.id] = itemActions;
 
           extracted.push({
-            id,
-            batchNo,
-            lotNo,
-            productCode,
-            productName: productName || "Allopurinol / Standard",
-            equipmentCode,
-            equipmentType,
-            workflowStage: `Stage ${sequence} (${equipmentType})`,
-            stageSequence: sequence,
-            rawStatus,
-            displayStatus,
-            pendingSince: toText(approval.transitionedAt || stage.stageEndAt || summary.updatedAt),
-            allowedActions: [],
-            summaryRef: summary,
+            id: item.id,
+            batchNo: item.batchNo,
+            lotNo: item.lotNo,
+            productCode: item.productCode,
+            productName: item.productName || "Finasteride USP 5 mg",
+            equipmentCode: item.equipmentCode,
+            equipmentType: item.equipmentType,
+            workflowStage: item.workflowStage,
+            stageSequence: item.stageSequence,
+            rawStatus: item.rawStatus,
+            displayStatus: item.displayStatus,
+            pendingSince: item.pendingSince || "",
+            allowedActions: itemActions,
+            summaryRef: (item.summaryRef as BatchSummary) || undefined,
           });
         }
-      }
 
-      setItems(extracted);
+        setActionsCache((prev) => ({ ...prev, ...initialCache }));
+        setItems(extracted);
+      } else {
+        // Fetch batch summaries (optimized to load latest 50 batches dynamically sorted by latest modified desc)
+        const summaries = await getBatchSummaryPaginated({ limit: 50 }).catch(() => []);
+        const extracted: PendingBatchItem[] = [];
+
+        for (const summary of summaries) {
+          const batchNo = toText(summary.batchNo);
+          const lotNo = toText(summary.lotNo);
+          const productCode = toText(summary.productCode);
+          const productName = toText(summary.productName);
+          const stages = (summary.stages as Array<Record<string, unknown>>) || [];
+          const summaryId = toText(
+            summary.id ||
+              (summary as Record<string, unknown>)._id ||
+              `${summary.lineId || "LINE"}_${batchNo}`
+          );
+
+          for (const stage of stages) {
+            const equipmentCode = toText(stage.equipmentCode || stage.equipmentId);
+            const equipmentType = toText(stage.equipmentType || equipmentCode.slice(-3)).toUpperCase();
+            const approval = (stage.approval as Record<string, unknown>) || {};
+            const rawStatus = toText(approval.status || "PENDING").toUpperCase();
+
+            // Exclude approved, completed, and deferred batches (deferred batches belong on their separate page)
+            if (rawStatus === "APPROVED" || rawStatus === "COMPLETED" || rawStatus === "DEFERRED") {
+              continue;
+            }
+
+            const sequence = typeof stage.sequenceOrder === "number" ? stage.sequenceOrder : 1;
+            let displayStatus = rawStatus.replace(/_/g, " ");
+            if (rawStatus === "REVIEWER_REVIEWED" || rawStatus === "PENDING_APPROVAL") {
+              displayStatus = "Pending Approval";
+            } else if (rawStatus === "UNDER_REVIEW" || rawStatus === "IN_REVIEW") {
+              displayStatus = "Under Review";
+            } else if (
+              rawStatus === "RETURNED_TO_OPERATOR" ||
+              rawStatus === "RETURNED" ||
+              rawStatus === "REJECTED" ||
+              rawStatus === "SENT_BACK"
+            ) {
+              displayStatus = "Returned / Rejected";
+            } else if (rawStatus === "PENDING" || rawStatus === "NOT_STARTED") {
+              displayStatus = "Pending Submission";
+            }
+
+            const id = `${summaryId}:${batchNo}:${lotNo}:${equipmentCode}:${sequence}`;
+
+            extracted.push({
+              id,
+              batchNo,
+              lotNo,
+              productCode,
+              productName: productName || "Finasteride USP 5 mg",
+              equipmentCode,
+              equipmentType,
+              workflowStage: `Stage ${sequence} (${equipmentType})`,
+              stageSequence: sequence,
+              rawStatus,
+              displayStatus,
+              pendingSince: toText(approval.transitionedAt || stage.stageEndAt || summary.updatedAt),
+              allowedActions: [],
+              summaryRef: summary,
+            });
+          }
+        }
+
+        setItems(extracted);
+      }
     } catch (err) {
       console.error("Failed to load Pending Batches data", err);
       setErrorMessage(

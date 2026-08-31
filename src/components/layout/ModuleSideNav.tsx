@@ -13,12 +13,14 @@ import {
   CaretRight,
   ChartLineUp,
   ChartBar,
+  CheckCircle,
   ClipboardText,
   Cpu,
   Database,
   Detective,
   Files,
   Factory,
+  GitBranch,
   House,
   Kanban,
   Key,
@@ -98,7 +100,7 @@ const iiotNavigationItems: NavigationItem[] = [
   },
   {
     label: "Approved Batches",
-    icon: ShieldCheck,
+    icon: CheckCircle,
     href: ROUTES.iiotApprovedBatches,
     isActive: (pathname) => pathname === ROUTES.iiotApprovedBatches,
   },
@@ -193,7 +195,7 @@ const sidebarItemsByModuleId: Record<string, NavigationItem[]> = {
     },
     {
       label: "Manage Workflow",
-      icon: ShieldCheck,
+      icon: GitBranch,
       href: ROUTES.masterWorkflowMdm,
       isActive: (pathname) =>
         pathname === ROUTES.masterWorkflowMdm ||
