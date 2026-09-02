@@ -15,6 +15,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         iconBg: "#EAF0FB",
         iconColor: "#064FA5",
         href: ROUTES.masterManagement,
+        status: "active",
       },
       {
         id: "iiot",
@@ -25,6 +26,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         iconBg: "#E6F4F1",
         iconColor: "#0D7E6A",
         href: ROUTES.iiot,
+        status: "active",
       },
       {
         id: "project-engine",
@@ -35,6 +37,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         iconBg: "#FEF3E2",
         iconColor: "#C06A0A",
         href: ROUTES.projectEngine,
+        status: "under-development",
       },
     ],
   },
@@ -51,6 +54,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         iconBg: "#E8F5E9",
         iconColor: "#1B7F3A",
         href: ROUTES.manufacturingElogbook,
+        status: "under-development",
       },
       {
         id: "ai-ebmr",
@@ -61,6 +65,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         iconBg: "#E8F5E9",
         iconColor: "#1B7F3A",
         href: ROUTES.manufacturingEbmr,
+        status: "under-development",
       },
       {
         id: "ai-iot",
@@ -71,6 +76,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         iconBg: "#EAF0FB",
         iconColor: "#064FA5",
         href: ROUTES.iiotEquipment,
+        status: "under-development",
       },
       {
         id: "cleaning-validations",
@@ -81,6 +87,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         iconBg: "#F0EBFB",
         iconColor: "#6B3EBF",
         href: ROUTES.manufacturingCleaningValidations,
+        status: "under-development",
       },
     ],
   },
@@ -97,6 +104,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         iconBg: "#EAF0FB",
         iconColor: "#064FA5",
         href: ROUTES.qualityQms,
+        status: "under-development",
       },
       {
         id: "apqr",
@@ -107,6 +115,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         iconBg: "#FEF3E2",
         iconColor: "#C06A0A",
         href: ROUTES.qualityApqr,
+        status: "under-development",
       },
       {
         id: "ai-investigation",
@@ -117,6 +126,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         iconBg: "#EAF0FB",
         iconColor: "#064FA5",
         href: ROUTES.qualityInvestigation,
+        status: "under-development",
       },
     ],
   },
@@ -133,6 +143,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         iconBg: "#FEF3E2",
         iconColor: "#C06A0A",
         href: ROUTES.complianceAudit,
+        status: "under-development",
       },
       {
         id: "ai-dms",
@@ -143,7 +154,9 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         iconBg: "#E6F4F1",
         iconColor: "#0D7E6A",
         href: ROUTES.complianceDms,
+        status: "under-development",
       },
     ],
   },
 ];
+

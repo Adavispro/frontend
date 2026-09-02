@@ -1,5 +1,7 @@
 import type { AppRoute } from "@/config/routes";
 
+export type ModuleStatus = "active" | "under-development";
+
 export interface ModuleItem {
   id: string;
   title: string;
@@ -12,6 +14,8 @@ export interface ModuleItem {
   iconColor: string;
   /** Route to navigate to on click */
   href: AppRoute;
+  /** Development/lifecycle status of the module */
+  status?: ModuleStatus;
 }
 
 export interface ModuleSection {
@@ -19,3 +23,4 @@ export interface ModuleSection {
   title: string;
   modules: ModuleItem[];
 }
+

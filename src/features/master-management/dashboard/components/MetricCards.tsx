@@ -1,8 +1,8 @@
 import { ROUTES } from "@/config/routes";
 import totalUsersIcon from "@/assets/status/Users.svg";
-import userGroupsIcon from "@/assets/status/groups.svg";
-import activeUsersIcon from "@/assets/status/running.svg";
-import userRolesIcon from "@/assets/status/roles.svg";
+import userGroupsIcon from "@/assets/status/groups-pink.svg";
+import activeUsersIcon from "@/assets/status/running-brown.svg";
+import userRolesIcon from "@/assets/status/roles-green.svg";
 import idleUsersIcon from "@/assets/status/warning.svg";
 import type { SystemAdminDashboardData } from "../api";
 import MetricCard from "./MetricCard";
@@ -15,70 +15,64 @@ export default function MetricCards({
   isLoading: boolean;
 }) {
   const loadingValue = isLoading ? "..." : "0";
-  const stats = data?.userStats;
-  const totalUsers = stats?.total ?? 0;
-  const activeUserPercent = totalUsers > 0 ? Math.round(((stats?.active ?? 0) / totalUsers) * 100) : 0;
-  const idleUserPercent = totalUsers > 0 ? Math.round(((stats?.idle ?? 0) / totalUsers) * 100) : 0;
-  const activeRoles = data?.roles.filter((role) => role.isActive).length ?? 0;
-  const activeGroups =
-    data?.groups.filter((group) => group.isActive).length ?? 0;
+  const userTiles = data?.userTiles;
+  const totalUsers = userTiles?.totalUsersCount ?? data?.userStats?.total ?? 0;
+  const activeUsers = userTiles?.activeUsersCount ?? data?.userStats?.active ?? 0;
+  const idleUsers = userTiles?.idleUsersCount ?? data?.userStats?.idle ?? 0;
+  const totalOnline = userTiles?.totalOnlineUsersCount ?? (activeUsers + idleUsers);
+  const configuredRoles = userTiles?.configuredRolesCount ?? data?.roles?.length ?? 0;
+  const configuredGroups = userTiles?.configuredGroupsCount ?? data?.groups?.length ?? 0;
+
   const metricNote = (note: string) =>
     isLoading ? "Loading latest data" : note;
+
   const cards = [
     {
       label: "Total Registered Users",
-      value: data ? String(data.userStats.total) : loadingValue,
-      note: metricNote(`${activeUserPercent}% active accounts`),
+      value: data ? String(totalUsers) : loadingValue,
+      note: metricNote(`${totalUsers} registered accounts`),
       icon: totalUsersIcon,
       variant: "primary",
       href: ROUTES.masterUsers,
     },
     {
       label: "Active Logged-in Users",
-      value: data ? String(data.userStats.active) : loadingValue,
-      note: metricNote(`${activeUserPercent}% of all registered users`),
+      value: data ? String(activeUsers) : loadingValue,
+      note: metricNote(
+        totalOnline > 0
+          ? `${Math.round((activeUsers / totalOnline) * 100)}% of online sessions`
+          : "0 active sessions",
+      ),
       icon: activeUsersIcon,
-      variant: "green",
+      variant: "brown",
       href: ROUTES.masterActiveUsers,
     },
     {
       label: "Idle Users",
-      value: data ? String(data.userStats.idle) : loadingValue,
-      note: metricNote(`${idleUserPercent}% of all registered users`),
+      value: data ? String(idleUsers) : loadingValue,
+      note: metricNote(
+        totalOnline > 0
+          ? `${Math.round((idleUsers / totalOnline) * 100)}% of online sessions`
+          : "0 idle sessions",
+      ),
       icon: idleUsersIcon,
       variant: "yellow",
       href: ROUTES.masterIdleUsers,
     },
-    // {
-    //   label: "Blocked Users",
-    //   value: data ? String(data.userStats.blocked) : loadingValue,
-    //   note: metricNote(`${blockedUserPercent}% of total users`),
-    //   icon: blockedUsersIcon,
-    //   variant: "yellow",
-    //   href: ROUTES.masterBlockedUsers,
-    // },
-    // {
-    //   label: "Deactivated Users",
-    //   value: data ? String(data.userStats.deactivated) : loadingValue,
-    //   note: metricNote(`${deactivatedUserPercent}% of total users`),
-    //   icon: deactivatedUsersIcon,
-    //   variant: "red",
-    //   href: ROUTES.masterDeactivatedUsers,
-    // },
     {
       label: "Configured Roles",
-      value: data ? String(data.roles.length) : loadingValue,
-      note: metricNote(`${activeRoles} active roles`),
+      value: data ? String(configuredRoles) : loadingValue,
+      note: metricNote(`${configuredRoles} active roles`),
       icon: userRolesIcon,
-      variant: "blue",
+      variant: "green",
       href: ROUTES.masterRoles,
     },
     {
       label: "Configured Groups",
-      value: data ? String(data.groups.length) : loadingValue,
-      note: metricNote(`${activeGroups} active groups`),
+      value: data ? String(configuredGroups) : loadingValue,
+      note: metricNote(`${configuredGroups} active groups`),
       icon: userGroupsIcon,
-      variant: "purple",
+      variant: "pink",
       href: ROUTES.masterUserGroups,
     },
   ] as const;

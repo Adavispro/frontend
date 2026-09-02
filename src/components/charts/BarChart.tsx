@@ -23,11 +23,18 @@ function getNiceStep(maxValue: number, desiredTickCount: number) {
 }
 
 function getChartTicks(maxValue: number, desiredTickCount = DEFAULT_TICK_COUNT) {
+  if (maxValue <= 0) return [1];
+
+  if (maxValue <= 5) {
+    const intMax = Math.max(1, Math.ceil(maxValue));
+    return Array.from({ length: intMax }, (_, index) => intMax - index);
+  }
+
   const step = getNiceStep(maxValue, desiredTickCount);
   const ceiling = Math.max(step, Math.ceil(maxValue / step) * step);
 
   return Array.from({ length: Math.ceil(ceiling / step) }, (_, index) =>
-    ceiling - index * step,
+    Number((ceiling - index * step).toFixed(2)),
   ).filter((tick) => tick > 0);
 }
 
@@ -54,14 +61,14 @@ export default function BarChart({
   return (
     <div className="w-full">
       <div
-        className="grid w-full grid-cols-[30px_1fr] grid-rows-[1fr_auto]"
+        className="grid w-full grid-cols-[36px_1fr] grid-rows-[1fr_auto]"
         style={{ height }}
       >
         <div className="relative row-start-1">
           {chartTicks.map((tick) => (
             <span
               key={tick}
-              className="type-chart-axis absolute right-2 -translate-y-1/2"
+              className="type-chart-axis absolute right-2.5 -translate-y-1/2"
               style={{ top: `${100 - (tick / chartMaxValue) * 100}%` }}
             >
               {tick}
@@ -118,13 +125,14 @@ export default function BarChart({
         </div>
 
         <div
-          className="col-start-2 row-start-2 grid px-5 pt-2"
+          className="col-start-2 row-start-2 grid px-2 pt-2"
           style={{ gridTemplateColumns: labelGridTemplateColumns }}
         >
           {items.map((item, index) => (
             <span
               key={`${item.label}-${index}`}
-              className="type-chart-axis text-center"
+              className="type-chart-axis truncate px-1 text-center"
+              title={item.label}
             >
               {item.label}
             </span>

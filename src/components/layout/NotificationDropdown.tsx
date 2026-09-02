@@ -61,6 +61,13 @@ export default function NotificationDropdown() {
     if (!isOpen) {
       void refreshNotifications({ unreadOnly: activeTab === "UNREAD", plantId: currentPlantId });
       void refreshUnreadCount(currentPlantId);
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("adavis:close-popovers", {
+            detail: { id: "notifications" },
+          }),
+        );
+      }
     }
     setIsOpen((prev) => !prev);
   };
@@ -106,6 +113,20 @@ export default function NotificationDropdown() {
   };
 
   useEffect(() => {
+    const handleClosePopovers = (event: Event) => {
+      const customEvent = event as CustomEvent<{ id?: string }>;
+      if (customEvent.detail?.id !== "notifications") {
+        setIsOpen(false);
+      }
+    };
+
+    window.addEventListener("adavis:close-popovers", handleClosePopovers);
+    return () => {
+      window.removeEventListener("adavis:close-popovers", handleClosePopovers);
+    };
+  }, []);
+
+  useEffect(() => {
     if (!isOpen) return;
 
     const handlePointerDown = (event: PointerEvent) => {
@@ -139,6 +160,7 @@ export default function NotificationDropdown() {
         type="button"
         id="notification-bell-btn"
         aria-label="Notifications"
+        aria-haspopup="dialog"
         aria-expanded={isOpen}
         onClick={handleToggle}
         className="relative flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-white/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"

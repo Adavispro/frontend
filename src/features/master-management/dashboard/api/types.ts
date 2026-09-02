@@ -16,13 +16,34 @@ export interface TeamActivityItem {
   total: number;
 }
 
+export interface DashboardUserTiles {
+  tenantId?: string;
+  totalUsersCount: number;
+  activeUsersCount: number;
+  idleUsersCount: number;
+  totalOnlineUsersCount: number;
+  configuredRolesCount: number;
+  configuredGroupsCount: number;
+  idleThresholdMinutes?: string;
+  asOf?: string;
+}
+
+export interface RoleUserCount {
+  roleId: string;
+  roleCode?: string;
+  label: string;
+  value: number;
+}
+
 export interface SystemAdminDashboardData {
-  groups: Group[];
-  recentAuditLogs: AuditLog[];
-  recentUsers: User[];
-  roles: Role[];
+  userTiles: DashboardUserTiles;
+  usersByRole: RoleUserCount[];
   teamActivity: TeamActivityItem[];
   loginActivityTrend: DashboardTrendPoint[];
+  recentAuditLogs: AuditLog[];
+  recentUsers: any[];
+  groups: Group[];
+  roles: Role[];
   users: User[];
   userStats: {
     active: number;
@@ -30,3 +51,4 @@ export interface SystemAdminDashboardData {
     total: number;
   };
 }
+

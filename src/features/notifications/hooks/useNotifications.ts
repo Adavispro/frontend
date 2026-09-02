@@ -18,15 +18,11 @@ export function useNotifications() {
   const [unreadCount, setUnreadCount] = useState<number>(0);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>("");
-  const [currentPlantId, setCurrentPlantId] = useState<string>("");
+  const [currentPlantId, setCurrentPlantId] = useState<string>(() => readSelectedPlantId());
   const isFetchingRef = useRef(false);
-  const plantIdRef = useRef<string>("");
+  const plantIdRef = useRef<string>(readSelectedPlantId());
 
   useEffect(() => {
-    const initialPlant = readSelectedPlantId();
-    setCurrentPlantId(initialPlant);
-    plantIdRef.current = initialPlant;
-
     const handlePlantChanged = (event: Event) => {
       const customEvent = event as CustomEvent<{ plantId?: string }>;
       const nextPlant = customEvent.detail?.plantId ?? readSelectedPlantId();

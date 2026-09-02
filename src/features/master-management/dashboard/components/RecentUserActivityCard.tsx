@@ -12,6 +12,53 @@ const formatTime = (value?: string | null) => {
 };
 const description = (log: AuditLog) => typeof log.metadata?.description === "string" ? log.metadata.description : `${formatAction(log.action)} ${log.entity ?? "record"}${log.entityId ? ` ${log.entityId}` : ""}`;
 
-export default function RecentUserActivityCard({ auditLogs }: { auditLogs: AuditLog[] }) {
-  return <DashboardPanel title="Recent User Activity" className="min-h-[212px]"><Link href={ROUTES.masterAuditLogs} className="absolute right-4 top-4 text-[9px] font-semibold text-primary">View all ›</Link><div className="mt-5 grid gap-3">{auditLogs.length ? auditLogs.slice(0, 5).map((log, index) => <div key={log.id ?? log._id ?? log.eventId ?? `${log.action}-${index}`} className="grid grid-cols-[1fr_auto] items-center gap-4"><div className="flex min-w-0 items-center gap-2"><span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-[#E7F7EE] text-[#2FB1A6]"><UserCircleGear size={12} /></span><p className="truncate text-[9px] font-medium text-text-heading"><span className="font-semibold text-primary">{log.username ?? log.userId ?? "System"}</span>{" "}{description(log)}</p></div><span className="text-[9px] font-medium text-text-heading">{formatTime(log.timestamp ?? log.createdAt)}</span></div>) : <p className="py-10 text-center text-[10px] font-medium text-text-secondary">No recent audit activity found.</p>}</div></DashboardPanel>;
+export default function RecentUserActivityCard({
+  auditLogs,
+}: {
+  auditLogs: AuditLog[];
+}) {
+  return (
+    <DashboardPanel
+      title="Recent User Activity"
+      className="min-h-[212px]"
+      headerAction={
+        <Link
+          href={ROUTES.masterAuditLogs}
+          className="text-[13px] sm:text-[14px] font-semibold text-primary hover:underline"
+        >
+          View all ›
+        </Link>
+      }
+    >
+      <div className="mt-5 grid gap-3.5">
+        {auditLogs.length ? (
+          auditLogs.slice(0, 5).map((log, index) => (
+            <div
+              key={log.id ?? log._id ?? log.eventId ?? `${log.action}-${index}`}
+              className="grid grid-cols-[1fr_auto] items-center gap-4"
+            >
+              <div className="flex min-w-0 items-center gap-2.5">
+                <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[#E7F7EE] text-[#2FB1A6]">
+                  <UserCircleGear size={15} />
+                </span>
+                <p className="truncate text-[12px] sm:text-[13px] font-normal text-text-heading">
+                  <span className="font-semibold text-primary">
+                    {log.username ?? log.userId ?? "System"}
+                  </span>{" "}
+                  {description(log)}
+                </p>
+              </div>
+              <span className="shrink-0 text-[12px] sm:text-[13px] font-medium text-text-secondary">
+                {formatTime(log.timestamp ?? log.createdAt)}
+              </span>
+            </div>
+          ))
+        ) : (
+          <p className="py-10 text-center text-[13px] font-medium text-text-secondary">
+            No recent audit activity found.
+          </p>
+        )}
+      </div>
+    </DashboardPanel>
+  );
 }

@@ -8,24 +8,24 @@ export default function UserStatusOverviewCard({
 }: {
   data: SystemAdminDashboardData | null;
 }) {
-  const stats = data?.userStats ?? {
-    active: 0,
-    idle: 0,
-    total: 0,
-  };
+  const userTiles = data?.userTiles;
+  const activeCount = userTiles?.activeUsersCount ?? data?.userStats?.active ?? 0;
+  const idleCount = userTiles?.idleUsersCount ?? data?.userStats?.idle ?? 0;
+  const totalCount = userTiles?.totalUsersCount ?? data?.userStats?.total ?? 0;
+
   const segments = [
     {
       label: "Active Users",
-      value: stats.active,
-      displayValue: String(stats.active),
+      value: activeCount,
+      displayValue: String(activeCount),
       color: "#2FB1A6",
       gradientTo: "#89D4CD",
       legendOrder: 1,
     },
     {
       label: "Idle Users",
-      value: stats.idle,
-      displayValue: String(stats.idle),
+      value: idleCount,
+      displayValue: String(idleCount),
       color: "#FFB857",
       gradientTo: "#F2D07A",
       legendOrder: 2,
@@ -37,13 +37,13 @@ export default function UserStatusOverviewCard({
       <div className="mt-5 flex justify-center">
         <DoughnutChart
           segments={segments}
-          centerValue={String(stats.total)}
+          centerValue={String(totalCount)}
           centerLabel="users"
-          size={112}
+          size={116}
           strokeWidth={15}
           gapDegrees={4}
           legendValueSuffix=""
-          legendLabelWidth={92}
+          legendLabelWidth={100}
           centerLabelClassName="type-chart-center-label mt-0.5 capitalize"
         />
       </div>

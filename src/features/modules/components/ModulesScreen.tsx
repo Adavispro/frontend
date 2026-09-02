@@ -149,6 +149,7 @@ export default function ModulesScreen() {
                       title={module.title}
                       description={module.description}
                       href={module.href}
+                      status={module.status}
                     />
                   ))}
                 </div>

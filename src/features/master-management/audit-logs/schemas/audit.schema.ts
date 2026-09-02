@@ -48,6 +48,8 @@ export const auditLogsResultSchema = z.union([
 export const auditListQuerySchema = z.object({
   page: z.coerce.number().int().min(0).default(0),
   size: z.coerce.number().int().min(1).max(100).default(20),
+  tenantId: z.string().trim().optional(),
+  userId: z.string().trim().optional(),
 });
 
 export const auditEntityQuerySchema = z.object({
@@ -61,7 +63,7 @@ export const auditActionQuerySchema = auditListQuerySchema.extend({
   to: z.string().trim().optional(),
 });
 
-export const auditTenantQuerySchema = z.object({
+export const auditTenantQuerySchema = auditListQuerySchema.extend({
   from: z.string().trim().optional(),
   to: z.string().trim().optional(),
 });

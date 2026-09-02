@@ -280,15 +280,15 @@ export const getAuditLogsByAction = async (
 
 export const getAuditLogsByTenant = async (
   tenantId: string,
-  query: AuditTenantQuery,
+  query: AuditTenantQuery = {},
   signal?: AbortSignal,
 ) => {
-  const result = await apiClient<BackendApiResponse<AuditLog[]>>(
+  const result = await apiClient<BackendApiResponse<AuditLogsResult>>(
     withQuery(APP_API_ENDPOINTS.audit.byTenant(tenantId), query),
     { signal },
   );
   const data = parseData(result, "Unable to load tenant audit logs.");
-  const parsedLogs = auditLogsArraySchema.safeParse(data);
+  const parsedLogs = auditLogsResultSchema.safeParse(data);
 
   if (!parsedLogs.success) {
     throw new ApiError({
@@ -298,7 +298,7 @@ export const getAuditLogsByTenant = async (
     });
   }
 
-  return parsedLogs.data;
+  return normalizeAuditLogsPage(parsedLogs.data, query.size);
 };
 
 export const countAuditLogsByAction = async (

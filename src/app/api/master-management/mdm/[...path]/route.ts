@@ -16,6 +16,7 @@ const allowedRoots = new Set([
   "areas",
   "assignments",
   "blocks",
+  "dashboard",
   "departments",
   "features",
   "license",

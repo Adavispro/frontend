@@ -1,7 +1,6 @@
 import { apiClient } from "@/api/client";
 import type { BackendApiResponse } from "@/api/types";
 import type {
-  NotificationItem,
   NotificationListResponse,
   UnreadCountResponse,
 } from "../schemas/notifications.schema";

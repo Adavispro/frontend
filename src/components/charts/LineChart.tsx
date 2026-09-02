@@ -85,14 +85,14 @@ export default function LineChart({
   return (
     <div className="w-full">
       <div
-        className="grid w-full grid-cols-[30px_1fr] grid-rows-[minmax(0,1fr)_20px]"
+        className="grid w-full grid-cols-[36px_1fr] grid-rows-[minmax(0,1fr)_24px]"
         style={{ height }}
       >
         <div className="relative row-start-1">
           {ticks.map((tick) => (
             <span
               key={tick}
-              className="type-chart-axis absolute right-2 -translate-y-1/2"
+              className="type-chart-axis absolute right-2.5 -translate-y-1/2"
               style={{
                 top: `${
                   100 - ((tick - minValue) / (maxValue - minValue)) * 100
@@ -176,7 +176,7 @@ export default function LineChart({
           </div>
         </div>
 
-        <div className="relative col-start-2 row-start-2 h-5 pt-1.5">
+        <div className="relative col-start-2 row-start-2 h-6 pt-2">
           {points.map((point, index) => (
             index % labelInterval === 0 ? (
               <span

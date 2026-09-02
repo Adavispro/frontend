@@ -12,51 +12,31 @@ const usersByRoleColors = [
 ];
 
 function getUsersByRoleChartItems(data: SystemAdminDashboardData | null) {
-  if (!data) return [];
+  if (!data || !data.usersByRole) return [];
 
-  const roleCounts = data.roles
-    .map((role) => {
-      const roleDisplayName =
-        role.roleName || role.name || role.roleCode || role.roleId;
-      const roleName = normalizeRoleValue(role.name);
-      const roleDisplay = normalizeRoleValue(roleDisplayName);
-      const roleId = normalizeRoleValue(role.roleId);
-      const roleCode = normalizeRoleValue(role.roleCode);
-      const value = data.users.filter((user) => {
-        const designation = normalizeRoleValue(user.designation);
-        return (
-          designation === roleName ||
-          designation === roleDisplay ||
-          designation === roleCode ||
-          designation === roleId
-        );
-      }).length;
-
-      return {
-        label: roleDisplayName,
-        value,
-      };
-    })
-    .sort((first, second) => {
-      if (second.value !== first.value) return second.value - first.value;
-      return first.label.localeCompare(second.label);
-    });
+  const roleCounts = [...data.usersByRole].sort((a, b) => {
+    if (b.value !== a.value) return b.value - a.value;
+    return a.label.localeCompare(b.label);
+  });
 
   const topRoles = roleCounts.slice(0, 4);
   const remainingRoles = roleCounts.slice(4);
+  const othersValue = remainingRoles.reduce((total, role) => total + role.value, 0);
+
   const groupedRoles =
-    remainingRoles.length > 0
+    othersValue > 0 || remainingRoles.length > 0
       ? [
           ...topRoles,
           {
             label: "Others",
-            value: remainingRoles.reduce((total, role) => total + role.value, 0),
+            value: othersValue,
           },
         ]
       : topRoles;
 
   return groupedRoles.map((item, index) => ({
-    ...item,
+    label: item.label,
+    value: item.value,
     color: usersByRoleColors[index]?.color ?? "#6F97D6",
     gradientTo: usersByRoleColors[index]?.gradientTo ?? "#A9C0EA",
   }));
@@ -70,11 +50,18 @@ export default function UsersByRoleCard({
   className?: string;
 }) {
   const items = getUsersByRoleChartItems(data);
+  const hasData = items.some((item) => item.value > 0);
 
   return (
     <DashboardPanel title="Users By Role" className={className}>
-      <div className="mt-5">
-        <BarChart items={items} height={150} />
+      <div className="mt-5 min-h-[150px] flex items-center justify-center">
+        {hasData ? (
+          <BarChart items={items} height={150} />
+        ) : (
+          <p className="text-center text-[13px] font-medium text-text-secondary">
+            No role assignment data available.
+          </p>
+        )}
       </div>
     </DashboardPanel>
   );

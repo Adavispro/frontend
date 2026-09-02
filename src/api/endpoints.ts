@@ -70,6 +70,8 @@ export const API_ENDPOINTS = {
     loginHistory: "/api/v1/audit/login-history",
     byUser: (userId: string) =>
       `/api/v1/audit/trails/user/${encodeURIComponent(userId)}`,
+    byTenant: (tenantId: string) =>
+      `/api/v1/audit/trails/tenant/${encodeURIComponent(tenantId)}`,
   },
 } as const;
 
