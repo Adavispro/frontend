@@ -6,6 +6,9 @@ import type { ApiMethod, BackendApiResponse } from "@/api/types";
 import { SELECTED_PLANT_HEADER } from "@/utils/plantSelection";
 import { AUTH_COOKIE_NAMES } from "@/features/auth/api/auth.server";
 
+export const dynamic = "force-dynamic";
+export const maxDuration = 60;
+
 const allowedRoots = new Set([
   "critical-parameters",
   "critical-parameter-limits",
@@ -70,17 +73,25 @@ async function proxy(
       });
 
       const contentType = upstreamRes.headers.get("content-type") || "";
-      if (upstreamRes.ok && contentType.includes("application/pdf")) {
+      if (upstreamRes.ok && (contentType.includes("application/pdf") || contentType.includes("octet-stream"))) {
         const disposition =
           upstreamRes.headers.get("content-disposition") ||
           `attachment; filename="Batch_Dossier_${path[1] || "Report"}.pdf"`;
+        const contentLength = upstreamRes.headers.get("content-length");
         const buffer = await upstreamRes.arrayBuffer();
+
+        const responseHeaders: Record<string, string> = {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": disposition,
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+        };
+        if (contentLength) {
+          responseHeaders["Content-Length"] = contentLength;
+        }
+
         return new NextResponse(buffer, {
           status: upstreamRes.status,
-          headers: {
-            "Content-Type": "application/pdf",
-            "Content-Disposition": disposition,
-          },
+          headers: responseHeaders,
         });
       }
 
@@ -90,12 +101,16 @@ async function proxy(
       try {
         errBody = JSON.parse(errText);
       } catch {
-        errBody.message = errText || "PDF generation failed.";
+        errBody.message = errText || `PDF generation failed with status ${upstreamRes.status}.`;
       }
       return NextResponse.json(errBody, { status: upstreamRes.status || 500 });
     } catch (err) {
       console.error("PDF stream proxy failed", err);
-      return errorResponse(503, "The IIOT PDF service is unavailable.", "IIOT_SERVICE_UNAVAILABLE");
+      return errorResponse(
+        503,
+        err instanceof Error ? err.message : "The IIOT PDF service is unavailable.",
+        "IIOT_SERVICE_UNAVAILABLE",
+      );
     }
   }
 

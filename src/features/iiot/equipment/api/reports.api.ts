@@ -675,11 +675,15 @@ export const downloadBatchPdfBlob = async (
 
   if (!response.ok) {
     const errorText = await response.text();
-    let msg = "Failed to download batch PDF report.";
+    let msg = `Failed to download batch PDF report (HTTP ${response.status}).`;
     try {
       const parsed = JSON.parse(errorText);
       if (parsed.message) msg = parsed.message;
-    } catch {}
+    } catch {
+      if (errorText && errorText.length < 200 && !errorText.includes("<!DOCTYPE")) {
+        msg = errorText;
+      }
+    }
     throw new Error(msg);
   }
 
