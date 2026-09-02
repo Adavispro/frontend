@@ -48,16 +48,37 @@ export const getDashboardSummaryFromBackend = async (
   tenantId?: string,
   signal?: AbortSignal,
 ): Promise<BackendSummaryResponse> => {
-  const path = withQuery("/api/master-management/mdm/dashboard/summary", {
+  const summaryPath = withQuery("/api/master-management/mdm/dashboard/summary", {
     tenantId: tenantId || undefined,
   });
 
-  const result = await apiClient<BackendApiResponse<BackendSummaryResponse>>(
-    path,
-    { method: "GET", signal },
-  );
+  try {
+    const result = await apiClient<BackendApiResponse<BackendSummaryResponse>>(
+      summaryPath,
+      { method: "GET", signal },
+    );
 
-  return requireApiData(result, "Unable to load dashboard summary.");
+    return requireApiData(result, "Unable to load dashboard summary.");
+  } catch {
+    // Graceful backward-compatible fallback for backends that only expose /user-tiles
+    const userTilesPath = withQuery("/api/master-management/mdm/dashboard/user-tiles", {
+      tenantId: tenantId || undefined,
+    });
+
+    const tilesResult = await apiClient<BackendApiResponse<DashboardUserTiles>>(
+      userTilesPath,
+      { method: "GET", signal },
+    );
+
+    const userTiles = requireApiData(tilesResult, "Unable to load dashboard summary.");
+
+    return {
+      userTiles,
+      usersByRole: [],
+      teamActivity: [],
+      recentUsers: [],
+    };
+  }
 };
 
 export const getUserActivityTrendFromBackend = async (
