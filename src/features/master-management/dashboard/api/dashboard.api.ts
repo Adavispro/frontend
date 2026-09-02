@@ -2,6 +2,8 @@ import { apiClient, requireApiData, withQuery } from "@/api";
 import type { BackendApiResponse } from "@/api/types";
 import type { AuditLog } from "../../audit-logs/api/types";
 import { getAuditLogs } from "../../audit-logs/api";
+import { getRoles } from "../../role-management/api";
+import { getGroups } from "../../user-group-management/api";
 import type {
   DashboardTrendPoint,
   DashboardUserTiles,
@@ -116,10 +118,18 @@ export const getSystemAdminDashboardData = async (
   tenantId?: string,
   signal?: AbortSignal,
 ): Promise<SystemAdminDashboardData> => {
-  const [summaryResult, trendResult, auditResult] = await Promise.allSettled([
+  const [
+    summaryResult,
+    trendResult,
+    auditResult,
+    rolesResult,
+    groupsResult,
+  ] = await Promise.allSettled([
     getDashboardSummaryFromBackend(tenantId, signal),
     getUserActivityTrendFromBackend("quarterly", tenantId, signal),
     getAuditLogs({ page: 0, size: 5, tenantId: tenantId || undefined }, signal),
+    getRoles(true, signal),
+    getGroups(true, signal),
   ]);
 
   if (summaryResult.status === "rejected") {
@@ -136,7 +146,21 @@ export const getSystemAdminDashboardData = async (
       ? auditResult.value
       : { content: [] as AuditLog[] };
 
-  const userTiles = summary.userTiles;
+  const activeRoles = rolesResult.status === "fulfilled" ? rolesResult.value : [];
+  const activeGroups = groupsResult.status === "fulfilled" ? groupsResult.value : [];
+
+  const userTiles = {
+    ...summary.userTiles,
+    configuredRolesCount:
+      Number(summary.userTiles?.configuredRolesCount ?? 0) > 0
+        ? Number(summary.userTiles.configuredRolesCount)
+        : activeRoles.length,
+    configuredGroupsCount:
+      Number(summary.userTiles?.configuredGroupsCount ?? 0) > 0
+        ? Number(summary.userTiles.configuredGroupsCount)
+        : activeGroups.length,
+  };
+
   const usersByRole = summary.usersByRole || [];
   const teamActivity = summary.teamActivity || [];
   const recentUsers = summary.recentUsers || [];
@@ -149,8 +173,8 @@ export const getSystemAdminDashboardData = async (
     loginActivityTrend,
     recentAuditLogs,
     recentUsers,
-    groups: [],
-    roles: [],
+    groups: activeGroups,
+    roles: activeRoles,
     users: [],
     userStats: {
       active: Number(userTiles.activeUsersCount ?? 0),
