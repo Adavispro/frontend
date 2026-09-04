@@ -1,5 +1,6 @@
 export {
   createDepartment,
+  deleteDepartment,
   getAllDepartments,
   getDepartments,
   setDepartmentActive,

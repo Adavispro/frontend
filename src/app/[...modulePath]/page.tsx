@@ -44,6 +44,7 @@ import {
   equipmentStatusFilters,
   findModule,
   getCreateIiotMasterSection,
+  getCreateIiotMasterTitle,
   getCreateTopologyKind,
   getEquipmentDetailTab,
   getEquipmentStatusFilter,
@@ -419,7 +420,7 @@ export async function generateMetadata({
   }
 
   if (isAssignmentManagementPath(modulePath)) {
-    return { title: "Assignment Management | ADAVIS" };
+    return { title: "Context Assignments | ADAVIS" };
   }
 
   if (isCreateAssignmentPath(modulePath)) {
@@ -434,7 +435,7 @@ export async function generateMetadata({
   const createIiotMasterSection = getCreateIiotMasterSection(modulePath);
   if (createIiotMasterSection) {
     return {
-      title: `Create ${getIiotMasterTitle(createIiotMasterSection).replace("Manage ", "")} | ADAVIS`,
+      title: `${getCreateIiotMasterTitle(createIiotMasterSection)} | ADAVIS`,
     };
   }
 
@@ -446,7 +447,7 @@ export async function generateMetadata({
 
   if (isWorkflowMdmPath(modulePath)) {
     return {
-      title: "Manage Workflow | ADAVIS",
+      title: "Workflow Management | ADAVIS",
     };
   }
 

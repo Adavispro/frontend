@@ -235,15 +235,23 @@ export async function DELETE(
     );
   }
 
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    body = undefined;
+  }
+
   const { userId } = await params;
   const selectedPlantId = request.headers.get(SELECTED_PLANT_HEADER)?.trim();
 
   try {
-    const { response, result } = await serverApiClient<null>(
+    const { response, result } = await serverApiClient<null, unknown>(
       SERVER_API_CONFIG.mdmServiceUrl,
       API_ENDPOINTS.masterManagement.userDetail(userId),
       {
         method: "DELETE",
+        body,
         headers: {
           Authorization: `Bearer ${accessToken}`,
           ...(selectedPlantId ? { [SELECTED_PLANT_HEADER]: selectedPlantId } : {}),

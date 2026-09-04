@@ -31,6 +31,10 @@ export const departmentFormSchema = z.object({
 export const createDepartmentRequestSchema = departmentFormSchema.extend({
   departmentName: z.string().trim().min(1),
   parentDepartmentId: z.string().trim().nullish(),
+  remarks: z.string().trim().optional(),
+  reason: z.string().trim().optional(),
+  esignPassword: z.string().optional(),
+  password: z.string().optional(),
 });
 
 export const updateDepartmentFormSchema = departmentFormSchema;
@@ -39,4 +43,15 @@ export const updateDepartmentRequestSchema = updateDepartmentFormSchema.extend({
   departmentName: z.string().trim().min(1),
   parentDepartmentId: z.string().trim().nullish(),
   isActive: z.boolean(),
+  remarks: z.string().trim().optional(),
+  reason: z.string().trim().optional(),
+  esignPassword: z.string().optional(),
+  password: z.string().optional(),
+});
+
+export const actionDepartmentRequestSchema = z.object({
+  remarks: z.string().trim().optional(),
+  reason: z.string().trim().optional(),
+  esignPassword: z.string().optional(),
+  password: z.string().optional(),
 });

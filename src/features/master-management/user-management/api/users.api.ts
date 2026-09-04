@@ -73,10 +73,25 @@ export const updateUser = async (
   );
 };
 
-export const deleteUser = async (userId: string) => {
-  const result = await apiClient<BackendApiResponse<null>>(
+export const deleteUser = async (
+  userId: string,
+  auth?: { remarks: string; password: string },
+) => {
+  const result = await apiClient<
+    BackendApiResponse<null>,
+    { remarks?: string; password?: string; esignPassword?: string }
+  >(
     APP_API_ENDPOINTS.masterManagement.userDetail(userId),
-    { method: "DELETE" },
+    {
+      method: "DELETE",
+      body: auth
+        ? {
+            remarks: auth.remarks,
+            password: auth.password,
+            esignPassword: auth.password,
+          }
+        : undefined,
+    },
   );
   ensureApiSuccess(result, "Unable to delete user.");
   return result;
@@ -87,12 +102,16 @@ export type UserLifecycleAction = "activate" | "reactivate" | "deactivate" | "bl
 export const changeUserLifecycle = async (
   userId: string,
   action: UserLifecycleAction,
+  auth?: { remarks: string; password: string },
 ) => {
   const result = await apiClient<
     BackendApiResponse<User>,
     {
       action: UserLifecycleAction;
       reason: string;
+      remarks?: string;
+      password?: string;
+      esignPassword?: string;
     }
   >(
     APP_API_ENDPOINTS.masterManagement.userLifecycle(userId),
@@ -100,7 +119,10 @@ export const changeUserLifecycle = async (
       method: "PATCH",
       body: {
         action,
-        reason: `User status changed to ${action}.`,
+        reason: auth?.remarks || `User status changed to ${action}.`,
+        remarks: auth?.remarks,
+        password: auth?.password,
+        esignPassword: auth?.password,
       },
     },
   );

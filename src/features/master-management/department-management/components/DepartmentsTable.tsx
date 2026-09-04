@@ -7,17 +7,19 @@ import {
   PencilSimple,
   Plus,
   Power,
+  Trash,
 } from "@phosphor-icons/react/dist/ssr";
 import ActionLabelTooltip from "@/components/table/ActionLabelTooltip";
 import DataTable, {
   StatusPill,
   type DataTableColumn,
 } from "@/components/table/DataTable";
-import { ConfirmDialog, FilterButton, Snackbar } from "@/components/ui";
+import { FilterButton, Snackbar } from "@/components/ui";
 import { ROUTES } from "@/config/routes";
+import TopologyEsignModal from "@/features/master-management/plant-topology/components/TopologyEsignModal";
 import { useTenants } from "../../tenant-management/hooks/useTenants";
 import { usePlantTopology } from "../../plant-topology/hooks/usePlantTopology";
-import { setDepartmentActive } from "../api";
+import { deleteDepartment, setDepartmentActive } from "../api";
 import type { Department } from "../api/types";
 import { useDepartments } from "../hooks/useDepartments";
 import DepartmentFiltersPanel, {
@@ -86,10 +88,12 @@ function DepartmentActions({
   department,
   onEdit,
   onStatusChange,
+  onDelete,
 }: {
   department: Department;
   onEdit: (department: Department) => void;
   onStatusChange: (department: Department) => void;
+  onDelete: (department: Department) => void;
 }) {
   return (
     <div className="flex items-center gap-3">
@@ -114,6 +118,16 @@ function DepartmentActions({
           <Power size={12} weight="regular" />
         </button>
       </ActionLabelTooltip>
+      <ActionLabelTooltip label="Delete">
+        <button
+          type="button"
+          aria-label="Delete department"
+          onClick={() => onDelete(department)}
+          className="grid h-6 w-6 place-items-center rounded bg-[#FFF0F0] text-danger transition-colors hover:bg-[#FFE0E0]"
+        >
+          <Trash size={12} weight="regular" />
+        </button>
+      </ActionLabelTooltip>
     </div>
   );
 }
@@ -121,23 +135,14 @@ function DepartmentActions({
 const createColumns = (
   onEdit: (department: Department) => void,
   onStatusChange: (department: Department) => void,
+  onDelete: (department: Department) => void,
 ): DataTableColumn<DepartmentRow>[] => [
   { key: "serialNumber", header: "S No.", render: (_row, index) => index + 1 },
-  //{ key: "id", header: "Department ID", render: (row) => row.id },
   { key: "name", header: "Department Name", render: (row) => row.name },
   { key: "code", header: "Department Code", render: (row) => row.code },
   { key: "parent", header: "Parent Department", render: (row) => row.parent },
-  
   { key: "tenant", header: "Tenant Name", render: (row) => row.tenant },
   { key: "plant", header: "Plant Name", render: (row) => row.plant },
-  
-  
-  // {
-  //   key: "description",
-  //   header: "Description",
-  //   render: (row) => row.description,
-  //   className: "w-[26%]",
-  // },
   {
     key: "status",
     header: "Status",
@@ -161,6 +166,7 @@ const createColumns = (
         department={row.source}
         onEdit={onEdit}
         onStatusChange={onStatusChange}
+        onDelete={onDelete}
       />
     ),
     disableRowLink: true,
@@ -219,7 +225,10 @@ export default function DepartmentsTable() {
   const [editingDepartment, setEditingDepartment] =
     useState<Department | null>(null);
   const [statusTarget, setStatusTarget] = useState<Department | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Department | null>(null);
   const [isChangingStatus, setIsChangingStatus] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [esignError, setEsignError] = useState("");
   const [operationNotification, setOperationNotification] = useState({
     message: "",
     variant: "success" as "error" | "success",
@@ -267,7 +276,7 @@ export default function DepartmentsTable() {
     [departments],
   );
   const columns = useMemo(
-    () => createColumns(setEditingDepartment, setStatusTarget),
+    () => createColumns(setEditingDepartment, setStatusTarget, setDeleteTarget),
     [],
   );
   const allRows = useMemo(
@@ -359,14 +368,15 @@ export default function DepartmentsTable() {
     setPage(1);
   };
 
-  const handleStatusChange = async () => {
+  const handleStatusChange = async (auth: { remarks: string; password: string }) => {
     if (!statusTarget) return;
 
     setIsChangingStatus(true);
+    setEsignError("");
     setOperationNotification({ message: "", variant: "success" });
 
     try {
-      const updated = await setDepartmentActive(statusTarget, !statusTarget.isActive);
+      const updated = await setDepartmentActive(statusTarget, !statusTarget.isActive, auth);
       replaceDepartment(updated);
       setStatusTarget(null);
       setOperationNotification({
@@ -374,15 +384,47 @@ export default function DepartmentsTable() {
         variant: "success",
       });
     } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Unable to update department status. Please check your credentials.";
+      setEsignError(message);
       setOperationNotification({
-        message:
-          error instanceof Error
-            ? error.message
-            : "Unable to update department status. Please try again.",
+        message,
         variant: "error",
       });
     } finally {
       setIsChangingStatus(false);
+    }
+  };
+
+  const handleDelete = async (auth: { remarks: string; password: string }) => {
+    if (!deleteTarget) return;
+
+    setIsDeleting(true);
+    setEsignError("");
+    setOperationNotification({ message: "", variant: "success" });
+
+    try {
+      await deleteDepartment(deleteTarget.departmentId, auth);
+      replaceDepartment({ ...deleteTarget, isActive: false });
+      setDeleteTarget(null);
+      setOperationNotification({
+        message: "Department deleted successfully.",
+        variant: "success",
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Unable to delete department. Please check your credentials.";
+      setEsignError(message);
+      setOperationNotification({
+        message,
+        variant: "error",
+      });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -428,20 +470,43 @@ export default function DepartmentsTable() {
         onClose={clearError}
       />
 
-      <ConfirmDialog
+      <TopologyEsignModal
         isOpen={Boolean(statusTarget)}
-        title={`${statusTarget?.isActive ? "Deactivate" : "Activate"} Department`}
-        message={`${statusTarget?.isActive ? "Deactivate" : "Activate"} ${statusTarget?.departmentName || statusTarget?.name || statusTarget?.departmentId || "this department"}?`}
-        confirmLabel={statusTarget?.isActive ? "Deactivate" : "Activate"}
-        isConfirming={isChangingStatus}
-        onConfirm={() => void handleStatusChange()}
-        onCancel={() => setStatusTarget(null)}
+        title={`${statusTarget?.isActive ? "Deactivate" : "Activate"} Department: ${statusTarget?.departmentCode || statusTarget?.departmentId || ""}`}
+        actionLabel={`Sign & ${statusTarget?.isActive ? "Deactivate" : "Activate"}`}
+        description="21 CFR Part 11 electronic signature authentication is required to change department lifecycle status. Enter your signature remarks and password."
+        isSubmitting={isChangingStatus}
+        errorMessage={esignError}
+        onConfirm={handleStatusChange}
+        onClose={() => {
+          if (!isChangingStatus) {
+            setStatusTarget(null);
+            setEsignError("");
+          }
+        }}
+      />
+
+      <TopologyEsignModal
+        isOpen={Boolean(deleteTarget)}
+        title={`Delete Department: ${deleteTarget?.departmentCode || deleteTarget?.departmentId || ""}`}
+        actionLabel="Sign & Delete Department"
+        description="21 CFR Part 11 electronic signature authentication is required to delete department master data. Enter your signature remarks and password."
+        isSubmitting={isDeleting}
+        errorMessage={esignError}
+        onConfirm={handleDelete}
+        onClose={() => {
+          if (!isDeleting) {
+            setDeleteTarget(null);
+            setEsignError("");
+          }
+        }}
       />
 
       {editingDepartment ? (
         <EditDepartmentDialog
           key={editingDepartment.departmentId}
           department={editingDepartment}
+          departments={departments}
           onClose={() => setEditingDepartment(null)}
           onUpdated={replaceDepartment}
         />

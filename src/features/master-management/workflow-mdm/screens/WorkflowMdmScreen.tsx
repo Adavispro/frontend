@@ -452,7 +452,7 @@ export default function WorkflowMdmScreen() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-3">
             <ShieldCheck className="h-7 w-7 text-indigo-600" />
-            Manage Workflow
+            Workflow Management
           </h1>
           <p className="text-sm text-slate-500 mt-1">
             Enterprise Master Data Management for multi-stage workflow definitions, dynamic lifecycle gates, role assignments, and 21 CFR Part 11 electronic signature rules.

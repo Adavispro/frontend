@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CaretDown } from "@phosphor-icons/react";
 import { Button, Dialog, TextField } from "@/components/ui";
 import { usePlantTopology } from "../../plant-topology/hooks/usePlantTopology";
@@ -83,12 +83,13 @@ const initialValues = (
   criticalParameters: CriticalParameter[],
 ): EditValues => {
   if (section === "equipments" && record && "equipmentId" in record) {
-    const equipment = record as IiotAsset;
+    const equipment = record as IiotAsset & { blockId?: string };
     return {
       equipmentCode: equipment.equipmentCode,
       equipmentName: equipment.equipmentName,
       tenantId: equipment.tenantId,
       plantId: equipment.plantId,
+      blockId: equipment.blockId ?? "",
       areaId: equipment.areaId,
       roomId: equipment.roomId,
       isActive: Boolean(equipment.isActive),
@@ -184,7 +185,14 @@ export default function IiotMasterEditDialog({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const tenantId = String(values.tenantId ?? "");
   const plantId = String(values.plantId ?? "");
+  const blockId = String(values.blockId ?? "");
   const areaId = String(values.areaId ?? "");
+  const roomId = String(values.roomId ?? "");
+
+  useEffect(() => {
+    setValues(initialValues(section, record, criticalParameters));
+    setErrors({});
+  }, [section, record, criticalParameters, isOpen]);
 
   const fields = useMemo<EditField[]>(() => {
     if (section === "equipments") {
@@ -209,6 +217,22 @@ export default function IiotMasterEditDialog({
           ),
       ];
 
+      const blockOptions = [
+        emptyOption("Select Block"),
+        ...topology.blocks
+          .filter(
+            (block) =>
+              block.isActive &&
+              (!tenantId || block.tenantId === tenantId) &&
+              (!plantId || block.plantId === plantId),
+          )
+          .map((block) => option(block.blockId, `${block.blockName} (${block.blockId})`)),
+      ];
+      if (blockId && !blockOptions.some((o) => o.value === blockId)) {
+        const found = topology.blocks.find((b) => b.blockId === blockId);
+        blockOptions.push(option(blockId, found ? `${found.blockName} (${found.blockId})` : blockId));
+      }
+
       const areaOptions = [
         emptyOption("Select Area"),
         ...topology.areas
@@ -216,10 +240,15 @@ export default function IiotMasterEditDialog({
             (area) =>
               area.isActive &&
               (!tenantId || area.tenantId === tenantId) &&
-              (!plantId || area.plantId === plantId),
+              (!plantId || area.plantId === plantId) &&
+              (!blockId || area.blockId === blockId),
           )
           .map((area) => option(area.areaId, `${area.areaName} (${area.areaId})`)),
       ];
+      if (areaId && !areaOptions.some((o) => o.value === areaId)) {
+        const found = topology.areas.find((a) => a.areaId === areaId);
+        areaOptions.push(option(areaId, found ? `${found.areaName} (${found.areaId})` : areaId));
+      }
 
       const roomOptions = [
         emptyOption("Select Room"),
@@ -233,10 +262,15 @@ export default function IiotMasterEditDialog({
           )
           .map((room) => option(room.roomId, `${room.roomName} (${room.roomId})`)),
       ];
+      if (roomId && !roomOptions.some((o) => o.value === roomId)) {
+        const found = topology.rooms.find((r) => r.roomId === roomId);
+        roomOptions.push(option(roomId, found ? `${found.roomName} (${found.roomId})` : roomId));
+      }
 
       return [
         { id: "tenantId", label: "Tenant", kind: "select", options: tenantOptions },
         { id: "plantId", label: "Plant", kind: "select", options: plantOptions },
+        { id: "blockId", label: "Block", kind: "select", options: blockOptions },
         { id: "areaId", label: "Area", kind: "select", options: areaOptions },
         { id: "roomId", label: "Room", kind: "select", options: roomOptions },
         { id: "equipmentCode", label: "Equipment Code" },
@@ -366,13 +400,16 @@ export default function IiotMasterEditDialog({
     ];
   }, [
     areaId,
+    blockId,
     criticalParameters,
     equipments,
     plantId,
+    roomId,
     section,
     tenantId,
     tenants,
     topology.areas,
+    topology.blocks,
     topology.plants,
     topology.rooms,
     values.parameterType,
@@ -384,10 +421,16 @@ export default function IiotMasterEditDialog({
       if (section === "equipments" && typeof value === "string") {
         if (field === "tenantId") {
           next.plantId = "";
+          next.blockId = "";
           next.areaId = "";
           next.roomId = "";
         }
         if (field === "plantId") {
+          next.blockId = "";
+          next.areaId = "";
+          next.roomId = "";
+        }
+        if (field === "blockId") {
           next.areaId = "";
           next.roomId = "";
         }

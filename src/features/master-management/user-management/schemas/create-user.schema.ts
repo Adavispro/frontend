@@ -42,4 +42,7 @@ export const createUserRequestSchema = z.object({
   supportingDocuments: z.array(z.record(z.string(), z.unknown())).optional(),
   supportingDocumentType: z.string().nullish(),
   reason: z.string().trim().min(1),
+  remarks: z.string().optional(),
+  password: z.string().optional(),
+  esignPassword: z.string().optional(),
 });

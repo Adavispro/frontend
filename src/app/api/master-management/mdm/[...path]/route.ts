@@ -65,7 +65,7 @@ async function proxy(
   const upstreamPath = `/api/v1/mdm/${path.map(encodeURIComponent).join("/")}${requestUrl.search}`;
   let body: unknown;
 
-  if (method !== "GET" && method !== "DELETE") {
+  if (method !== "GET") {
     try {
       body = await request.json();
     } catch {

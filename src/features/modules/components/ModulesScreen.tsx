@@ -20,7 +20,8 @@ import type { IconProps } from "@phosphor-icons/react";
 import titleImage from "@/assets/modules/title-image.png";
 import titleShade from "@/assets/modules/title-shade.png";
 import TopNav from "@/components/layout/TopNav";
-import { useCurrentUser } from "@/features/auth/hooks/useCurrentUser";
+import { useCurrentUser, useLoginContext } from "@/features/auth/hooks/useCurrentUser";
+import { usePermissions } from "@/features/auth/hooks/usePermissions";
 import { MODULE_SECTIONS } from "@/features/modules/data/module-data";
 import ModuleCard from "./ModuleCard";
 
@@ -45,25 +46,85 @@ const ICON_REGISTRY: Record<string, PhosphorIconComponent> = {
 function resolveIcon(name: string, color: string) {
   const Icon = ICON_REGISTRY[name];
   if (!Icon) return null;
-  return <Icon size={17} weight="regular" color={color} />;
+  return <Icon size={28} weight="regular" color={color} />;
 }
 
 
 export default function ModulesScreen() {
   const [search, setSearch] = useState("");
   const currentUser = useCurrentUser();
+  const loginContext = useLoginContext();
+  const { hasPermission, roles } = usePermissions();
+
   const displayName =
     currentUser?.firstName?.trim() || currentUser?.username || "User";
   const userInitial = displayName.charAt(0).toUpperCase();
 
+  const isModuleAuthorized = (moduleId: string): boolean => {
+    // Under-development modules are informational previews
+    if (moduleId !== "master-management" && moduleId !== "iiot") {
+      return true;
+    }
+
+    if (!loginContext) {
+      return true;
+    }
+
+    const isAdmin = roles.some((r: any) =>
+      [
+        "SUPER_ADMIN",
+        "PLATFORM_SUPER_ADMIN",
+        "PLATFORM_ADMIN",
+        "IT_ADMIN",
+        "ADMIN",
+      ].includes(r.roleCode),
+    );
+
+    if (isAdmin) {
+      return true;
+    }
+
+    const rolePermissions = loginContext.rolePermissions || {};
+    const hasModuleInRoles = (targetCode: string) => {
+      return Object.values(rolePermissions).some((moduleList) => {
+        if (!Array.isArray(moduleList)) return false;
+        return moduleList.some(
+          (m: any) =>
+            m.moduleCode === targetCode || m.moduleId === targetCode,
+        );
+      });
+    };
+
+    if (moduleId === "master-management") {
+      return (
+        hasPermission("MDM_ALL") ||
+        hasPermission("ADMIN") ||
+        hasModuleInRoles("MOD-MDM")
+      );
+    }
+
+    if (moduleId === "iiot") {
+      return (
+        hasPermission("BATCH_READ") ||
+        hasPermission("BATCH_SEND_FOR_APPROVAL") ||
+        hasPermission("BATCH_APPROVE") ||
+        hasModuleInRoles("MOD-IIOT")
+      );
+    }
+
+    return true;
+  };
+
   const filtered = MODULE_SECTIONS.map((section) => ({
     ...section,
-    modules: section.modules.filter(
-      (m) =>
-        search.trim() === "" ||
-        m.title.toLowerCase().includes(search.toLowerCase()) ||
-        m.description.toLowerCase().includes(search.toLowerCase())
-    ),
+    modules: section.modules
+      .filter((m) => isModuleAuthorized(m.id))
+      .filter(
+        (m) =>
+          search.trim() === "" ||
+          m.title.toLowerCase().includes(search.toLowerCase()) ||
+          m.description.toLowerCase().includes(search.toLowerCase()),
+      ),
   })).filter((s) => s.modules.length > 0);
 
   return (
@@ -102,64 +163,54 @@ export default function ModulesScreen() {
             </p>
             <div className="mb-5 h-[2px] w-[160px] bg-white" />
 
-            <label className="flex h-10 w-full max-w-[390px] items-center gap-2 rounded-lg border border-white/20 bg-white/20 px-3.5 shadow-inner backdrop-blur-sm">
+            <label className="flex h-11 w-full max-w-[420px] items-center gap-2.5 rounded-xl border border-white/25 bg-white/20 px-4 shadow-inner backdrop-blur-sm transition-all focus-within:border-white/50 focus-within:bg-white/25">
               <MagnifyingGlass
-                size={14}
-                color="rgba(255,255,255,0.92)"
-                weight="regular"
+                size={18}
+                color="rgba(255,255,255,0.95)"
+                weight="bold"
               />
               <span className="sr-only">Search modules</span>
               <input
                 type="search"
-                placeholder="Search modules"
+                placeholder="Search modules..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="min-w-0 flex-1 bg-transparent text-[0.65rem] text-white outline-none placeholder:text-white/85"
+                className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-white/80"
               />
             </label>
           </div>
         </section>
 
         <div className="mt-12 space-y-16">
-          {filtered.map((section) => {
-            const twoColumnSection =
-              section.id === "manufacturing-operations" ||
-              section.id === "compliance-documentation";
+          {filtered.map((section) => (
+            <section key={section.id}>
+              <div className="mb-6 flex items-center gap-3">
+                <h2 className="whitespace-nowrap text-sm font-bold tracking-wider text-slate-600 uppercase">
+                  {section.title}
+                </h2>
+                <div className="h-px flex-1 bg-slate-200" />
+              </div>
 
-            return (
-              <section key={section.id}>
-                <div className="mb-5 flex items-center gap-3">
-                  <h2 className="whitespace-nowrap text-[0.86rem] font-semibold tracking-[0.035em] text-[#4c5057]">
-                    {section.title}
-                  </h2>
-                  <div className="h-px flex-1 bg-[#d9dde3]" />
-                </div>
-
-                <div
-                  className={`grid grid-cols-1 gap-8 sm:grid-cols-2 ${
-                    twoColumnSection ? "" : "lg:grid-cols-3"
-                  }`}
-                >
-                  {section.modules.map((module) => (
-                    <ModuleCard
-                      key={module.id}
-                      icon={resolveIcon(module.iconName, module.iconColor)}
-                      iconBg={module.iconBg}
-                      iconColor={module.iconColor}
-                      title={module.title}
-                      description={module.description}
-                      href={module.href}
-                      status={module.status}
-                    />
-                  ))}
-                </div>
-              </section>
-            );
-          })}
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                {section.modules.map((module) => (
+                  <ModuleCard
+                    key={module.id}
+                    icon={resolveIcon(module.iconName, module.iconColor)}
+                    iconBg={module.iconBg}
+                    iconColor={module.iconColor}
+                    title={module.title}
+                    description={module.description}
+                    href={module.href}
+                    status={module.status}
+                  />
+                ))}
+              </div>
+            </section>
+          ))}
 
           {filtered.length === 0 && (
-            <div className="rounded-xl border border-dashed border-line py-12 text-center text-sm text-text-secondary">
-              No modules match your search.
+            <div className="rounded-2xl border border-dashed border-slate-200 py-16 text-center text-sm font-medium text-slate-500">
+              No modules match your search query.
             </div>
           )}
         </div>

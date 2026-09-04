@@ -43,7 +43,7 @@ const sectionTabs: {
 }[] = [
   {
     key: "equipments",
-    label: "Equipments",
+    label: "Equipment",
     href: ROUTES.masterIiotEquipments,
     icon: Factory,
   },
@@ -68,10 +68,10 @@ const sectionTabs: {
 ];
 
 const sectionTitles: Record<IiotMasterSection, string> = {
-  equipments: "Manage Equipments",
-  "critical-parameters": "Manage Critical Parameters",
-  "critical-parameter-limits": "Manage Critical Parameter Limits",
-  "product-master": "Manage Product Master",
+  equipments: "Equipment Master",
+  "critical-parameters": "Critical Parameters",
+  "critical-parameter-limits": "Critical Parameter Limits",
+  "product-master": "Product Master",
 };
 
 const sectionCreateRoutes: Record<IiotMasterSection, string> = {

@@ -57,19 +57,25 @@ export default function LicenseOverview() {
     if (!action || !tenantId) return;
     setIsSubmitting(true);
     try {
+      const token = values.encryptedLicenseToken || license?.licenseKey || undefined;
       const updated = action === "RENEW"
         ? await renewTenantLicense(tenantId, {
             encryptedLicenseToken: values.encryptedLicenseToken,
             reason: values.reason,
             renewedBy: actorUserId,
           })
-        : action === "UPGRADE" || action === "ACTIVATE"
+        : action === "UPGRADE"
         ? await upgradeTenantLicense(tenantId, {
             encryptedLicenseToken: values.encryptedLicenseToken ?? "",
             reason: values.reason,
             upgradedBy: actorUserId,
           })
-        : await applyLicense({ actionType: action, encryptedLicenseToken: values.encryptedLicenseToken, performedBy: actorUserId, reason: values.reason });
+        : await applyLicense({
+            actionType: action,
+            encryptedLicenseToken: token,
+            performedBy: actorUserId,
+            reason: values.reason,
+          });
       setLicense(updated);
       setAction(null);
       setNotification({ message: `License ${action.toLowerCase()} action completed.`, variant: "success" });

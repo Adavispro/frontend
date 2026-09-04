@@ -8,6 +8,7 @@ import {
   invalidateLoginContext,
   useCurrentUser,
 } from "@/features/auth/hooks/useCurrentUser";
+import TopologyEsignModal from "@/features/master-management/plant-topology/components/TopologyEsignModal";
 import {
   buildUpdateUserRequest,
   getUser,
@@ -15,6 +16,7 @@ import {
 } from "@/features/master-management/user-management/api";
 import type {
   UpdateUserFormValues,
+  UpdateUserRequest,
   User,
 } from "@/features/master-management/user-management/api";
 import {
@@ -92,6 +94,9 @@ export default function ProfileEditScreen() {
   >({});
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isEsignOpen, setIsEsignOpen] = useState(false);
+  const [pendingPayload, setPendingPayload] = useState<UpdateUserRequest | null>(null);
+  const [esignError, setEsignError] = useState("");
   const [notification, setNotification] = useState({
     message: "",
     variant: "error" as "error" | "success",
@@ -113,13 +118,11 @@ export default function ProfileEditScreen() {
           message:
             error instanceof ApiError
               ? error.message
-              : "Unable to load your profile. Please try again.",
+              : "Unable to load your profile. Please refresh the page.",
           variant: "error",
         });
       })
-      .finally(() => {
-        if (!controller.signal.aborted) setIsLoading(false);
-      });
+      .finally(() => setIsLoading(false));
 
     return () => controller.abort();
   }, [currentUser?.userId]);
@@ -142,7 +145,7 @@ export default function ProfileEditScreen() {
     setErrors((previous) => ({ ...previous, [updateField]: undefined }));
   };
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!values || !user) return;
 
@@ -160,14 +163,30 @@ export default function ProfileEditScreen() {
       return;
     }
 
+    const requestPayload = buildUpdateUserRequest(user, parsedValues.data);
+    setPendingPayload(requestPayload);
+    setEsignError("");
+    setIsEsignOpen(true);
+  };
+
+  const handleEsignConfirm = async (auth: { remarks: string; password: string }) => {
+    if (!user || !pendingPayload) return;
+
     setIsSubmitting(true);
+    setEsignError("");
     setNotification({ message: "", variant: "error" });
 
     try {
-      const requestPayload = buildUpdateUserRequest(user, parsedValues.data);
-      const updatedUser = await updateUser(user.userId, requestPayload);
+      const requestWithEsign = {
+        ...pendingPayload,
+        remarks: auth.remarks,
+        password: auth.password,
+        esignPassword: auth.password,
+      };
+      const updatedUser = await updateUser(user.userId, requestWithEsign);
       setUser(updatedUser);
       setValues(userToValues(updatedUser));
+      setIsEsignOpen(false);
       setNotification({
         message: "Profile updated successfully.",
         variant: "success",
@@ -175,11 +194,13 @@ export default function ProfileEditScreen() {
       invalidateLoginContext();
       router.refresh();
     } catch (error) {
+      const message =
+        error instanceof ApiError
+          ? error.message
+          : "Unable to update your profile. Please try again.";
+      setEsignError(message);
       setNotification({
-        message:
-          error instanceof ApiError
-            ? error.message
-            : "Unable to update your profile. Please try again.",
+        message,
         variant: "error",
       });
     } finally {
@@ -268,6 +289,22 @@ export default function ProfileEditScreen() {
         }
         message={notification.message}
         onClose={() => setNotification({ message: "", variant: "error" })}
+      />
+
+      <TopologyEsignModal
+        isOpen={isEsignOpen}
+        title={`Authorize Profile Update: ${user?.userId ?? ""}`}
+        actionLabel="Sign & Update Profile"
+        description="21 CFR Part 11 electronic signature authentication is required to update your profile. Enter your signature remarks and password."
+        isSubmitting={isSubmitting}
+        errorMessage={esignError}
+        onConfirm={handleEsignConfirm}
+        onClose={() => {
+          if (!isSubmitting) {
+            setIsEsignOpen(false);
+            setEsignError("");
+          }
+        }}
       />
     </form>
   );

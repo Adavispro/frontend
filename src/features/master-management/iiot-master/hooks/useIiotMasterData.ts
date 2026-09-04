@@ -157,6 +157,15 @@ export function useIiotMasterData() {
     record: IiotMasterRecord,
     values: IiotMasterUpdateValues,
   ) => {
+    if (section === "equipments" && "equipmentId" in record) {
+      const updated = await updateIiotAsset(
+        String(record.equipmentId),
+        values as UpdateIiotAssetValues,
+      );
+      replaceRecord(section, updated);
+      return updated;
+    }
+
     const currentActive =
       "isActive" in record ? Boolean(record.isActive) : true;
     const nextActive =

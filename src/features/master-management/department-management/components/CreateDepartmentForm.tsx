@@ -7,10 +7,12 @@ import { ApiError } from "@/api";
 import { Button, Snackbar } from "@/components/ui";
 import { ROUTES } from "@/config/routes";
 import clearIcon from "@/assets/icons/clear-icon.svg";
+import TopologyEsignModal from "@/features/master-management/plant-topology/components/TopologyEsignModal";
 import { usePlantTopology } from "../../plant-topology/hooks/usePlantTopology";
 import { useTenants } from "../../tenant-management/hooks/useTenants";
 import { useDepartments } from "../hooks/useDepartments";
 import { createDepartment } from "../api";
+import type { CreateDepartmentRequest } from "../api/types";
 import { departmentFormSchema } from "../schemas";
 import {
   createDepartmentFields,
@@ -38,6 +40,9 @@ export default function CreateDepartmentForm() {
     Partial<Record<DepartmentFormFieldId, string>>
   >({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isEsignOpen, setIsEsignOpen] = useState(false);
+  const [esignError, setEsignError] = useState("");
+  const [pendingPayload, setPendingPayload] = useState<CreateDepartmentRequest | null>(null);
   const [notification, setNotification] = useState({
     message: "",
     variant: "error" as "error" | "success",
@@ -72,7 +77,7 @@ export default function CreateDepartmentForm() {
     [departments, tenants, topology.plants, values.plantId, values.tenantId],
   );
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const parsedValues = departmentFormSchema.safeParse(values);
 
@@ -89,21 +94,33 @@ export default function CreateDepartmentForm() {
       return;
     }
 
+    const payload: CreateDepartmentRequest = {
+      tenantId: parsedValues.data.tenantId,
+      plantId: parsedValues.data.plantId,
+      departmentCode: parsedValues.data.departmentCode,
+      departmentName: parsedValues.data.name,
+      name: parsedValues.data.name,
+      description: parsedValues.data.description,
+      parentDepartmentId: toNullableParent(
+        parsedValues.data.parentDepartmentId ?? "",
+      ),
+    };
+
+    setPendingPayload(payload);
+    setEsignError("");
+    setIsEsignOpen(true);
+  };
+
+  const handleEsignConfirm = async (auth: { remarks: string; password: string }) => {
+    if (!pendingPayload) return;
+
     setIsSubmitting(true);
+    setEsignError("");
     setNotification({ message: "", variant: "error" });
 
     try {
-      await createDepartment({
-        tenantId: parsedValues.data.tenantId,
-        plantId: parsedValues.data.plantId,
-        departmentCode: parsedValues.data.departmentCode,
-        departmentName: parsedValues.data.name,
-        name: parsedValues.data.name,
-        description: parsedValues.data.description,
-        parentDepartmentId: toNullableParent(
-          parsedValues.data.parentDepartmentId ?? "",
-        ),
-      });
+      await createDepartment(pendingPayload, auth);
+      setIsEsignOpen(false);
       setNotification({
         message: "Department created successfully.",
         variant: "success",
@@ -113,80 +130,101 @@ export default function CreateDepartmentForm() {
         router.refresh();
       }, 700);
     } catch (error) {
+      const message =
+        error instanceof ApiError
+          ? error.message
+          : "Unable to create department. Please try again.";
+      setEsignError(message);
       setNotification({
-        message:
-          error instanceof ApiError
-            ? error.message
-            : "Unable to create department. Please try again.",
+        message,
         variant: "error",
       });
+    } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <form
-      className="module-glass-panel overflow-hidden rounded-lg shadow-[0_12px_24px_rgba(35,50,70,0.1)]"
-      onSubmit={handleSubmit}
-    >
-      <div className="border-b border-[#E3E9F0] px-6 py-5">
-        <h2 className="text-[14px] font-semibold text-text-heading">
-          Enter Department Details
-        </h2>
-        <p className="mt-2 text-[9px] text-text-secondary">
-          Fill out the required details to create a department
-        </p>
-      </div>
-
-      <div className="grid gap-6 px-6 py-5 md:grid-cols-2">
-        <DepartmentFormFields
-          fields={fields}
-          values={values}
-          errors={errors}
-          onChange={handleChange}
-        />
-
-        <div className="flex justify-end gap-3 md:col-span-2">
-          <Button
-            type="reset"
-            onClick={clearForm}
-            variant="ghost"
-            size="sm"
-            prefixIcon={<Image src={clearIcon} alt="" aria-hidden="true" className="h-3.5 w-3.5" />}
-            rounded="rounded-[4px]"
-            textSize="text-[10px]"
-            paddingX="px-4"
-            paddingY="py-0"
-            className="h-9 border-primary/35 bg-white/35 !text-primary hover:bg-white/65"
-          >
-            Clear All
-          </Button>
-          <Button
-            type="submit"
-            isLoading={isSubmitting || isLoadingDepartments || isLoadingTopology || isLoadingTenants}
-            size="sm"
-            rounded="rounded-[4px]"
-            textSize="text-[10px]"
-            paddingX="px-5"
-            paddingY="py-0"
-            className="h-9 shadow-[0_8px_18px_rgba(7,92,175,0.18)]"
-          >
-            Save Department
-          </Button>
+    <>
+      <form
+        className="module-glass-panel overflow-hidden rounded-lg shadow-[0_12px_24px_rgba(35,50,70,0.1)]"
+        onSubmit={handleSubmit}
+      >
+        <div className="border-b border-[#E3E9F0] px-6 py-5">
+          <h2 className="text-[14px] font-semibold text-text-heading">
+            Enter Department Details
+          </h2>
+          <p className="mt-2 text-[9px] text-text-secondary">
+            Fill out the required details to create a department
+          </p>
         </div>
-      </div>
 
-      <Snackbar
-        open={Boolean(notification.message)}
-        variant={notification.variant}
-        title={
-          notification.variant === "success"
-            ? "Department created"
-            : "Unable to create department"
-        }
-        message={notification.message}
-        onClose={() => setNotification({ message: "", variant: "error" })}
+        <div className="grid gap-6 px-6 py-5 md:grid-cols-2">
+          <DepartmentFormFields
+            fields={fields}
+            values={values}
+            errors={errors}
+            onChange={handleChange}
+          />
+
+          <div className="flex justify-end gap-3 md:col-span-2">
+            <Button
+              type="reset"
+              onClick={clearForm}
+              variant="ghost"
+              size="sm"
+              prefixIcon={<Image src={clearIcon} alt="" aria-hidden="true" className="h-3.5 w-3.5" />}
+              rounded="rounded-[4px]"
+              textSize="text-[10px]"
+              paddingX="px-4"
+              paddingY="py-0"
+              className="h-9 border-primary/35 bg-white/35 !text-primary hover:bg-white/65"
+            >
+              Clear All
+            </Button>
+            <Button
+              type="submit"
+              isLoading={isSubmitting || isLoadingDepartments || isLoadingTopology || isLoadingTenants}
+              size="sm"
+              rounded="rounded-[4px]"
+              textSize="text-[10px]"
+              paddingX="px-5"
+              paddingY="py-0"
+              className="h-9 shadow-[0_8px_18px_rgba(7,92,175,0.18)]"
+            >
+              Save Department
+            </Button>
+          </div>
+        </div>
+
+        <Snackbar
+          open={Boolean(notification.message)}
+          variant={notification.variant}
+          title={
+            notification.variant === "success"
+              ? "Department created"
+              : "Unable to create department"
+          }
+          message={notification.message}
+          onClose={() => setNotification({ message: "", variant: "error" })}
+        />
+      </form>
+
+      <TopologyEsignModal
+        isOpen={isEsignOpen}
+        title={`Authorize Create Department: ${values.departmentCode || "New Department"}`}
+        actionLabel="Sign & Create Department"
+        description="21 CFR Part 11 electronic signature authentication is required to create department master data. Enter your signature remarks and password."
+        isSubmitting={isSubmitting}
+        errorMessage={esignError}
+        onConfirm={handleEsignConfirm}
+        onClose={() => {
+          if (!isSubmitting) {
+            setIsEsignOpen(false);
+            setEsignError("");
+          }
+        }}
       />
-    </form>
+    </>
   );
 }

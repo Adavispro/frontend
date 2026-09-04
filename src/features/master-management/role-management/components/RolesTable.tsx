@@ -52,7 +52,7 @@ export default function RolesTable() {
   return (
     <>
       <DataTable
-        title="Roles List"
+        title="Roles"
         columns={columns}
         rows={rows}
         getRowKey={(row) => row.id}

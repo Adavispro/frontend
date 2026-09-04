@@ -10,8 +10,9 @@ import emailIcon from "@/assets/icons/email.svg";
 import plantIcon from "@/assets/icons/plant-icon.svg";
 import phoneIcon from "@/assets/icons/phone.svg";
 import userIcon from "@/assets/icons/user.svg";
+import TopologyEsignModal from "@/features/master-management/plant-topology/components/TopologyEsignModal";
 import { buildUpdateUserRequest, getUser, updateUser } from "../api";
-import type { UpdateUserFormValues, User } from "../api/types";
+import type { UpdateUserFormValues, UpdateUserRequest, User } from "../api/types";
 import { updateUserFormSchema } from "../schemas";
 
 interface EditUserFormProps {
@@ -27,6 +28,9 @@ export default function EditUserForm({ userId }: EditUserFormProps) {
   >({});
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isEsignOpen, setIsEsignOpen] = useState(false);
+  const [pendingPayload, setPendingPayload] = useState<UpdateUserRequest | null>(null);
+  const [esignError, setEsignError] = useState("");
   const [notification, setNotification] = useState({
     message: "",
     variant: "error" as "error" | "success",
@@ -73,7 +77,7 @@ export default function EditUserForm({ userId }: EditUserFormProps) {
     setErrors((previous) => ({ ...previous, [field]: undefined }));
   };
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!values || !user) return;
 
@@ -91,12 +95,28 @@ export default function EditUserForm({ userId }: EditUserFormProps) {
       return;
     }
 
+    const requestPayload = buildUpdateUserRequest(user, parsedValues.data);
+    setPendingPayload(requestPayload);
+    setEsignError("");
+    setIsEsignOpen(true);
+  };
+
+  const handleEsignConfirm = async (auth: { remarks: string; password: string }) => {
+    if (!user || !pendingPayload) return;
+
     setIsSubmitting(true);
+    setEsignError("");
     setNotification({ message: "", variant: "error" });
 
     try {
-      const requestPayload = buildUpdateUserRequest(user, parsedValues.data);
-      await updateUser(user.userId, requestPayload);
+      const requestWithEsign = {
+        ...pendingPayload,
+        remarks: auth.remarks,
+        password: auth.password,
+        esignPassword: auth.password,
+      };
+      await updateUser(user.userId, requestWithEsign);
+      setIsEsignOpen(false);
       setNotification({
         message: "User updated successfully.",
         variant: "success",
@@ -106,11 +126,13 @@ export default function EditUserForm({ userId }: EditUserFormProps) {
         router.refresh();
       }, 700);
     } catch (error) {
+      const message =
+        error instanceof ApiError
+          ? error.message
+          : "Unable to update user. Please try again.";
+      setEsignError(message);
       setNotification({
-        message:
-          error instanceof ApiError
-            ? error.message
-            : "Unable to update user. Please try again.",
+        message,
         variant: "error",
       });
       setIsSubmitting(false);
@@ -251,6 +273,22 @@ export default function EditUserForm({ userId }: EditUserFormProps) {
         }
         message={notification.message}
         onClose={() => setNotification({ message: "", variant: "error" })}
+      />
+
+      <TopologyEsignModal
+        isOpen={isEsignOpen}
+        title={`Authorize User Profile Update: ${user?.userId ?? ""}`}
+        actionLabel="Sign & Update User"
+        description="21 CFR Part 11 electronic signature authentication is required to modify user master data. Enter your signature remarks and password."
+        isSubmitting={isSubmitting}
+        errorMessage={esignError}
+        onConfirm={handleEsignConfirm}
+        onClose={() => {
+          if (!isSubmitting) {
+            setIsEsignOpen(false);
+            setEsignError("");
+          }
+        }}
       />
     </form>
   );

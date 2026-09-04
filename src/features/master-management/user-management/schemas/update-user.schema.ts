@@ -26,4 +26,7 @@ export const updateUserRequestSchema = updateUserFormSchema.extend({
   supportingDocuments: z.array(z.record(z.string(), z.unknown())).optional(),
   supportingDocumentType: z.string().nullish().optional(),
   reason: z.string().trim().min(1).optional(),
+  remarks: z.string().optional(),
+  password: z.string().optional(),
+  esignPassword: z.string().optional(),
 });

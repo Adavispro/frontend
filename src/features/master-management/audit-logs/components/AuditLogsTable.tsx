@@ -284,7 +284,7 @@ export default function AuditLogsTable() {
   return (
     <>
       <DataTable
-        title="Logs"
+        title="Audit Logs"
         columns={columns}
         rows={rows}
         getRowKey={(row, index) =>

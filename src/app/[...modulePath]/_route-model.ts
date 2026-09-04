@@ -256,12 +256,21 @@ export function isCreateIiotMasterPath(modulePath: ModulePath) {
 }
 
 export function getIiotMasterTitle(section: IiotMasterSection) {
-  if (section === "equipments") return "Manage Equipments";
-  if (section === "critical-parameters") return "Manage Critical Parameters";
+  if (section === "equipments") return "Equipment Master";
+  if (section === "critical-parameters") return "Critical Parameters";
   if (section === "critical-parameter-limits") {
-    return "Manage Critical Parameter Limits";
+    return "Critical Parameter Limits";
   }
-  return "Manage Product Master";
+  return "Product Master";
+}
+
+export function getCreateIiotMasterTitle(section: IiotMasterSection) {
+  if (section === "equipments") return "Create Equipment";
+  if (section === "critical-parameters") return "Create Critical Parameter";
+  if (section === "critical-parameter-limits") {
+    return "Create Critical Parameter Limit";
+  }
+  return "Create Product Master";
 }
 
 export function getIiotMasterRoute(section: IiotMasterSection) {
@@ -422,7 +431,7 @@ export function getModulePageTitle(
   if (isCreateUserGroupPath(modulePath)) return "Create New User Group";
   if (isDepartmentManagementPath(modulePath)) return "Department Management";
   if (isCreateDepartmentPath(modulePath)) return "Create New Department";
-  if (isAssignmentManagementPath(modulePath)) return "User & Group Context Assignments";
+  if (isAssignmentManagementPath(modulePath)) return "Context Assignments";
   if (isCreateAssignmentPath(modulePath)) return "Create New Assignment";
 
   const iiotMasterSection = getIiotMasterSection(modulePath);
@@ -432,11 +441,11 @@ export function getModulePageTitle(
 
   const createIiotMasterSection = getCreateIiotMasterSection(modulePath);
   if (createIiotMasterSection) {
-    return `Create ${getIiotMasterTitle(createIiotMasterSection).replace("Manage ", "")}`;
+    return getCreateIiotMasterTitle(createIiotMasterSection);
   }
 
   if (isAuditLogsPath(modulePath)) return "Audit Logs";
-  if (isWorkflowMdmPath(modulePath)) return "Manage Workflow";
+  if (isWorkflowMdmPath(modulePath)) return "Workflow Management";
   if (isBulkUploadPath(modulePath)) return "Master Data Bulk Upload";
   if (isLicenseManagementPath(modulePath)) return "License Management";
   if (isLicenseHistoryPath(modulePath)) return "License History";

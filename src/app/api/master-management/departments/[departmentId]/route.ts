@@ -122,6 +122,13 @@ export async function DELETE(
   )?.value;
   if (!accessToken) return unauthorizedResponse();
 
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    body = undefined;
+  }
+
   const { departmentId } = await params;
   const selectedPlantId = request.headers.get(SELECTED_PLANT_HEADER)?.trim();
 
@@ -131,6 +138,7 @@ export async function DELETE(
       API_ENDPOINTS.masterManagement.departmentDetail(departmentId),
       {
         method: "DELETE",
+        body,
         headers: {
           Authorization: `Bearer ${accessToken}`,
           ...(selectedPlantId ? { [SELECTED_PLANT_HEADER]: selectedPlantId } : {}),

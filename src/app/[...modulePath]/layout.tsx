@@ -6,6 +6,7 @@ import { equipmentStatusLabels } from "@/features/iiot/equipment/data/equipment-
 import {
   findModule,
   getCreateIiotMasterSection,
+  getCreateIiotMasterTitle,
   getIiotMasterRoute,
   getIiotMasterTitle,
   getModulePageTitle,
@@ -88,8 +89,8 @@ export default async function ModuleRouteLayout({
           : isUserStatusPath(modulePath)
             ? [
                 {
-                  label: "System Admin Dashboard",
-                  href: ROUTES.masterManagement,
+                  label: "Users",
+                  href: ROUTES.masterUsers,
                 },
                 {
                   label: getUserStatusTitle(modulePath) ?? "Users",
@@ -114,59 +115,62 @@ export default async function ModuleRouteLayout({
           : isCreateTopologyPath(modulePath)
             ? [
                 { label: "Plant Topology", href: ROUTES.masterPlantTopology },
-                { label: "Create", active: true },
+                { label: "Create Plant Topology", active: true },
               ]
           : isCreateUserPath(modulePath)
             ? [
-                { label: "User Management", href: ROUTES.masterUsers },
+                { label: "Users", href: ROUTES.masterUsers },
                 { label: "Create New User", active: true },
               ]
           : isCreateRolePath(modulePath)
             ? [
-                { label: "Role Management", href: ROUTES.masterRoles },
+                { label: "Roles", href: ROUTES.masterRoles },
                 { label: "Create New Role", active: true },
               ]
           : isEditUserPath(modulePath)
             ? [
-                { label: "Users List", href: ROUTES.masterUsers },
+                { label: "Users", href: ROUTES.masterUsers },
                 { label: `Edit ${modulePath[2].toUpperCase()}`, active: true },
               ]
           : isUserDetailPath(modulePath)
             ? [
-                { label: "Users List", href: ROUTES.masterUsers },
+                { label: "Users", href: ROUTES.masterUsers },
                 { label: selectedUser?.name ?? modulePath[2].toUpperCase(), active: true },
               ]
           : isLicenseHistoryPath(modulePath)
             ? [
-                { label: "License Management", href: ROUTES.masterLicenses },
+                { label: "Licenses", href: ROUTES.masterLicenses },
                 { label: "License History", active: true },
               ]
           : isCreateAssignmentPath(modulePath)
             ? [
-                { label: "User & Group Context Assignments", href: ROUTES.masterAssignments },
+                { label: "Assignments", href: ROUTES.masterAssignments },
                 { label: "Create New Assignment", active: true },
               ]
           : isCreateUserGroupPath(modulePath)
             ? [
-                { label: "User Group Management", href: ROUTES.masterUserGroups },
+                { label: "User Groups", href: ROUTES.masterUserGroups },
                 { label: "Create New User Group", active: true },
               ]
           : isCreateDepartmentPath(modulePath)
             ? [
-                { label: "Department Management", href: ROUTES.masterDepartments },
+                { label: "Departments", href: ROUTES.masterDepartments },
                 { label: "Create New Department", active: true },
               ]
           : isCreateIiotMasterPath(modulePath)
             ? [
                 {
-                  label: getCreateIiotMasterSection(modulePath)
-                    ? getIiotMasterTitle(getCreateIiotMasterSection(modulePath)!)
-                    : "IIOT Master",
+                  label: "IIoT Master",
                   href: getCreateIiotMasterSection(modulePath)
                     ? getIiotMasterRoute(getCreateIiotMasterSection(modulePath)!)
                     : ROUTES.masterIiotEquipments,
                 },
-                { label: "Create", active: true },
+                {
+                  label: getCreateIiotMasterSection(modulePath)
+                    ? getCreateIiotMasterTitle(getCreateIiotMasterSection(modulePath)!)
+                    : "Create",
+                  active: true,
+                },
               ]
           : undefined
       }

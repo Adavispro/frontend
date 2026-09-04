@@ -14,8 +14,8 @@ interface LicenseActionDialogProps {
 
 const actionCopy: Record<LicenseDialogAction, { title: string; submit: string; token: boolean }> = {
   ACTIVATE: { title: "Activate License", submit: "Activate License", token: true },
-  SUSPEND: { title: "Suspend License", submit: "Suspend License", token: true },
-  REACTIVATE: { title: "Reactivate License", submit: "Reactivate License", token: true },
+  SUSPEND: { title: "Suspend License", submit: "Suspend License", token: false },
+  REACTIVATE: { title: "Reactivate License", submit: "Reactivate License", token: false },
   UPGRADE: { title: "Upgrade License", submit: "Upgrade License", token: true },
   RENEW: { title: "Renew Tenant License", submit: "Renew License", token: false },
 };

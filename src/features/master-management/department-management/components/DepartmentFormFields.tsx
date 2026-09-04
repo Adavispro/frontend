@@ -50,34 +50,66 @@ const getDepartmentLabel = (department: Department) =>
 export const createParentDepartmentOptions = ({
   departments,
   excludeDepartmentId,
+  currentParentId,
   plantId,
   tenantId,
 }: {
   departments: Department[];
   excludeDepartmentId?: string;
+  currentParentId?: string | null;
   plantId?: string;
   tenantId?: string;
 }): MasterLookupOption[] => {
   const selectedTenantId = tenantId?.trim();
   const selectedPlantId = plantId?.trim();
+  const targetExcludeId = excludeDepartmentId?.trim();
+  const activeParentId = currentParentId?.trim();
+
+  // Find all descendants of targetExcludeId to prevent circular references
+  const excludedIds = new Set<string>();
+  if (targetExcludeId) {
+    excludedIds.add(targetExcludeId);
+    let added = true;
+    while (added) {
+      added = false;
+      for (const d of departments) {
+        if (!excludedIds.has(d.departmentId)) {
+          if (d.parentDepartmentId && excludedIds.has(d.parentDepartmentId)) {
+            excludedIds.add(d.departmentId);
+            added = true;
+          } else if (d.path) {
+            const parts = d.path.split("/");
+            if (parts.includes(targetExcludeId)) {
+              excludedIds.add(d.departmentId);
+              added = true;
+            }
+          }
+        }
+      }
+    }
+  }
+
   const seen = new Set<string>();
 
   return departments
-    .filter((department) => department.isActive)
-    .filter((department) => department.departmentId !== excludeDepartmentId)
-    .filter((department) =>
-      selectedTenantId
-        ? !department.tenantId || department.tenantId === selectedTenantId
-        : true,
-    )
-    .filter((department) =>
-      selectedPlantId
-        ? !department.plantId || department.plantId === selectedPlantId
-        : true,
-    )
+    .filter((department) => {
+      if (excludedIds.has(department.departmentId)) {
+        return false;
+      }
+      if (!department.isActive && department.departmentId !== activeParentId) {
+        return false;
+      }
+      if (selectedTenantId && department.tenantId && department.tenantId !== selectedTenantId) {
+        return false;
+      }
+      if (selectedPlantId && department.plantId && department.plantId !== selectedPlantId) {
+        return false;
+      }
+      return true;
+    })
     .map((department) => ({
       value: department.departmentId,
-      label: getDepartmentLabel(department),
+      label: getDepartmentLabel(department) + (!department.isActive ? " (Inactive)" : ""),
     }))
     .filter((option) => {
       if (seen.has(option.value)) return false;

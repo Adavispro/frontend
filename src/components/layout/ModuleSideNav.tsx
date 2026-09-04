@@ -112,7 +112,10 @@ const sidebarItemsByModuleId: Record<string, NavigationItem[]> = {
       label: "Dashboard",
       icon: SquaresFour,
       href: ROUTES.masterManagement,
-      isActive: (pathname) => pathname === ROUTES.masterManagement,
+      isActive: (pathname) =>
+        pathname === ROUTES.masterManagement ||
+        pathname === "/master-management/dashboard" ||
+        pathname === "/master-management",
     },
     {
       label: "Tenants",
@@ -138,7 +141,6 @@ const sidebarItemsByModuleId: Record<string, NavigationItem[]> = {
         pathname === ROUTES.masterDepartments ||
         pathname.startsWith(`${ROUTES.masterDepartments}/`),
     },
-    
     {
       label: "Roles",
       icon: ShieldCheck,
@@ -163,9 +165,8 @@ const sidebarItemsByModuleId: Record<string, NavigationItem[]> = {
         pathname === ROUTES.masterUserGroups ||
         pathname.startsWith(`${ROUTES.masterUserGroups}/`),
     },
-    
     {
-      label: "User & Group Context Assignments",
+      label: "Assignments",
       icon: ClipboardText,
       href: ROUTES.masterAssignments,
       isActive: (pathname) =>
@@ -173,14 +174,14 @@ const sidebarItemsByModuleId: Record<string, NavigationItem[]> = {
         pathname.startsWith(`${ROUTES.masterAssignments}/`),
     },
     {
-      label: "IIOT Master",
+      label: "IIoT Master",
       icon: Cpu,
       href: ROUTES.masterIiotEquipments,
       isActive: (pathname) =>
         pathname.startsWith("/master-management/iiot-master"),
     },
     {
-      label: "License",
+      label: "Licenses",
       icon: Key,
       href: ROUTES.masterLicenses,
       isActive: (pathname) =>
@@ -194,7 +195,7 @@ const sidebarItemsByModuleId: Record<string, NavigationItem[]> = {
       isActive: (pathname) => pathname === ROUTES.masterAuditLogs,
     },
     {
-      label: "Manage Workflow",
+      label: "Workflows",
       icon: GitBranch,
       href: ROUTES.masterWorkflowMdm,
       isActive: (pathname) =>

@@ -11,6 +11,7 @@ import clearIcon from "@/assets/icons/clear-icon.svg";
 import { useMasterLookups } from "../../lookups/hooks";
 import { useDepartments } from "../../department-management/hooks/useDepartments";
 import { useTenants } from "../../tenant-management/hooks/useTenants";
+import TopologyEsignModal from "@/features/master-management/plant-topology/components/TopologyEsignModal";
 import {
   assignUserToGroup,
   createUser,
@@ -36,6 +37,8 @@ export default function CreateUserForm() {
   const { tenants, isLoading: isLoadingTenants } = useTenants();
   const [activeStep, setActiveStep] = useState<1 | 2>(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isEsignOpen, setIsEsignOpen] = useState(false);
+  const [esignError, setEsignError] = useState("");
   const [notification, setNotification] = useState({
     message: "",
     variant: "error" as "error" | "success",
@@ -84,7 +87,7 @@ export default function CreateUserForm() {
     return false;
   };
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     if (activeStep === 1) {
@@ -92,7 +95,13 @@ export default function CreateUserForm() {
       return;
     }
 
+    setEsignError("");
+    setIsEsignOpen(true);
+  };
+
+  const handleEsignConfirm = async (auth: { remarks: string; password: string }) => {
     setIsSubmitting(true);
+    setEsignError("");
     setNotification({ message: "", variant: "error" });
 
     try {
@@ -117,6 +126,9 @@ export default function CreateUserForm() {
         supportingDocuments: [],
         supportingDocumentType: null,
         reason: values.reason,
+        remarks: auth.remarks,
+        password: auth.password,
+        esignPassword: auth.password,
       });
 
       await provisionAuthUser({
@@ -138,6 +150,8 @@ export default function CreateUserForm() {
           ),
         );
       }
+
+      setIsEsignOpen(false);
       setNotification({
         message: "User created successfully.",
         variant: "success",
@@ -147,13 +161,16 @@ export default function CreateUserForm() {
         router.refresh();
       }, 700);
     } catch (error) {
+      const message =
+        error instanceof ApiError
+          ? error.message
+          : "Unable to create user. Please try again.";
+      setEsignError(message);
       setNotification({
-        message:
-          error instanceof ApiError
-            ? error.message
-            : "Unable to create user. Please try again.",
+        message,
         variant: "error",
       });
+    } finally {
       setIsSubmitting(false);
     }
   };
@@ -260,6 +277,22 @@ export default function CreateUserForm() {
         title={notification.variant === "success" ? "User created" : "Unable to create user"}
         message={notification.message}
         onClose={() => setNotification({ message: "", variant: "error" })}
+      />
+
+      <TopologyEsignModal
+        isOpen={isEsignOpen}
+        title={`Authorize User Creation: ${values.username.trim()}`}
+        actionLabel="Sign & Create User"
+        description="21 CFR Part 11 electronic signature authentication is required to create and onboard a new user. Enter your signature remarks and password."
+        isSubmitting={isSubmitting}
+        errorMessage={esignError}
+        onConfirm={handleEsignConfirm}
+        onClose={() => {
+          if (!isSubmitting) {
+            setIsEsignOpen(false);
+            setEsignError("");
+          }
+        }}
       />
     </form>
   );

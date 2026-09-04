@@ -22,6 +22,7 @@ import {
 } from "@/components/ui";
 import { ROUTES } from "@/config/routes";
 import { useDepartments } from "../../department-management/hooks/useDepartments";
+import TopologyEsignModal from "@/features/master-management/plant-topology/components/TopologyEsignModal";
 import type { User } from "../api/types";
 import { deleteUser } from "../api";
 import { useUsers } from "../hooks/useUsers";
@@ -58,7 +59,7 @@ const toUserRow = (
   name:
     [user.firstName, user.lastName].filter(Boolean).join(" ") ||
     user.username ||
-    "-",
+    user.userId,
   email: user.email,
   department: user.departmentId
     ? departmentNamesById[user.departmentId] || user.departmentId
@@ -260,6 +261,8 @@ export default function UsersTable({
   const [updatingPasswordUser, setUpdatingPasswordUser] =
     useState<User | null>(null);
   const [pendingDelete, setPendingDelete] = useState<User | null>(null);
+  const [isDeleteEsignOpen, setIsDeleteEsignOpen] = useState(false);
+  const [deleteEsignError, setDeleteEsignError] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
   const [operationNotification, setOperationNotification] = useState({
     message: "",
@@ -354,38 +357,42 @@ export default function UsersTable({
     ? rows.length
     : Math.min((page + 1) * effectivePageSize, totalElements);
   const tableTitle = isIdleView
-    ? "Idle Users List"
+    ? "Idle Users"
     : statusFilter === "active"
-      ? "Active Logged-in Users List"
+      ? "Active Logged-in Users"
       : statusFilter === "blocked"
-        ? "Blocked Users List"
+        ? "Blocked Users"
         : statusFilter === "deactivated"
-          ? "Deactivated Users List"
-          : "Users List";
+          ? "Deactivated Users"
+          : "Users";
 
-  const handleDelete = async () => {
+  const handleDeleteConfirm = async (auth: { remarks: string; password: string }) => {
     if (!pendingDelete) return;
 
     setIsDeleting(true);
+    setDeleteEsignError("");
     setOperationNotification({ message: "", variant: "success" });
 
     try {
-      await deleteUser(pendingDelete.userId);
+      await deleteUser(pendingDelete.userId, auth);
       removeUser(pendingDelete.userId);
       if ((usersPage?.content.length ?? 0) === 1 && page > 0) {
         setPage(page - 1);
       }
+      setIsDeleteEsignOpen(false);
       setPendingDelete(null);
       setOperationNotification({
         message: "User deleted successfully.",
         variant: "success",
       });
     } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Unable to delete user. Please try again.";
+      setDeleteEsignError(message);
       setOperationNotification({
-        message:
-          error instanceof Error
-            ? error.message
-            : "Unable to delete user. Please try again.",
+        message,
         variant: "error",
       });
     } finally {
@@ -469,7 +476,7 @@ export default function UsersTable({
       />
 
       <ConfirmDialog
-        isOpen={Boolean(pendingDelete)}
+        isOpen={Boolean(pendingDelete) && !isDeleteEsignOpen}
         title="Delete User"
         message={`Are you sure you want to delete ${
           pendingDelete
@@ -477,11 +484,33 @@ export default function UsersTable({
                 .filter(Boolean)
                 .join(" ") || pendingDelete.userId
             : "this user"
-        }? This action will deactivate the account.`}
-        confirmLabel="Delete User"
-        isConfirming={isDeleting}
-        onConfirm={() => void handleDelete()}
-        onCancel={() => setPendingDelete(null)}
+        }? This action will deactivate the account and requires 21 CFR Part 11 electronic signature.`}
+        confirmLabel="Proceed to e-Signature"
+        isConfirming={false}
+        onConfirm={() => {
+          setDeleteEsignError("");
+          setIsDeleteEsignOpen(true);
+        }}
+        onCancel={() => {
+          setPendingDelete(null);
+          setIsDeleteEsignOpen(false);
+        }}
+      />
+
+      <TopologyEsignModal
+        isOpen={isDeleteEsignOpen && Boolean(pendingDelete)}
+        title={`Authorize User Deletion: ${pendingDelete?.userId ?? ""}`}
+        actionLabel="Sign & Delete User"
+        description="21 CFR Part 11 electronic signature authentication is required to delete a user account. Enter your signature remarks and password."
+        isSubmitting={isDeleting}
+        errorMessage={deleteEsignError}
+        onConfirm={handleDeleteConfirm}
+        onClose={() => {
+          if (!isDeleting) {
+            setIsDeleteEsignOpen(false);
+            setDeleteEsignError("");
+          }
+        }}
       />
 
       {editingDetailsUser ? (

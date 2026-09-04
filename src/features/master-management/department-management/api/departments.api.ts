@@ -42,13 +42,20 @@ export const getAllDepartments = async (signal?: AbortSignal) => {
   return [...active, ...inactive];
 };
 
-export const createDepartment = async (request: CreateDepartmentRequest) => {
+export const createDepartment = async (
+  request: CreateDepartmentRequest,
+  auth?: { remarks: string; password: string },
+) => {
+  const payload: CreateDepartmentRequest = {
+    ...request,
+    ...(auth ? { remarks: auth.remarks, esignPassword: auth.password, password: auth.password } : {}),
+  };
   const result = await apiClient<
     BackendApiResponse<Department>,
     CreateDepartmentRequest
   >(APP_API_ENDPOINTS.masterManagement.departments, {
     method: "POST",
-    body: request,
+    body: payload,
   });
 
   if (!result.success || !result.data) {
@@ -74,13 +81,18 @@ export const createDepartment = async (request: CreateDepartmentRequest) => {
 export const updateDepartment = async (
   departmentId: string,
   request: UpdateDepartmentRequest,
+  auth?: { remarks: string; password: string },
 ) => {
+  const payload: UpdateDepartmentRequest = {
+    ...request,
+    ...(auth ? { remarks: auth.remarks, esignPassword: auth.password, password: auth.password } : {}),
+  };
   const result = await apiClient<
     BackendApiResponse<Department>,
     UpdateDepartmentRequest
   >(APP_API_ENDPOINTS.masterManagement.departmentDetail(departmentId), {
     method: "PUT",
-    body: request,
+    body: payload,
   });
 
   if (!result.success || !result.data) {
@@ -106,10 +118,15 @@ export const updateDepartment = async (
 export const setDepartmentActive = async (
   department: Department,
   active: boolean,
+  auth?: { remarks: string; password: string },
 ) => {
-  const result = await apiClient<BackendApiResponse<Department | null>>(
+  const body = auth ? { remarks: auth.remarks, esignPassword: auth.password, password: auth.password } : undefined;
+  const result = await apiClient<BackendApiResponse<Department | null>, typeof body>(
     `/api/master-management/mdm/departments/${encodeURIComponent(department.departmentId)}/${active ? "activate" : "deactivate"}`,
-    { method: "POST" },
+    {
+      method: "POST",
+      body,
+    },
   );
 
   if (!result.success) {
@@ -122,4 +139,28 @@ export const setDepartmentActive = async (
 
   if (!active) return { ...department, isActive: false };
   return departmentSchema.parse(result.data);
+};
+
+export const deleteDepartment = async (
+  departmentId: string,
+  auth?: { remarks: string; password: string },
+) => {
+  const body = auth ? { remarks: auth.remarks, esignPassword: auth.password, password: auth.password } : undefined;
+  const result = await apiClient<BackendApiResponse<null>, typeof body>(
+    APP_API_ENDPOINTS.masterManagement.departmentDetail(departmentId),
+    {
+      method: "DELETE",
+      body,
+    },
+  );
+
+  if (!result.success) {
+    throw new ApiError({
+      status: 400,
+      message: result.message || "Unable to delete department.",
+      details: result,
+    });
+  }
+
+  return true;
 };
