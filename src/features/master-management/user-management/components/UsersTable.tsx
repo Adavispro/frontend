@@ -94,8 +94,8 @@ const uniqueValues = (values: string[]) =>
     (first, second) => first.localeCompare(second),
   );
 
-const apiStatusFilters: Record<UserStatusFilter, { isActive?: boolean; isBlocked?: boolean }> = {
-  active: { isActive: true, isBlocked: false },
+const apiStatusFilters: Record<UserStatusFilter, { isActive?: boolean; isBlocked?: boolean; sessionPresence?: string }> = {
+  active: { sessionPresence: "ACTIVE", isActive: true, isBlocked: false },
   idle: { isActive: true, isBlocked: false },
   blocked: { isBlocked: true },
   deactivated: { isActive: false, isBlocked: false },

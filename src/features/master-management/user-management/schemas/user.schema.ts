@@ -48,4 +48,5 @@ export const usersListQuerySchema = z.object({
   isActive: optionalQueryBoolean,
   isBlocked: optionalQueryBoolean,
   lifecycleStatus: z.string().trim().min(1).optional(),
+  sessionPresence: z.string().trim().min(1).optional(),
 });

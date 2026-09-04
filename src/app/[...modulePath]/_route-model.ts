@@ -167,7 +167,7 @@ export function isUserStatusPath(modulePath: ModulePath) {
 export function getUserStatusTitle(modulePath: ModulePath) {
   const statusFilter = getUserStatusFilter(modulePath);
 
-  if (statusFilter === "active") return "Active Users";
+  if (statusFilter === "active") return "Active Logged-in Users";
   if (statusFilter === "idle") return "Idle Users";
   if (statusFilter === "blocked") return "Blocked Users";
   if (statusFilter === "deactivated") return "Deactivated Users";

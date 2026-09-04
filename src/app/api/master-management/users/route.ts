@@ -47,6 +47,7 @@ export async function GET(request: Request) {
     isActive: url.searchParams.get("isActive") ?? undefined,
     isBlocked: url.searchParams.get("isBlocked") ?? undefined,
     lifecycleStatus: url.searchParams.get("lifecycleStatus") ?? undefined,
+    sessionPresence: url.searchParams.get("sessionPresence") ?? undefined,
   });
 
   if (!parsedQuery.success) {

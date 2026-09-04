@@ -13,9 +13,9 @@ export function useUsers({
   filters = {},
 }: {
   pageSize?: number;
-  filters?: Pick<UsersListQuery, "isActive" | "isBlocked" | "lifecycleStatus">;
+  filters?: Pick<UsersListQuery, "isActive" | "isBlocked" | "lifecycleStatus" | "sessionPresence">;
 } = {}) {
-  const { isActive, isBlocked, lifecycleStatus } = filters;
+  const { isActive, isBlocked, lifecycleStatus, sessionPresence } = filters;
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(initialPageSize);
   const [usersPage, setUsersPage] = useState<UsersPage | null>(null);
@@ -25,7 +25,7 @@ export function useUsers({
   useEffect(() => {
     const controller = new AbortController();
 
-    void getUsers({ page, size: pageSize, isActive, isBlocked, lifecycleStatus }, controller.signal)
+    void getUsers({ page, size: pageSize, isActive, isBlocked, lifecycleStatus, sessionPresence }, controller.signal)
       .then(setUsersPage)
       .catch((error) => {
         if (error instanceof DOMException && error.name === "AbortError") return;
@@ -40,7 +40,7 @@ export function useUsers({
       });
 
     return () => controller.abort();
-  }, [isActive, isBlocked, lifecycleStatus, page, pageSize]);
+  }, [isActive, isBlocked, lifecycleStatus, sessionPresence, page, pageSize]);
 
   const changePage = (nextPage: number) => {
     setIsLoading(true);
