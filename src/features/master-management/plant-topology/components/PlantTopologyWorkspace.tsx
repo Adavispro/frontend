@@ -4,14 +4,21 @@ import { useCallback, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Buildings, Factory, MagnifyingGlass, MapPin, PencilSimple, Plus, Power, SquaresFour } from "@phosphor-icons/react";
 import DataTable, { StatusPill, type DataTableColumn } from "@/components/table/DataTable";
-import { Button, ConfirmDialog, Snackbar } from "@/components/ui";
+import { Button, Snackbar } from "@/components/ui";
 import { ROUTES } from "@/config/routes";
 import { useLoginContext } from "@/features/auth/hooks/useCurrentUser";
 import { useTenants } from "../../tenant-management/hooks/useTenants";
 import { setTopologyRecordActive } from "../api";
 import type { TopologyKind, TopologyRecord } from "../api";
 import { usePlantTopology } from "../hooks/usePlantTopology";
+import TopologyEsignModal from "./TopologyEsignModal";
 import TopologyRecordDialog from "./TopologyRecordDialog";
+
+const formatDate = (value?: string | null) => {
+  if (!value) return "-";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "-" : date.toLocaleDateString("en-GB").replaceAll("/", "-");
+};
 
 const tabs = [
   { kind: "plants" as const, label: "Plants", icon: Factory },
@@ -169,49 +176,45 @@ export default function PlantTopologyWorkspace() {
         .some((value) => value.toLowerCase().includes(query));
     }) as TopologyRecord[];
   }, [data, filters, getAreaLabel, getBlockLabel, getPlantLabel, getRoomBlockId, kind, search, tenantId]);
-
   const columns = useMemo<DataTableColumn<TopologyRecord>[]>(() => {
     const baseColumns: DataTableColumn<TopologyRecord>[] = [
-      { key: "serial", header: "S No.", render: (_row, index) => index + 1 },
-     // { key: "id", header: `${labelFor(kind)} ID`, render: (row) => field(row, idField[kind]) },
+      { key: "serial", header: "S No.", render: (_row, index) => index + 1, className: "w-[60px]" },
       { key: "name", header: `${labelFor(kind)} Name`, render: (row) => field(row, nameField[kind]) },
       { key: "code", header: `${labelFor(kind)} Code`, render: (row) => field(row, codeField[kind]) },
-      
     ];
 
     if (kind === "plants") {
       baseColumns.push(
-        { key: "tenant", header: "Tenant Name", render: (row) => getTenantLabel(field(row, "tenantId")) },
-        //{ key: "detail", header: "Details", render: (row) => detail(kind, row) },
+        { key: "tenant", header: "Tenant Name", render: (row) => getTenantLabel(field(row, "tenantId")), className: "w-[20%]" },
       );
     }
 
     if (kind === "blocks") {
-      baseColumns.push({ key: "plant", header: "Plant Name", render: (row) => getPlantLabel(field(row, "plantId")), className: "w-[22%]" });
+      baseColumns.push({ key: "plant", header: "Plant Name", render: (row) => getPlantLabel(field(row, "plantId")), className: "w-[20%]" });
     }
 
     if (kind === "areas") {
       baseColumns.push(
-        { key: "plant", header: "Plant Name", render: (row) => getPlantLabel(field(row, "plantId")), className: "w-[20%]" },
-        { key: "block", header: "Block Name", render: (row) => getBlockLabel(field(row, "blockId")), className: "w-[20%]" },
+        { key: "plant", header: "Plant Name", render: (row) => getPlantLabel(field(row, "plantId")), className: "w-[16%]" },
+        { key: "block", header: "Block Name", render: (row) => getBlockLabel(field(row, "blockId")), className: "w-[16%]" },
       );
     }
 
     if (kind === "rooms") {
       baseColumns.push(
-        { key: "plant", header: "Plant Name", render: (row) => getPlantLabel(field(row, "plantId")), className: "w-[18%]" },
-        { key: "block", header: "Block Name", render: (row) => getBlockLabel(getRoomBlockId(row)), className: "w-[18%]" },
-        { key: "area", header: "Area Name", render: (row) => getAreaLabel(field(row, "areaId")), className: "w-[18%]" },
-        //{ key: "classification", header: "Classification", render: (row) => field(row, "classification") },
+        { key: "plant", header: "Plant Name", render: (row) => getPlantLabel(field(row, "plantId")), className: "w-[14%]" },
+        { key: "block", header: "Block Name", render: (row) => getBlockLabel(getRoomBlockId(row)), className: "w-[14%]" },
+        { key: "area", header: "Area Name", render: (row) => getAreaLabel(field(row, "areaId")), className: "w-[14%]" },
       );
     }
 
     return [
       ...baseColumns,
-      { key: "status", header: "Status", render: (row) => <StatusPill label={row.isActive ? "Active" : "Inactive"} className={row.isActive ? "bg-[#DDF6DF] text-[#158047]" : "bg-[#EBEEF2] text-text-secondary"} /> },
-      { key: "actions", header: "Actions", disableRowLink: true, render: (row) => <div className="flex items-center gap-2"><button type="button" aria-label={`Edit ${labelFor(kind)}`} disabled={!row.isActive} onClick={() => { setEditing(row); setDialogKind(kind); }} className="grid h-6 w-6 place-items-center rounded bg-[#E6F1FF] text-primary disabled:opacity-35"><PencilSimple size={12} /></button><button type="button" aria-label={row.isActive ? "Deactivate" : "Activate"} onClick={() => setStatusTarget(row)} className={`grid h-6 w-6 place-items-center rounded ${row.isActive ? "bg-[#FFF0F0] text-danger" : "bg-[#E7F7EE] text-success"}`}><Power size={12} /></button></div> },
+      { key: "status", header: "Status", className: "w-[100px]", render: (row) => <StatusPill label={row.isActive ? "Active" : "Inactive"} className={row.isActive ? "bg-[#DDF6DF] text-[#158047]" : "bg-[#EBEEF2] text-text-secondary"} /> },
+      { key: "created", header: "Created Date", className: "w-[110px]", render: (row) => formatDate(row.createdAt) },
+      { key: "actions", header: "Actions", disableRowLink: true, className: "w-[80px]", render: (row) => <div className="flex items-center gap-2"><button type="button" aria-label={`Edit ${labelFor(kind)}`} disabled={!row.isActive} onClick={() => { setEditing(row); setDialogKind(kind); }} className="grid h-6 w-6 place-items-center rounded bg-[#E6F1FF] text-primary disabled:opacity-35"><PencilSimple size={12} /></button><button type="button" aria-label={row.isActive ? "Deactivate" : "Activate"} onClick={() => setStatusTarget(row)} className={`grid h-6 w-6 place-items-center rounded ${row.isActive ? "bg-[#FFF0F0] text-danger" : "bg-[#E7F7EE] text-success"}`}><Power size={12} /></button></div> },
     ];
-  }, [getAreaLabel, getBlockLabel, getPlantLabel, getRoomBlockId, kind]);
+  }, [getAreaLabel, getBlockLabel, getPlantLabel, getRoomBlockId, getTenantLabel, kind]);
 
   const filterControls = (
     <>
@@ -273,16 +276,21 @@ export default function PlantTopologyWorkspace() {
     </>
   );
 
-  const changeStatus = async () => {
+  const [statusEsignError, setStatusEsignError] = useState("");
+
+  const handleStatusConfirm = async (auth: { remarks: string; password: string }) => {
     if (!statusTarget) return;
     setIsChangingStatus(true);
+    setStatusEsignError("");
     try {
-      const updated = await setTopologyRecordActive(kind, statusTarget, !statusTarget.isActive);
+      const updated = await setTopologyRecordActive(kind, statusTarget, !statusTarget.isActive, auth);
       replaceRecord(kind, updated);
       setNotification({ message: `${labelFor(kind)} ${statusTarget.isActive ? "deactivated" : "activated"} successfully.`, variant: "success" });
       setStatusTarget(null);
     } catch (error) {
-      setNotification({ message: error instanceof Error ? error.message : `Unable to update ${labelFor(kind).toLowerCase()}.`, variant: "error" });
+      const errMsg = error instanceof Error ? error.message : `Unable to update ${labelFor(kind).toLowerCase()}.`;
+      setStatusEsignError(errMsg);
+      setNotification({ message: errMsg, variant: "error" });
     } finally {
       setIsChangingStatus(false);
     }
@@ -310,7 +318,19 @@ export default function PlantTopologyWorkspace() {
       />
 
       <TopologyRecordDialog key={`${dialogKind ?? "closed"}-${editing ? field(editing, idField[kind]) : "new"}`} kind={dialogKind} record={editing} tenantId={tenantId} tenants={tenants} topology={data} onClose={() => { setDialogKind(null); setEditing(null); }} onSaved={(saved) => { replaceRecord(kind, saved); setNotification({ message: `${labelFor(kind)} saved successfully.`, variant: "success" }); }} />
-      <ConfirmDialog isOpen={Boolean(statusTarget)} title={`${statusTarget?.isActive ? "Deactivate" : "Activate"} ${labelFor(kind)}`} message={`${statusTarget?.isActive ? "Deactivate" : "Activate"} ${statusTarget ? field(statusTarget, nameField[kind]) : `this ${labelFor(kind).toLowerCase()}`}?`} confirmLabel={statusTarget?.isActive ? "Deactivate" : "Activate"} isConfirming={isChangingStatus} onConfirm={changeStatus} onCancel={() => setStatusTarget(null)} />
+      <TopologyEsignModal
+        isOpen={Boolean(statusTarget)}
+        title={`${statusTarget?.isActive ? "Deactivate" : "Activate"} ${labelFor(kind)}`}
+        actionLabel={statusTarget?.isActive ? "Sign & Deactivate" : "Sign & Activate"}
+        description={`Changing status of ${statusTarget ? field(statusTarget, nameField[kind]) : labelFor(kind).toLowerCase()} to ${statusTarget?.isActive ? "Inactive" : "Active"} requires 21 CFR Part 11 electronic signature authentication.`}
+        isSubmitting={isChangingStatus}
+        errorMessage={statusEsignError}
+        onConfirm={handleStatusConfirm}
+        onClose={() => {
+          setStatusTarget(null);
+          setStatusEsignError("");
+        }}
+      />
       <Snackbar open={Boolean(notification.message || errorMessage)} title={notification.variant === "error" || errorMessage ? "Topology operation failed" : "Topology updated"} message={errorMessage || notification.message} variant={errorMessage ? "error" : notification.variant} onClose={() => { clearError(); setNotification({ message: "", variant: "success" }); }} />
     </div>
   );

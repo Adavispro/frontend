@@ -11,6 +11,7 @@ import { createTopologyRecord, updateTopologyRecord } from "../api";
 import type { TopologyKind, TopologyRecord, TopologyRequest } from "../api";
 import type { TopologyData } from "../hooks/usePlantTopology";
 import { areaRequestSchema, blockRequestSchema, plantRequestSchema, roomRequestSchema } from "../schemas";
+import TopologyEsignModal from "./TopologyEsignModal";
 
 type FormValues = Record<string, string>;
 
@@ -58,6 +59,9 @@ export default function TopologyRecordForm({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState("");
+  const [isEsignOpen, setIsEsignOpen] = useState(false);
+  const [pendingPayload, setPendingPayload] = useState<TopologyRequest | null>(null);
+  const [esignError, setEsignError] = useState("");
   const plants = useMemo(() => topology.plants.filter((plant) => plant.isActive && plant.tenantId === values.tenantId), [topology.plants, values.tenantId]);
   const blocks = useMemo(() => topology.blocks.filter((block) => block.isActive && block.tenantId === values.tenantId && (!values.plantId || block.plantId === values.plantId)), [topology.blocks, values.plantId, values.tenantId]);
   const areas = useMemo(() => topology.areas.filter((area) => area.isActive && area.tenantId === values.tenantId && (!values.plantId || area.plantId === values.plantId)), [topology.areas, values.plantId, values.tenantId]);
@@ -80,21 +84,37 @@ export default function TopologyRecordForm({
     return { ...common, plantId: values.plantId, areaId: values.areaId, roomCode: values.code, roomName: values.name, classification: values.classification };
   };
 
-  const submit = async (event: React.FormEvent) => {
+  const submit = (event: React.FormEvent) => {
     event.preventDefault();
     const parsed = schemas[kind].safeParse(buildPayload());
     if (!parsed.success) {
       setErrors(Object.fromEntries(parsed.error.issues.map((issue) => [String(issue.path[0]), issue.message])));
       return;
     }
+    setPendingPayload(parsed.data as TopologyRequest);
+    setEsignError("");
+    setIsEsignOpen(true);
+  };
+
+  const handleEsignConfirm = async (auth: { remarks: string; password: string }) => {
+    if (!pendingPayload) return;
     setIsSubmitting(true);
+    setEsignError("");
     try {
+      const payloadWithAuth: TopologyRequest = {
+        ...pendingPayload,
+        remarks: auth.remarks,
+        password: auth.password,
+      };
       const saved = record
-        ? await updateTopologyRecord(kind, record, parsed.data as TopologyRequest)
-        : await createTopologyRecord(kind, parsed.data as TopologyRequest);
+        ? await updateTopologyRecord(kind, record, payloadWithAuth)
+        : await createTopologyRecord(kind, payloadWithAuth);
+      setIsEsignOpen(false);
       onSaved(saved);
     } catch (error) {
-      setMessage(error instanceof ApiError ? error.message : `Unable to save ${topologyLabels[kind].toLowerCase()}.`);
+      const errMsg = error instanceof ApiError ? error.message : `Unable to save ${topologyLabels[kind].toLowerCase()}.`;
+      setEsignError(errMsg);
+      setMessage(errMsg);
     } finally {
       setIsSubmitting(false);
     }
@@ -143,6 +163,16 @@ export default function TopologyRecordForm({
         </div>
       </form>
       <Snackbar open={Boolean(message)} title={`Unable to save ${topologyLabels[kind]}`} message={message} variant="error" onClose={() => setMessage("")} />
+      <TopologyEsignModal
+        isOpen={isEsignOpen}
+        title={`${record ? "Update" : "Create"} ${topologyLabels[kind]} Electronic Signature`}
+        actionLabel={record ? "Sign & Save" : `Sign & Create ${topologyLabels[kind]}`}
+        description={`Confirming ${record ? "changes to" : "creation of"} ${topologyLabels[kind].toLowerCase()} requires 21 CFR Part 11 compliant authentication.`}
+        isSubmitting={isSubmitting}
+        errorMessage={esignError}
+        onConfirm={handleEsignConfirm}
+        onClose={() => setIsEsignOpen(false)}
+      />
     </>
   );
 }

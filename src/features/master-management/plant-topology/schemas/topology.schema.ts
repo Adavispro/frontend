@@ -10,6 +10,8 @@ export const roomsSchema = z.array(roomSchema);
 const common = {
   tenantId: z.string().trim().min(1, "Tenant is required."),
   isActive: z.boolean().default(true),
+  remarks: z.string().trim().optional(),
+  password: z.string().optional(),
 };
 
 export const plantRequestSchema = z.object({

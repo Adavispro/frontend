@@ -146,7 +146,7 @@ export async function createTopologyRecord(kind: TopologyKind, request: Topology
     method: "POST", body: request,
   });
   const data = dataOrThrow(result, `Unable to create ${kind.slice(0, -1)}.`);
-  return itemSchemas[kind].parse(normalizeTopologyData(kind, data)) as TopologyRecord;
+  return itemSchemas[kind].parse(normalizeTopologyRecord(kind, data)) as TopologyRecord;
 }
 
 export async function updateTopologyRecord(kind: TopologyKind, record: TopologyRecord, request: TopologyRequest) {
@@ -155,16 +155,24 @@ export async function updateTopologyRecord(kind: TopologyKind, record: TopologyR
     method: "PUT", body: request,
   });
   const data = dataOrThrow(result, `Unable to update ${kind.slice(0, -1)}.`);
-  return itemSchemas[kind].parse(normalizeTopologyData(kind, data)) as TopologyRecord;
+  return itemSchemas[kind].parse(normalizeTopologyRecord(kind, data)) as TopologyRecord;
 }
 
-export async function setTopologyRecordActive(kind: TopologyKind, record: TopologyRecord, active: boolean) {
+export async function setTopologyRecordActive(
+  kind: TopologyKind,
+  record: TopologyRecord,
+  active: boolean,
+  auth?: { remarks?: string; password?: string },
+) {
   const id = String(record[idFields[kind] as keyof TopologyRecord]);
-  const result = await apiClient<BackendApiResponse<unknown>>(
+  const result = await apiClient<BackendApiResponse<unknown>, { remarks?: string; password?: string } | undefined>(
     `${root}/${kind}/${encodeURIComponent(id)}/${active ? "activate" : "deactivate"}`,
-    { method: "POST" },
+    {
+      method: "POST",
+      body: auth,
+    },
   );
   if (!active) return { ...record, isActive: false } as TopologyRecord;
   const data = dataOrThrow(result, `Unable to activate ${kind.slice(0, -1)}.`);
-  return itemSchemas[kind].parse(normalizeTopologyData(kind, data)) as TopologyRecord;
+  return itemSchemas[kind].parse(normalizeTopologyRecord(kind, data)) as TopologyRecord;
 }
