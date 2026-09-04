@@ -25,11 +25,17 @@ export default function UserActivityTrendCard({
       return;
     }
 
-    getUserActivityTrendFromBackend(trendMode, tenantId).then((points: Array<{ label: string; value: number }>) => {
-      if (active) {
-        setModePoints(points);
-      }
-    });
+    getUserActivityTrendFromBackend(trendMode, tenantId)
+      .then((points: Array<{ label: string; value: number }>) => {
+        if (active) {
+          setModePoints(points);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setModePoints([]);
+        }
+      });
 
     return () => {
       active = false;

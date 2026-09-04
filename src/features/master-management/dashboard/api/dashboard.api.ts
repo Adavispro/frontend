@@ -30,6 +30,7 @@ interface BackendTrendResponse {
     weekStart: string;
     weekEnd: string;
     distinctUserCount: number;
+    loginCount?: number;
     users: Array<{ userId: string; username: string }>;
   }>;
 }
@@ -109,7 +110,7 @@ export const getUserActivityTrendFromBackend = async (
 
   return (data.weeks || []).map((w, index) => ({
     label: formatWeekLabel(w.weekStart) || `W${index + 1}`,
-    value: w.distinctUserCount,
+    value: w.loginCount ?? w.distinctUserCount,
     bucketStart: w.weekStart,
   }));
 };
