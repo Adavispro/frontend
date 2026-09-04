@@ -84,20 +84,20 @@ export default function MetricCard({
   const iconOpacity = variant === "primary" ? "opacity-85" : "opacity-75";
 
   const content = (
-    <div className="flex h-full min-h-[138px] sm:min-h-[140px] flex-col justify-between">
-      <div className="flex items-start justify-between gap-2 pr-10">
-        <p className={`text-[15px] sm:text-[16px] font-semibold leading-tight ${labelColor}`}>
+    <div className="flex h-full min-h-[142px] sm:min-h-[146px] flex-col justify-between">
+      <div className="flex items-start justify-between gap-2 pr-11">
+        <p className={`text-[15px] sm:text-[16px] font-semibold leading-snug tracking-normal ${labelColor}`}>
           {label}
         </p>
       </div>
 
-      <div className="mt-auto pt-2">
+      <div className="mt-auto pt-3">
         <strong
-          className={`block text-[38px] sm:text-[40px] font-bold leading-none tracking-tight ${valueColor}`}
+          className={`block text-[38px] sm:text-[40px] xl:text-[42px] font-bold leading-none tracking-tight ${valueColor}`}
         >
           {value}
         </strong>
-        <p className={`mt-2 text-[13px] sm:text-[14px] font-medium leading-tight ${noteColor}`}>
+        <p className={`mt-2.5 text-[13px] sm:text-[14px] font-medium leading-tight ${noteColor}`}>
           {note}
         </p>
       </div>
@@ -106,12 +106,12 @@ export default function MetricCard({
         src={icon}
         alt=""
         aria-hidden="true"
-        className={`absolute right-5 top-5 h-9 w-9 object-contain pointer-events-none ${iconOpacity}`}
+        className={`absolute right-5 top-5 h-9 w-9 sm:h-10 sm:w-10 object-contain pointer-events-none ${iconOpacity}`}
       />
     </div>
   );
 
-  const className = `relative flex min-h-[138px] sm:min-h-[140px] w-full flex-col justify-between overflow-hidden rounded-[12px] border p-5 text-left transition-transform hover:-translate-y-0.5 ${styles}`;
+  const className = `relative flex min-h-[142px] sm:min-h-[146px] w-full flex-col justify-between overflow-hidden rounded-[14px] border p-5 text-left transition-transform hover:-translate-y-0.5 ${styles}`;
 
   if (href) {
     return (
