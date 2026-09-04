@@ -21,7 +21,6 @@ import {
   Snackbar,
 } from "@/components/ui";
 import { ROUTES } from "@/config/routes";
-import { getAuditLogsByAction } from "../../audit-logs/api";
 import { useDepartments } from "../../department-management/hooks/useDepartments";
 import type { User } from "../api/types";
 import { deleteUser } from "../api";
@@ -96,13 +95,10 @@ const uniqueValues = (values: string[]) =>
 
 const apiStatusFilters: Record<UserStatusFilter, { isActive?: boolean; isBlocked?: boolean; sessionPresence?: string }> = {
   active: { sessionPresence: "ACTIVE", isActive: true, isBlocked: false },
-  idle: { isActive: true, isBlocked: false },
+  idle: { sessionPresence: "IDLE", isActive: true, isBlocked: false },
   blocked: { isBlocked: true },
   deactivated: { isActive: false, isBlocked: false },
 };
-
-const IDLE_LOOKBACK_DAYS = 30;
-const LOGIN_PAGE_SIZE = 100;
 
 function UserActions({
   user,
@@ -265,7 +261,6 @@ export default function UsersTable({
     useState<User | null>(null);
   const [pendingDelete, setPendingDelete] = useState<User | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [idleUserIds, setIdleUserIds] = useState<Set<string> | null>(null);
   const [operationNotification, setOperationNotification] = useState({
     message: "",
     variant: "success" as "error" | "success",
@@ -315,68 +310,6 @@ export default function UsersTable({
     [departmentNamesById, usersPage],
   );
 
-  useEffect(() => {
-    if (statusFilter !== "idle") {
-      setIdleUserIds(null);
-      return;
-    }
-
-    const controller = new AbortController();
-    const end = new Date();
-    const start = new Date(end);
-    start.setDate(start.getDate() - IDLE_LOOKBACK_DAYS);
-
-    void (async () => {
-      const firstPage = await getAuditLogsByAction(
-        {
-          action: "LOGIN",
-          page: 0,
-          size: LOGIN_PAGE_SIZE,
-          from: start.toISOString(),
-          to: end.toISOString(),
-        },
-        controller.signal,
-      );
-
-      const loginUserIds = new Set(
-        firstPage.content
-          .map((log) => log.userId)
-          .filter((userId): userId is string => Boolean(userId)),
-      );
-
-      if (firstPage.totalPages > 1) {
-        const remainingPages = await Promise.all(
-          Array.from({ length: firstPage.totalPages - 1 }, (_, index) =>
-            getAuditLogsByAction(
-              {
-                action: "LOGIN",
-                page: index + 1,
-                size: LOGIN_PAGE_SIZE,
-                from: start.toISOString(),
-                to: end.toISOString(),
-              },
-              controller.signal,
-            ),
-          ),
-        );
-
-        remainingPages.flatMap((page) => page.content).forEach((log) => {
-          if (log.userId) loginUserIds.add(log.userId);
-        });
-      }
-
-      if (!controller.signal.aborted) {
-        setIdleUserIds(loginUserIds);
-      }
-    })().catch(() => {
-      if (!controller.signal.aborted) {
-        setIdleUserIds(new Set());
-      }
-    });
-
-    return () => controller.abort();
-  }, [statusFilter]);
-
   const filterOptions = useMemo(
     () => ({
       departments: uniqueValues(allRows.map((user) => user.department)),
@@ -391,11 +324,7 @@ export default function UsersTable({
     const mappedUsers = allRows
       .filter((user) =>
         statusFilter
-          ? statusFilter === "idle"
-            ? user.status === "Active" && idleUserIds
-              ? !idleUserIds.has(user.id)
-              : false
-            : user.status === statusFilterLabels[statusFilter]
+          ? user.status === statusFilterLabels[statusFilter]
           : true,
       )
       .filter((user) =>
@@ -417,7 +346,7 @@ export default function UsersTable({
         (value) => value.toLowerCase().includes(normalizedSearch),
       ),
     );
-  }, [allRows, appliedFilters, search, statusFilter, idleUserIds]);
+  }, [allRows, appliedFilters, search, statusFilter]);
   const totalElements = isClientFiltered ? rows.length : usersPage?.totalElements ?? 0;
   const effectivePageSize = usersPage?.pageSize ?? pageSize;
   const firstEntry = totalElements === 0 ? 0 : isClientFiltered ? 1 : page * effectivePageSize + 1;
@@ -427,13 +356,12 @@ export default function UsersTable({
   const tableTitle = isIdleView
     ? "Idle Users List"
     : statusFilter === "active"
-      ? "Active Users List"
+      ? "Active Logged-in Users List"
       : statusFilter === "blocked"
         ? "Blocked Users List"
         : statusFilter === "deactivated"
           ? "Deactivated Users List"
           : "Users List";
-  const isIdleLoading = isIdleView && idleUserIds === null;
 
   const handleDelete = async () => {
     if (!pendingDelete) return;
@@ -506,7 +434,15 @@ export default function UsersTable({
         totalPages={isClientFiltered ? 1 : Math.max(usersPage?.totalPages ?? 1, 1)}
         pageSize={isClientFiltered ? 10 : pageSize}
         pageSizeOptions={[10, 20, 30]}
-        emptyText={isLoading || isIdleLoading ? "Loading users..." : "No users found."}
+        emptyText={
+          isLoading
+            ? "Loading users..."
+            : statusFilter === "idle"
+              ? "No idle users found."
+              : statusFilter === "active"
+                ? "No active logged-in users found."
+                : "No users found."
+        }
         onPageChange={
           isClientFiltered ? undefined : (nextPage) => setPage(nextPage - 1)
         }
