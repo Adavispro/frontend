@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
+  ArrowRight,
   Clock,
   WarningCircle,
   FileText,
@@ -30,6 +31,7 @@ import {
   SlidersHorizontal,
   Gauge,
   ListNumbers,
+  ListChecks,
 } from "@phosphor-icons/react";
 import {
   getAlarmEventDataPaginated,
@@ -62,6 +64,11 @@ import DynamicProcessTrendChart, {
 } from "../components/DynamicProcessTrendChart";
 import Pagination from "@/components/ui/Pagination";
 import { WorkflowActionModal } from "../../components/WorkflowActionModal";
+import {
+  RequestInformationModal,
+  type ConsolidatedQueryItem,
+} from "../components/RequestInformationModal";
+import { Question, Check } from "@phosphor-icons/react";
 import { evaluateParameterStatus } from "@/features/iiot/equipment/utils/parameter-status";
 import { ROUTES } from "@/config/routes";
 import { getSafeReturnTo } from "@/utils/navigation";
@@ -71,13 +78,32 @@ export interface BatchDetailScreenProps {
   searchParams?: Record<string, string | string[] | undefined>;
 }
 
-type TabType =
+export type TabType =
   | "PARAMETER_SETTINGS"
   | "OPERATIONAL_VALUE"
   | "OPERATIONAL_DETAIL_VALUES"
   | "TRENDS"
   | "ALARM_SUMMARY"
   | "AUDIT_TRAIL";
+
+export type TabReviewStatus = "PENDING" | "PASSED" | "HAS_QUERIES";
+
+export interface TabReviewItem {
+  status: TabReviewStatus;
+  reviewedBy?: string;
+  reviewedAt?: string;
+  queryComments?: string;
+  queryRecipient?: string;
+}
+
+export const TAB_SEQUENCE: { id: TabType; label: string; shortName: string }[] = [
+  { id: "PARAMETER_SETTINGS", label: "PARAMETER SETTINGS", shortName: "Parameter Settings" },
+  { id: "OPERATIONAL_VALUE", label: "OPERATIONAL VALUE", shortName: "Operational Value" },
+  { id: "OPERATIONAL_DETAIL_VALUES", label: "OPERATIONAL DETAIL VALUES", shortName: "Operational Detail Values" },
+  { id: "TRENDS", label: "TRENDS", shortName: "Trends" },
+  { id: "ALARM_SUMMARY", label: "ALARM SUMMARY", shortName: "Alarm Summary" },
+  { id: "AUDIT_TRAIL", label: "AUDIT TRAIL", shortName: "Audit Trail" },
+];
 
 const toText = (value: unknown): string =>
   typeof value === "string" ? value.trim() : value == null ? "" : String(value).trim();
@@ -410,31 +436,31 @@ function resolveMetricLimits(
   // Deterministic equipment-specific standard operational defaults
   if (normKey.includes("agspeed") || normKey.includes("agitatorspeed") || normKey === "speed") {
     return {
-      parameterName: "Agitator Speed",
+      parameterName: "Agitator Speed #004",
       unit: "RPM",
       limits: {
         upperCriticalLimit: 175.0,
         upperWarningLimit: 160.0,
         idealTarget: 140.0,
-        idealMin: 130.0,
-        idealMax: 150.0,
-        lowerWarningLimit: 120.0,
+        idealMin: 100.0,
+        idealMax: 175.0,
+        lowerWarningLimit: 100.0,
         lowerCriticalLimit: 100.0,
       },
     };
   }
 
-  if (normKey.includes("agamps") || normKey.includes("agitatoramps") || normKey.includes("current") || normKey === "currentamp") {
+  if (normKey.includes("agamps") || normKey.includes("agitatoramps") || normKey.includes("agitatorcurrent") || normKey === "current" || normKey === "currentamp") {
     return {
-      parameterName: "Agitator Current",
+      parameterName: "Agitator Current #004",
       unit: "A",
       limits: {
         upperCriticalLimit: 33.0,
         upperWarningLimit: 30.5,
         idealTarget: 28.0,
-        idealMin: 15.0,
-        idealMax: 30.0,
-        lowerWarningLimit: 10.0,
+        idealMin: 0.0,
+        idealMax: 33.0,
+        lowerWarningLimit: 0.0,
         lowerCriticalLimit: 0.0,
       },
     };
@@ -442,15 +468,15 @@ function resolveMetricLimits(
 
   if (normKey.includes("chpspeed") || normKey.includes("chopperspeed") || normKey.includes("granulatorspeed")) {
     return {
-      parameterName: "Granulator Speed",
+      parameterName: "Granulator Speed #004",
       unit: "RPM",
       limits: {
         upperCriticalLimit: 1600.0,
         upperWarningLimit: 1500.0,
         idealTarget: 1420.0,
-        idealMin: 1350.0,
-        idealMax: 1480.0,
-        lowerWarningLimit: 1250.0,
+        idealMin: 1000.0,
+        idealMax: 1600.0,
+        lowerWarningLimit: 1000.0,
         lowerCriticalLimit: 1000.0,
       },
     };
@@ -458,21 +484,21 @@ function resolveMetricLimits(
 
   if (normKey.includes("chpamps") || normKey.includes("chopperamps") || normKey.includes("granulatoramps") || normKey.includes("granulatorcurrent")) {
     return {
-      parameterName: "Granulator Current",
+      parameterName: "Granulator Current #004",
       unit: "A",
       limits: {
-        upperCriticalLimit: 33.0,
-        upperWarningLimit: 6.2,
+        upperCriticalLimit: 7.5,
+        upperWarningLimit: 6.5,
         idealTarget: 5.5,
-        idealMin: 3.0,
-        idealMax: 6.0,
-        lowerWarningLimit: 2.0,
+        idealMin: 0.0,
+        idealMax: 7.5,
+        lowerWarningLimit: 0.0,
         lowerCriticalLimit: 0.0,
       },
     };
   }
 
-  if (normKey.includes("heatertemp") || normKey.includes("granulationtemp") || normKey.includes("temperature") || normKey.includes("temp")) {
+  if (normKey.includes("granulationtemperature") || normKey.includes("heatertemp") || normKey.includes("granulationtemp") || (normKey.includes("temp") && !normKey.includes("inlet") && !normKey.includes("outlet") && !normKey.includes("bed"))) {
     return {
       parameterName: "Granulation Temperature",
       unit: "°C",
@@ -480,9 +506,9 @@ function resolveMetricLimits(
         upperCriticalLimit: 75.0,
         upperWarningLimit: 68.0,
         idealTarget: 55.0,
-        idealMin: 50.0,
-        idealMax: 60.0,
-        lowerWarningLimit: 42.0,
+        idealMin: 35.0,
+        idealMax: 75.0,
+        lowerWarningLimit: 35.0,
         lowerCriticalLimit: 35.0,
       },
     };
@@ -490,14 +516,14 @@ function resolveMetricLimits(
 
   if (normKey.includes("duration") || normKey.includes("durationsec")) {
     return {
-      parameterName: "Duration",
+      parameterName: "Duration Sec #004",
       unit: "Sec",
       limits: {
         upperCriticalLimit: 600.0,
-        upperWarningLimit: 480.0,
+        upperWarningLimit: 600.0,
         idealTarget: 180.0,
         idealMin: 0.0,
-        idealMax: 480.0,
+        idealMax: 600.0,
         lowerWarningLimit: 0.0,
         lowerCriticalLimit: 0.0,
       },
@@ -549,10 +575,67 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
   const [workflowInstance, setWorkflowInstance] = useState<Record<string, unknown> | null>(null);
   const [isClaiming, setIsClaiming] = useState(false);
 
+  const targetEquipmentCode =
+    selectedEquipmentCode || queryEquipmentCode || batchSummary?.equipmentId || "G5RMG";
+
+  const activeStatus = toText(
+    (batchSummary?.stages &&
+      batchSummary.stages.find(
+        (stage: Record<string, unknown>) =>
+          stage.equipmentCode === targetEquipmentCode ||
+          stage.equipmentId === targetEquipmentCode ||
+          stage.equipmentType === targetEquipmentCode,
+      )?.approval?.status) ||
+      batchSummary?.batchStatus ||
+      batchSummary?.overallStatus ||
+      "PENDING",
+  );
+
+  const isEquipmentOverviewSource = Boolean(
+    returnToRoute.includes("equipment-overview") ||
+      searchParams.get("returnTo")?.includes("equipment-overview") ||
+      searchParams.get("readOnly") === "true" ||
+      searchParams.get("from") === "equipment"
+  );
+
+  const isApprovedBatch = Boolean(
+    activeStatus === "APPROVED" ||
+      activeStatus === "COMPLETED" ||
+      batchSummary?.overallStatus === "APPROVED" ||
+      batchSummary?.overallStatus === "COMPLETED"
+  );
+
+  const roleScope = useMemo(() => {
+    const r = (userRole || "").toUpperCase();
+    if (r.includes("APPROVER") || activeStatus === "PENDING_APPROVAL" || activeStatus === "REVIEWER_REVIEWED") {
+      return "QA_APPROVER";
+    }
+    if (r.includes("REVIEWER") || activeStatus === "UNDER_REVIEW" || activeStatus === "IN_REVIEW") {
+      return "PRODUCTION_REVIEWER";
+    }
+    return "PRODUCTION_OPERATOR";
+  }, [userRole, activeStatus]);
+
+  const roleTitle = useMemo(() => roleScope.replace(/_/g, " "), [roleScope]);
+
   // Modal State
   const [modalAction, setModalAction] = useState<AllowedWorkflowAction | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [actionSuccessMsg, setActionSuccessMsg] = useState<string | null>(null);
+  // Tab Checkpoint Review States & Queries
+  const initialTabReviews: Record<TabType, TabReviewItem> = useMemo(() => ({
+    PARAMETER_SETTINGS: { status: "PENDING" },
+    OPERATIONAL_VALUE: { status: "PENDING" },
+    OPERATIONAL_DETAIL_VALUES: { status: "PENDING" },
+    TRENDS: { status: "PENDING" },
+    ALARM_SUMMARY: { status: "PENDING" },
+    AUDIT_TRAIL: { status: "PENDING" },
+  }), []);
+
+  const [tabReviews, setTabReviews] = useState<Record<TabType, TabReviewItem>>(initialTabReviews);
+  const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
+  const [activeInfoTab, setActiveInfoTab] = useState<TabType>("PARAMETER_SETTINGS");
+
 
   // Filter States
   const [parameterSearch, setParameterSearch] = useState("");
@@ -709,6 +792,189 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
     loadBatchData();
   }, [loadBatchData]);
 
+  // Load persisted tab reviews on batch switch or role change
+  useEffect(() => {
+    if (!queryBatchNo) return;
+    try {
+      const eqCode = selectedEquipmentCode || queryEquipmentCode || batchSummary?.equipmentId || "G5RMG";
+      const roleKey = `batch_tab_reviews_${roleScope}_${queryBatchNo}_${eqCode}`;
+      const fallbackKey = `batch_tab_reviews_${queryBatchNo}_${eqCode}`;
+      const saved = localStorage.getItem(roleKey) || localStorage.getItem(fallbackKey);
+      if (saved) {
+        setTabReviews(JSON.parse(saved));
+      } else {
+        setTabReviews(initialTabReviews);
+      }
+    } catch (e) {
+      console.error("Failed to load saved tab reviews", e);
+    }
+  }, [queryBatchNo, selectedEquipmentCode, queryEquipmentCode, batchSummary?.equipmentId, initialTabReviews, roleScope]);
+
+  const existingQueryList: ConsolidatedQueryItem[] = useMemo(() => {
+    return TAB_SEQUENCE.map((t) => {
+      const rev = tabReviews[t.id];
+      return {
+        tabKey: t.id,
+        tabLabel: t.shortName,
+        queryComments: rev?.queryComments,
+        queryRecipient: rev?.queryRecipient,
+      };
+    }).filter((q) => Boolean(q.queryComments && tabReviews[q.tabKey as TabType]?.status === "HAS_QUERIES"));
+  }, [tabReviews]);
+
+  const handlePassTab = (tab: TabType) => {
+    const eqCode = targetEquipmentCode;
+    const updated: Record<TabType, TabReviewItem> = {
+      ...tabReviews,
+      [tab]: {
+        status: "PASSED",
+        reviewedBy: currentUser?.userId || currentUser?.username || roleTitle,
+        reviewedAt: new Date().toISOString(),
+      },
+    };
+    setTabReviews(updated);
+    try {
+      localStorage.setItem(`batch_tab_reviews_${roleScope}_${queryBatchNo}_${eqCode}`, JSON.stringify(updated));
+    } catch (e) {
+      console.error("Failed to persist tab reviews", e);
+    }
+    setActionSuccessMsg(`Tab "${tab.replace(/_/g, " ")}" reviewed and marked as Passed.`);
+    setTimeout(() => setActionSuccessMsg(null), 4000);
+
+    const newAudit: WorkflowAuditEvent = {
+      auditId: `audit_tab_${tab}_${Date.now()}`,
+      tenantId: "TNT-0001",
+      batchNo: queryBatchNo,
+      lotNo: queryLotNo || toText(batchSummary?.lotNo) || "01 of 05",
+      equipmentCode: targetEquipmentCode,
+      previousStatus: tabReviews[tab]?.status || "PENDING",
+      newStatus: "PASSED",
+      action: `TAB REVIEW: ${tab.replace(/_/g, " ")} PASSED (${roleTitle})`,
+      actionCode: `TAB_REVIEW_${tab}_PASSED`,
+      userId: currentUser?.userId || "OPERATOR_01",
+      userName: currentUser?.username || roleTitle,
+      userRole: userRole,
+      comments: `${roleTitle} checkpoint verification passed for ${tab.replace(/_/g, " ")}`,
+      timestamp: new Date().toISOString(),
+      esignatureVerified: true,
+      esignatureReason: "Tab Review Checkpoint Approval",
+      regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant tab verification.",
+    };
+    setAuditEvents((prev) => [newAudit, ...prev]);
+  };
+
+  const handlePassAndNext = (tab: TabType) => {
+    const eqCode = targetEquipmentCode;
+    const updated: Record<TabType, TabReviewItem> = {
+      ...tabReviews,
+      [tab]: {
+        status: "PASSED",
+        reviewedBy: currentUser?.userId || currentUser?.username || roleTitle,
+        reviewedAt: new Date().toISOString(),
+      },
+    };
+    setTabReviews(updated);
+    try {
+      localStorage.setItem(`batch_tab_reviews_${roleScope}_${queryBatchNo}_${eqCode}`, JSON.stringify(updated));
+    } catch (e) {
+      console.error("Failed to persist tab reviews", e);
+    }
+
+    const newAudit: WorkflowAuditEvent = {
+      auditId: `audit_tab_${tab}_${Date.now()}`,
+      tenantId: "TNT-0001",
+      batchNo: queryBatchNo,
+      lotNo: queryLotNo || toText(batchSummary?.lotNo) || "01 of 05",
+      equipmentCode: targetEquipmentCode,
+      previousStatus: tabReviews[tab]?.status || "PENDING",
+      newStatus: "PASSED",
+      action: `TAB REVIEW: ${tab.replace(/_/g, " ")} PASSED (${roleTitle})`,
+      actionCode: `TAB_REVIEW_${tab}_PASSED`,
+      userId: currentUser?.userId || "OPERATOR_01",
+      userName: currentUser?.username || roleTitle,
+      userRole: userRole,
+      comments: `${roleTitle} checkpoint verification passed for ${tab.replace(/_/g, " ")}`,
+      timestamp: new Date().toISOString(),
+      esignatureVerified: true,
+      esignatureReason: "Tab Review Checkpoint Approval",
+      regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant tab verification.",
+    };
+    setAuditEvents((prev) => [newAudit, ...prev]);
+
+    const currentIndex = TAB_SEQUENCE.findIndex((t) => t.id === tab);
+    if (currentIndex >= 0 && currentIndex < TAB_SEQUENCE.length - 1) {
+      const nextTab = TAB_SEQUENCE[currentIndex + 1];
+      setActiveTab(nextTab.id);
+      setActionSuccessMsg(`✓ Tab "${tab.replace(/_/g, " ")}" Verified! Moved to "${nextTab.shortName}".`);
+    } else {
+      setActionSuccessMsg(`✓ All 6 tabs verified and approved for ${roleTitle} stage! Batch is ready for submission.`);
+    }
+    setTimeout(() => setActionSuccessMsg(null), 4000);
+  };
+
+  const handleInfoQuerySuccess = (
+    comment: string,
+    recipient: string,
+    tabName: string,
+    affectedTabs?: string[]
+  ) => {
+    const eqCode = targetEquipmentCode;
+    let updated: Record<TabType, TabReviewItem> = { ...tabReviews };
+
+    const tabsToUpdate = affectedTabs && affectedTabs.length > 0 ? affectedTabs : [tabName];
+    for (const t of tabsToUpdate) {
+      if (t in updated) {
+        const tabKey = t as TabType;
+        updated[tabKey] = {
+          ...updated[tabKey],
+          status: "HAS_QUERIES",
+          queryComments: comment,
+          queryRecipient: recipient,
+          reviewedBy: currentUser?.userId || currentUser?.username || roleTitle,
+          reviewedAt: new Date().toISOString(),
+        };
+      }
+    }
+
+    setTabReviews(updated);
+    try {
+      localStorage.setItem(`batch_tab_reviews_${roleScope}_${queryBatchNo}_${eqCode}`, JSON.stringify(updated));
+    } catch (e) {
+      console.error("Failed to persist tab reviews", e);
+    }
+
+    const isConsolidated = tabsToUpdate.length > 1 || tabName === "CONSOLIDATED";
+    setActionSuccessMsg(
+      isConsolidated
+        ? `Consolidated queries across ${tabsToUpdate.length} tabs sent to ${recipient}.`
+        : `Information query sent to ${recipient} for tab "${tabName.replace(/_/g, " ")}".`
+    );
+    setTimeout(() => setActionSuccessMsg(null), 5000);
+
+    const newAudit: WorkflowAuditEvent = {
+      auditId: `audit_query_${Date.now()}`,
+      tenantId: "TNT-0001",
+      batchNo: queryBatchNo,
+      lotNo: queryLotNo || toText(batchSummary?.lotNo) || "01 of 05",
+      equipmentCode: targetEquipmentCode,
+      previousStatus: "PENDING",
+      newStatus: "HAS_QUERIES",
+      action: isConsolidated
+        ? `CONSOLIDATED QUERY TO ${recipient} (${tabsToUpdate.length} TABS)`
+        : `REQUEST INFORMATION: ${tabName.replace(/_/g, " ")}`,
+      actionCode: isConsolidated ? "CONSOLIDATED_INFO_QUERY" : `REQUEST_INFO_${tabName}`,
+      userId: currentUser?.userId || "OPERATOR_01",
+      userName: currentUser?.username || roleTitle,
+      userRole: userRole,
+      comments: `Query to ${recipient}: ${comment}`,
+      timestamp: new Date().toISOString(),
+      esignatureVerified: true,
+      esignatureReason: "Request for Information & Process Clarification",
+      regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant query submission.",
+    };
+    setAuditEvents((prev) => [newAudit, ...prev]);
+  };
+
   const handleActionSuccess = () => {
     setActionSuccessMsg("Workflow transition signed and submitted successfully!");
     loadBatchData();
@@ -778,9 +1044,6 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
     setCorrelatedAlarm(null);
     setParametersPage(1);
   };
-
-  const targetEquipmentCode =
-    selectedEquipmentCode || queryEquipmentCode || batchSummary?.equipmentId || "G5RMG";
 
   // Batch & Lot Execution Timeframe Boundaries (startAt to endAt)
   const batchTimeRange = useMemo(() => {
@@ -1168,6 +1431,18 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
         const nk = k.toLowerCase().replace(/[^a-z0-9]/g, "");
         return (nk.includes("speed") || nk.includes("rpm")) && !nk.includes("current") && !nk.includes("amps");
       });
+    } else if (eqCode.includes("COAT")) {
+      keys = ["Inlet_Air_Temp", "Bed_Temp", "Pan_Speed", "Spray_Rate", "Atom_Air_Press"];
+    } else {
+      // RMG 6 standard columns
+      keys = [
+        "Agitator_Speed",
+        "Agitator_Current",
+        "Granulator_Speed",
+        "Granulator_Current",
+        "Granulation_Temperature",
+        "Duration_Sec"
+      ];
     }
 
     return keys.map((key) => {
@@ -1273,33 +1548,6 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
     });
   }, [cppRecords, selectedTrendMetric, currentMetricMeta, correlatedAlarm, isWithinCorrelationWindow]);
 
-  const activeStatus = toText(
-    (batchSummary?.stages &&
-      batchSummary.stages.find(
-        (stage: Record<string, unknown>) =>
-          stage.equipmentCode === targetEquipmentCode ||
-          stage.equipmentId === targetEquipmentCode ||
-          stage.equipmentType === targetEquipmentCode,
-      )?.approval?.status) ||
-      batchSummary?.batchStatus ||
-      batchSummary?.overallStatus ||
-      "PENDING",
-  );
-
-  const isEquipmentOverviewSource = Boolean(
-    returnToRoute.includes("equipment-overview") ||
-      searchParams.get("returnTo")?.includes("equipment-overview") ||
-      searchParams.get("readOnly") === "true" ||
-      searchParams.get("from") === "equipment"
-  );
-
-  const isApprovedBatch = Boolean(
-    activeStatus === "APPROVED" ||
-      activeStatus === "COMPLETED" ||
-      batchSummary?.overallStatus === "APPROVED" ||
-      batchSummary?.overallStatus === "COMPLETED"
-  );
-
   return (
     <div className="flex-1 space-y-5 p-4 sm:p-6 bg-slate-50 text-slate-900 min-h-screen">
       {/* Top Breadcrumb & Action Bar */}
@@ -1385,42 +1633,7 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
             </button>
           )}
 
-          {/* Dynamic Workflow Stage Action Buttons (Hidden if navigated from Equipment Overview / Read-Only mode) */}
-          {!isEquipmentOverviewSource && allowedActions.map((action) => {
-            const currentUserId = currentUser?.userId || currentUser?.username || "SYSTEM";
-            const assignedTo = toText(workflowInstance?.assignedTo) || toText((workflowInstance?.context as Record<string, unknown>)?.activeReviewer) || toText(batchSummary?.assignedTo);
-            const isClaimedByMe = Boolean(assignedTo && assignedTo.toUpperCase() === currentUserId.toUpperCase());
-            const isClaimedByOther = Boolean(assignedTo && !isClaimedByMe);
-
-            const isApprove = action.actionType === "APPROVE" || action.actionCode === "APPROVE";
-            const isReject = action.actionType === "REJECT" || action.actionCode === "REJECT" || action.actionCode === "REQUEST_ADDITIONAL_INFO";
-            const isDefer = action.actionType === "DEFER" || action.actionCode === "DEFER";
-
-            let btnClass = "bg-indigo-600 hover:bg-indigo-700 text-white";
-            if (isApprove) btnClass = "bg-emerald-600 hover:bg-emerald-700 text-white";
-            if (isReject) btnClass = "bg-amber-600 hover:bg-amber-700 text-white";
-            if (isDefer) btnClass = "bg-purple-600 hover:bg-purple-700 text-white";
-
-            return (
-              <button
-                key={action.actionCode}
-                disabled={isClaimedByOther}
-                onClick={() => {
-                  setModalAction(action);
-                  setIsModalOpen(true);
-                }}
-                title={isClaimedByOther ? `Action locked: Claimed by ${assignedTo}` : undefined}
-                className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg font-semibold text-xs transition shadow-sm ${
-                  isClaimedByOther ? "bg-slate-200 text-slate-500 border border-slate-300 cursor-not-allowed opacity-70" : btnClass
-                }`}
-              >
-                <Lock className="h-3 w-3" />
-                {action.displayName || action.actionName || action.actionCode}
-                {isClaimedByOther && <span className="text-[10px] ml-1">(Locked)</span>}
-              </button>
-            );
-          })}
-        </div>
+                  </div>
       </div>
 
       {actionSuccessMsg && (
@@ -1710,69 +1923,224 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
         </div>
       </div>
 
-      {/* Tabs Navigation: 6 Requested Tabs */}
+      {/* Tabs Navigation: 6 Defined GxP Tabs */}
       <div className="flex border-b border-slate-200 text-xs font-medium space-x-1 sm:space-x-2 overflow-x-auto pb-0.5">
-        <button
-          onClick={() => setActiveTab("PARAMETER_SETTINGS")}
-          className={`pb-2.5 px-3.5 flex items-center gap-2 border-b-2 text-xs transition whitespace-nowrap ${
-            activeTab === "PARAMETER_SETTINGS"
-              ? "border-indigo-600 text-indigo-600 font-bold"
-              : "border-transparent text-slate-500 hover:text-slate-900 font-semibold"
-          }`}
-        >
-          <SlidersHorizontal className="h-4 w-4" /> PARAMETER SETTINGS
-        </button>
-        <button
-          onClick={() => setActiveTab("OPERATIONAL_VALUE")}
-          className={`pb-2.5 px-3.5 flex items-center gap-2 border-b-2 text-xs transition whitespace-nowrap ${
-            activeTab === "OPERATIONAL_VALUE"
-              ? "border-indigo-600 text-indigo-600 font-bold"
-              : "border-transparent text-slate-500 hover:text-slate-900 font-semibold"
-          }`}
-        >
-          <Gauge className="h-4 w-4" /> OPERATIONAL VALUE
-        </button>
-        <button
-          onClick={() => setActiveTab("OPERATIONAL_DETAIL_VALUES")}
-          className={`pb-2.5 px-3.5 flex items-center gap-2 border-b-2 text-xs transition whitespace-nowrap ${
-            activeTab === "OPERATIONAL_DETAIL_VALUES"
-              ? "border-indigo-600 text-indigo-600 font-bold"
-              : "border-transparent text-slate-500 hover:text-slate-900 font-semibold"
-          }`}
-        >
-          <ListNumbers className="h-4 w-4" /> OPERATIONAL DETAIL VALUES ({filteredParameters.length})
-        </button>
-        <button
-          onClick={() => setActiveTab("TRENDS")}
-          className={`pb-2.5 px-3.5 flex items-center gap-2 border-b-2 text-xs transition whitespace-nowrap ${
-            activeTab === "TRENDS"
-              ? "border-indigo-600 text-indigo-600 font-bold"
-              : "border-transparent text-slate-500 hover:text-slate-900 font-semibold"
-          }`}
-        >
-          <ChartLine className="h-4 w-4" /> TRENDS
-        </button>
-        <button
-          onClick={() => setActiveTab("ALARM_SUMMARY")}
-          className={`pb-2.5 px-3.5 flex items-center gap-2 border-b-2 text-xs transition whitespace-nowrap ${
-            activeTab === "ALARM_SUMMARY"
-              ? "border-indigo-600 text-indigo-600 font-bold"
-              : "border-transparent text-slate-500 hover:text-slate-900 font-semibold"
-          }`}
-        >
-          <Bell className="h-4 w-4" /> ALARM SUMMARY ({filteredAlarms.length})
-        </button>
-        <button
-          onClick={() => setActiveTab("AUDIT_TRAIL")}
-          className={`pb-2.5 px-3.5 flex items-center gap-2 border-b-2 text-xs transition whitespace-nowrap ${
-            activeTab === "AUDIT_TRAIL"
-              ? "border-indigo-600 text-indigo-600 font-bold"
-              : "border-transparent text-slate-500 hover:text-slate-900 font-semibold"
-          }`}
-        >
-          <ShieldCheck className="h-4 w-4" /> AUDIT TRAIL ({filteredAuditEvents.length + actionHistory.length})
-        </button>
+        {TAB_SEQUENCE.map((tab) => {
+          const tabReview = tabReviews[tab.id];
+          const isPassed = tabReview?.status === "PASSED" || isApprovedBatch;
+          const hasQuery = tabReview?.status === "HAS_QUERIES";
+
+          let TabIcon = SlidersHorizontal;
+          if (tab.id === "OPERATIONAL_VALUE") TabIcon = Gauge;
+          if (tab.id === "OPERATIONAL_DETAIL_VALUES") TabIcon = ListNumbers;
+          if (tab.id === "TRENDS") TabIcon = ChartLine;
+          if (tab.id === "ALARM_SUMMARY") TabIcon = Bell;
+          if (tab.id === "AUDIT_TRAIL") TabIcon = ShieldCheck;
+
+          const tabLabel =
+            tab.id === "OPERATIONAL_DETAIL_VALUES"
+              ? `OPERATIONAL DETAIL VALUES (${filteredParameters.length})`
+              : tab.id === "ALARM_SUMMARY"
+              ? `ALARM SUMMARY (${filteredAlarms.length})`
+              : tab.id === "AUDIT_TRAIL"
+              ? `AUDIT TRAIL (${filteredAuditEvents.length + actionHistory.length})`
+              : tab.label;
+
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`pb-2.5 px-3.5 flex items-center gap-2 border-b-2 text-xs transition whitespace-nowrap cursor-pointer ${
+                activeTab === tab.id
+                  ? "border-indigo-600 text-indigo-600 font-bold"
+                  : "border-transparent text-slate-500 hover:text-slate-900 font-semibold"
+              }`}
+            >
+              <TabIcon className="h-4 w-4 flex-shrink-0" />
+              <span>{tabLabel}</span>
+              {isPassed ? (
+                <span className="inline-flex items-center px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                  ✓ Passed
+                </span>
+              ) : hasQuery ? (
+                <span className="inline-flex items-center px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                  ? Query
+                </span>
+              ) : (
+                <span className="inline-flex items-center px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-slate-100 text-slate-500 border border-slate-200">
+                  Pending
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
+
+      {/* Consolidated Queries Banner if queries are flagged */}
+      {existingQueryList.length > 0 && (
+        <div className="p-4 bg-gradient-to-r from-amber-500/15 via-amber-500/10 to-amber-500/15 border-2 border-amber-400 rounded-2xl shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-amber-100 border border-amber-300 text-amber-800 flex-shrink-0">
+              <Question className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-black uppercase tracking-wider text-amber-950 bg-amber-300 px-2 py-0.5 rounded shadow-xs">
+                  ⚠️ {existingQueryList.length} TAB {existingQueryList.length === 1 ? "QUERY" : "QUERIES"} FLAGGED
+                </span>
+                <span className="text-xs text-amber-950 font-semibold">
+                  Assigned recipient: <strong>{existingQueryList[0]?.queryRecipient || "Operator"}</strong>
+                </span>
+              </div>
+              <div className="mt-1.5 space-y-1 text-xs text-amber-950">
+                {existingQueryList.map((q) => (
+                  <div key={q.tabKey} className="flex items-center gap-1.5">
+                    <strong className="font-mono text-amber-900">• [{q.tabLabel}]:</strong>
+                    <span className="italic">&quot;{q.queryComments}&quot;</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 self-end md:self-auto">
+            <button
+              type="button"
+              onClick={() => {
+                setActiveInfoTab("CONSOLIDATED" as TabType);
+                setIsInfoModalOpen(true);
+              }}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-sm transition cursor-pointer"
+            >
+              <ListChecks className="h-4 w-4" />
+              Consolidate & Send to {existingQueryList[0]?.queryRecipient || "Operator"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Tab Review Checkpoint & Sequential Verification Action Bar */}
+      {(() => {
+        const currentTabIndex = TAB_SEQUENCE.findIndex((t) => t.id === activeTab);
+        const isLastTab = currentTabIndex === TAB_SEQUENCE.length - 1;
+        const nextTabObj = !isLastTab ? TAB_SEQUENCE[currentTabIndex + 1] : null;
+        const currentReview = tabReviews[activeTab];
+        const isCurrentPassed = currentReview?.status === "PASSED" || isApprovedBatch;
+        const isCurrentQuery = currentReview?.status === "HAS_QUERIES";
+
+        return (
+          <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className={`p-2.5 rounded-xl border flex-shrink-0 ${
+                isCurrentPassed
+                  ? "bg-emerald-50 border-emerald-300 text-emerald-700"
+                  : isCurrentQuery
+                  ? "bg-amber-50 border-amber-300 text-amber-700"
+                  : "bg-slate-50 border-slate-200 text-slate-500"
+              }`}>
+                {isCurrentPassed ? (
+                  <CheckCircle className="h-5 w-5" />
+                ) : isCurrentQuery ? (
+                  <Question className="h-5 w-5" />
+                ) : (
+                  <Clock className="h-5 w-5" />
+                )}
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-bold text-slate-900 uppercase">
+                    {activeTab.replace(/_/g, " ")} CHECKPOINT
+                  </span>
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                    isCurrentPassed
+                      ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                      : isCurrentQuery
+                      ? "bg-amber-50 text-amber-900 border-amber-200"
+                      : "bg-slate-100 text-slate-700 border-slate-200"
+                  }`}>
+                    {isCurrentPassed
+                      ? "Reviewed & Passed"
+                      : isCurrentQuery
+                      ? "Queries Raised / Info Requested"
+                      : "Pending Review"}
+                  </span>
+                  {currentReview?.reviewedBy && (
+                    <span className="text-[11px] text-slate-500">
+                      by <strong>{currentReview?.reviewedBy}</strong> ({toDisplayDate(currentReview?.reviewedAt)})
+                    </span>
+                  )}
+                </div>
+                {currentReview?.queryComments && (
+                  <p className="text-[11px] text-amber-900 mt-1 font-semibold italic bg-amber-50/80 px-2.5 py-1 rounded border border-amber-200">
+                    Pending Query to {currentReview?.queryRecipient}: &quot;{currentReview?.queryComments}&quot;
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 self-end md:self-auto flex-wrap">
+              {/* Request Information Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveInfoTab(activeTab);
+                  setIsInfoModalOpen(true);
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-950 border border-amber-300 text-xs font-bold transition shadow-xs cursor-pointer"
+              >
+                <Question className="h-3.5 w-3.5 text-amber-700" />
+                Request Information
+              </button>
+
+              {/* Verify & Next Tab / Approve & Next Navigation */}
+              {!isCurrentPassed ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => handlePassAndNext(activeTab)}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition shadow-sm cursor-pointer"
+                    title={isLastTab ? "Verify final tab and complete stage review" : `Verify this tab and navigate to ${nextTabObj?.shortName}`}
+                  >
+                    <CheckCircle className="h-4 w-4" />
+                    <span>{isLastTab ? "Verify & Complete Stage Review" : `Approve & Next Tab →`}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handlePassTab(activeTab)}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 text-xs font-semibold transition shadow-xs cursor-pointer"
+                    title="Verify only current tab without moving to next tab"
+                  >
+                    <Check className="h-3.5 w-3.5 text-slate-500" />
+                    Verify Tab Only
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => handlePassTab(activeTab)}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-300 text-xs font-bold transition shadow-xs cursor-pointer"
+                    title="Tab is passed. Click to re-sign and update verification timestamp."
+                  >
+                    <CheckCircle className="h-3.5 w-3.5 text-emerald-600" />
+                    Passed ✓
+                  </button>
+                  {!isLastTab && nextTabObj && (
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab(nextTabObj.id)}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold transition shadow-xs cursor-pointer"
+                    >
+                      <span>Next Tab: {nextTabObj.shortName}</span>
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* TAB 1: PARAMETER SETTINGS */}
       {activeTab === "PARAMETER_SETTINGS" && (
@@ -2348,36 +2716,79 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
             <div className="p-3.5 bg-white border border-slate-200 rounded-xl shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex items-center gap-2 text-xs font-semibold text-slate-700">
                 <Target className="h-4 w-4 text-amber-600" />
-                <span>Trends filtered to ±15m correlation window of <strong>{getAlarmCode(correlatedAlarm as unknown as Record<string, unknown>)}</strong> ({toDisplayDate(getAlarmEventTime(correlatedAlarm as unknown as Record<string, unknown>))})</span>
+                <span>
+                  Correlated with alarm: <strong className="font-mono text-slate-900">{getAlarmCode(correlatedAlarm as unknown as Record<string, unknown>)}</strong> (
+                  {toDisplayDate(getAlarmEventTime(correlatedAlarm as unknown as Record<string, unknown>))})
+                </span>
               </div>
               <button
                 type="button"
                 onClick={handleClearCorrelation}
-                className="inline-flex items-center self-start sm:self-auto gap-1.5 px-3 py-1.5 bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 rounded-lg text-xs font-bold transition shadow-sm"
+                className="inline-flex items-center gap-1 text-xs font-semibold text-amber-800 hover:text-amber-950 underline self-end sm:self-auto cursor-pointer"
               >
                 <X className="h-3.5 w-3.5" />
-                <span>Clear Correlation</span>
+                Clear Correlation Window
               </button>
             </div>
           )}
+
+          {/* Metric Selector Bar */}
+          <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-sm space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                  <ChartLine className="h-4 w-4 text-indigo-600" />
+                  Telemetry Parameter Channel
+                </h3>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  Select a continuous critical process parameter to visualize time-series telemetry against tolerance limits
+                </p>
+              </div>
+              <div className="text-xs font-mono font-bold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-lg self-start sm:self-auto">
+                {canonicalTrendPoints.length} Data Points
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 overflow-x-auto pb-1">
+              {availableMetricsList.map((col) => {
+                const isSelected = selectedTrendMetric === col.key;
+                return (
+                  <button
+                    key={col.key}
+                    type="button"
+                    onClick={() => setSelectedTrendMetric(col.key)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer ${
+                      isSelected
+                        ? "bg-indigo-600 text-white shadow-sm ring-2 ring-indigo-400/30"
+                        : "bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200"
+                    }`}
+                  >
+                    {col.label} ({col.unit})
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Dynamic Process Trend Chart */}
           <DynamicProcessTrendChart
             points={canonicalTrendPoints}
             parameterName={currentMetricMeta.parameterName}
             metricKey={selectedTrendMetric}
             unit={currentMetricMeta.unit}
             limits={currentMetricMeta.limits}
-            batchNo={queryBatchNo || toText(batchSummary?.batchNo)}
-            lotNo={queryLotNo || toText(batchSummary?.lotNo)}
+            isLoading={isLoading}
+            batchNo={queryBatchNo}
+            lotNo={queryLotNo}
             equipmentCode={targetEquipmentCode}
             availableMetrics={availableMetricsList}
             selectedMetric={selectedTrendMetric}
-            onMetricChange={setSelectedTrendMetric}
-            isLoading={isLoading}
+            onMetricChange={(k) => setSelectedTrendMetric(k)}
           />
         </div>
       )}
 
-      {/* TAB 5: ALARM SUMMARY */}
+      {/* TAB 5: ALARM_SUMMARY */}
       {activeTab === "ALARM_SUMMARY" && (
         <div className="space-y-6">
           {/* Header Filter Bar */}
@@ -2474,18 +2885,15 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
                   <thead className="bg-slate-50 text-[11px] font-bold text-slate-600 uppercase tracking-wider border-b border-slate-200">
                     <tr>
                       <th className="py-3 px-3.5">Occurred Time</th>
-                      <th className="py-3 px-3.5">Alarm Code / Name</th>
-                      <th className="py-3 px-3.5">Severity</th>
                       <th className="py-3 px-3.5">Description</th>
                       <th className="py-3 px-3.5">Resolved Time</th>
                       <th className="py-3 px-3.5">Duration</th>
-                      <th className="py-3 px-3.5 text-right">Correlation</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-xs">
                     {filteredAlarms.length === 0 ? (
                       <tr>
-                        <td colSpan={7} className="py-8 text-center text-slate-500 font-medium">
+                        <td colSpan={4} className="py-8 text-center text-slate-500 font-medium">
                           <div className="flex flex-col items-center justify-center gap-1.5">
                             <CheckCircle className="h-6 w-6 text-emerald-500 opacity-60" />
                             <span className="text-slate-700 font-bold text-xs">
@@ -2534,48 +2942,16 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
                         return (
                           <tr
                             key={alarmKey}
-                            className={`hover:bg-slate-50/80 transition cursor-pointer ${
-                              isSelected ? "bg-amber-50/80 border-l-4 border-amber-500 font-medium" : ""
-                            }`}
-                            onClick={() => handleCorrelateAlarm(alarmItem)}
+                            className="hover:bg-slate-50/80 transition"
                           >
                             <td className="py-2.5 px-3.5 font-mono text-slate-600 font-semibold whitespace-nowrap">
                               {toDisplayDate(aTime)}
-                            </td>
-                            <td className="py-2.5 px-3.5 font-mono font-bold text-slate-900">
-                              {aCode}
-                            </td>
-                            <td className="py-2.5 px-3.5">
-                              <span
-                                className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold border ${
-                                  aSev === "CRITICAL"
-                                    ? "bg-rose-50 text-rose-700 border-rose-200"
-                                    : aSev === "WARNING"
-                                    ? "bg-amber-50 text-amber-700 border-amber-200"
-                                    : "bg-slate-100 text-slate-700 border-slate-200"
-                                }`}
-                              >
-                                {aSev}
-                              </span>
                             </td>
                             <td className="py-2.5 px-3.5 text-slate-800 font-semibold">{aDesc}</td>
                             <td className="py-2.5 px-3.5 font-mono text-slate-600">
                               {aResolved && aResolved !== "-" ? toDisplayDate(aResolved) : "-"}
                             </td>
                             <td className="py-2.5 px-3.5 font-mono font-bold text-indigo-700">{aDuration}</td>
-                            <td className="py-2.5 px-3.5 text-right">
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleCorrelateAlarm(alarmItem);
-                                }}
-                                className="px-2.5 py-1 text-xs font-bold bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 rounded-lg transition inline-flex items-center gap-1 shadow-sm"
-                              >
-                                <Target className="h-3.5 w-3.5" />
-                                <span>Correlate</span>
-                              </button>
-                            </td>
                           </tr>
                         );
                       })
@@ -2872,6 +3248,122 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
         </div>
       )}
 
+            {/* Bottom Sticky Action Bar */}
+      <div className="sticky bottom-0 z-40 bg-white/95 backdrop-blur-md border-t-2 border-slate-200 p-4 shadow-2xl flex flex-col lg:flex-row items-center justify-between gap-3 -mx-4 -mb-4 sm:-mx-6 sm:-mb-6 rounded-b-xl">
+        <div className="flex items-center gap-4 w-full lg:w-auto justify-between lg:justify-start">
+          <div className="flex items-center gap-2.5">
+            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold border ${getStatusBadge(activeStatus)}`}>
+              {activeStatus.replace(/_/g, " ")}
+            </span>
+            <span className="text-xs text-slate-500 font-mono hidden sm:inline">
+              Batch: <strong className="text-slate-900">{queryBatchNo || "NL0026008"}</strong> &bull; Stage: <strong className="text-indigo-700">{targetEquipmentCode}</strong>
+            </span>
+          </div>
+        </div>
+
+        {/* Action Buttons at Bottom */}
+        <div className="flex items-center gap-2.5 w-full lg:w-auto justify-end flex-wrap">
+          {/* Consolidated Queries Dispatch button if queries are open */}
+          {existingQueryList.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                setActiveInfoTab("CONSOLIDATED" as TabType);
+                setIsInfoModalOpen(true);
+              }}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs transition shadow-sm cursor-pointer"
+              title={`Consolidate and send ${existingQueryList.length} open tab queries to ${existingQueryList[0]?.queryRecipient || "Operator"}`}
+            >
+              <ListChecks className="h-4 w-4" />
+              Consolidated Queries ({existingQueryList.length})
+            </button>
+          )}
+
+          {/* Request Information Button */}
+          <button
+            type="button"
+            onClick={() => {
+              setActiveInfoTab(activeTab);
+              setIsInfoModalOpen(true);
+            }}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-950 border border-amber-300 font-bold text-xs transition shadow-sm cursor-pointer"
+          >
+            <Question className="h-4 w-4 text-amber-700" />
+            Request Information
+          </button>
+
+          {/* Quick Verify & Next Tab button if current tab is pending */}
+          {tabReviews[activeTab]?.status !== "PASSED" && !isApprovedBatch && (
+            <button
+              type="button"
+              onClick={() => handlePassAndNext(activeTab)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition shadow-sm cursor-pointer"
+            >
+              <CheckCircle className="h-4 w-4" />
+              <span>Approve & Next Tab</span>
+            </button>
+          )}
+
+          {/* Workflow Transitions (Submit for Review, Submit for Approve, Approve, Reject, Defer) */}
+          {!isEquipmentOverviewSource && allowedActions.map((action) => {
+            const currentUserId = currentUser?.userId || currentUser?.username || "SYSTEM";
+            const assignedTo = toText(workflowInstance?.assignedTo) || toText((workflowInstance?.context as Record<string, unknown>)?.activeReviewer) || toText(batchSummary?.assignedTo);
+            const isClaimedByMe = Boolean(assignedTo && assignedTo.toUpperCase() === currentUserId.toUpperCase());
+            const isClaimedByOther = Boolean(assignedTo && !isClaimedByMe);
+
+            const passedCount = Object.values(tabReviews).filter((t) => t.status === "PASSED").length;
+            const isAllTabsPassed = passedCount === 6 || isApprovedBatch;
+
+            const isApprove = action.actionType === "APPROVE" || action.actionCode === "APPROVE" || action.actionCode.includes("SUBMIT");
+            const isReject = action.actionType === "REJECT" || action.actionCode === "REJECT" || action.actionCode === "REQUEST_ADDITIONAL_INFO";
+            const isDefer = action.actionType === "DEFER" || action.actionCode === "DEFER";
+
+            // Stage approval gating: "Submit for Review", "Submit for Approve", "Approve" require all tabs to be approved/passed
+            const isSubmissionAction = isApprove || action.actionCode.includes("SUBMIT") || action.actionCode.includes("APPROVE");
+            const isGated = isSubmissionAction && !isAllTabsPassed;
+
+            let btnClass = "bg-indigo-600 hover:bg-indigo-700 text-white";
+            if (isApprove) btnClass = "bg-emerald-600 hover:bg-emerald-700 text-white";
+            if (isReject) btnClass = "bg-rose-600 hover:bg-rose-700 text-white";
+            if (isDefer) btnClass = "bg-purple-600 hover:bg-purple-700 text-white";
+
+            const buttonTitle = isClaimedByOther
+              ? `Action locked: Claimed by ${assignedTo}`
+              : isGated
+              ? `Locked: All 6 tabs must be reviewed and passed first (${passedCount}/6 passed)`
+              : undefined;
+
+            return (
+              <div key={action.actionCode} className="relative group">
+                <button
+                  disabled={isClaimedByOther || isGated}
+                  onClick={() => {
+                    setModalAction(action);
+                    setIsModalOpen(true);
+                  }}
+                  title={buttonTitle}
+                  className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl font-bold text-xs transition shadow-md cursor-pointer ${
+                    isClaimedByOther || isGated
+                      ? "bg-slate-200 text-slate-500 border border-slate-300 cursor-not-allowed opacity-70"
+                      : btnClass
+                  }`}
+                >
+                  <Lock className="h-3.5 w-3.5" />
+                  <span>{action.displayName || action.actionName || action.actionCode}</span>
+                  {isGated && <span className="text-[10px] ml-1 bg-slate-300 px-1.5 py-0.2 rounded text-slate-700">({passedCount}/6 Tabs)</span>}
+                  {isClaimedByOther && <span className="text-[10px] ml-1">(Locked)</span>}
+                </button>
+                {isGated && (
+                  <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block z-50 bg-slate-900 text-white text-[11px] p-2 rounded-lg shadow-xl whitespace-nowrap">
+                    ⚠️ Each tab must be reviewed and approved before overall submission! ({passedCount}/6 tabs passed)
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Dynamic Workflow Action Modal */}
       {modalAction && (
         <WorkflowActionModal
@@ -2894,6 +3386,26 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
           plantId="PLNT-0001"
         />
       )}
+
+      {/* Request Information / Query Modal */}
+      <RequestInformationModal
+        isOpen={isInfoModalOpen}
+        onClose={() => setIsInfoModalOpen(false)}
+        onSuccess={handleInfoQuerySuccess}
+        tabName={activeInfoTab}
+        currentUserRole={userRole}
+        existingQueries={existingQueryList}
+        batchContext={{
+          batchNo: queryBatchNo,
+          lotNo: queryLotNo || toText(batchSummary?.lotNo) || "01 of 05",
+          equipmentCode: queryEquipmentCode || toText(batchSummary?.equipmentId) || "G5RMG",
+          equipmentName: toText(batchSummary?.equipmentId || "Equipment"),
+          productName: toText(batchSummary?.productName || "Allopurinol Tablets"),
+          currentStatus: activeStatus,
+        }}
+        tenantId="TNT-0001"
+        plantId="PLNT-0001"
+      />
     </div>
   );
 }
