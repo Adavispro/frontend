@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Poppins, Alan_Sans } from "next/font/google";
 import "./globals.css";
+import SessionInactivityController from "@/components/session/SessionInactivityController";
 
 const poppins = Poppins({
   variable: "--font-poppins",
@@ -37,7 +38,10 @@ export default function RootLayout({
       lang="en"
       className={`${poppins.variable} ${alanSans.variable} h-full antialiased`}
     >
-      <body className="min-h-full font-sans">{children}</body>
+      <body className="min-h-full font-sans">
+        {children}
+        <SessionInactivityController />
+      </body>
     </html>
   );
 }

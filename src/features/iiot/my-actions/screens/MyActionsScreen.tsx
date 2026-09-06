@@ -3,7 +3,6 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Eye,
   CheckCircle,
   Clock,
   ShieldCheck,
@@ -13,31 +12,22 @@ import {
   ArrowCounterClockwise,
   UserCheck,
   CheckSquare,
-  Lock,
   CaretUp,
   CaretDown,
   ChartDonut,
-  UserPlus,
-  PaperPlaneTilt,
-  Question,
-  ChatCenteredText,
-  ClockCountdown,
 } from "@phosphor-icons/react";
 import { useLoginContext } from "@/features/auth/hooks/useCurrentUser";
 import {
   getBatchSummaryPaginated,
   getWorkflowDashboardCounts,
   getMyActions,
-  getAllowedActions,
-  claimWorkflowTask,
   deduplicateAllowedActions,
+  getAllowedActions,
   type AllowedWorkflowAction,
   type WorkflowDashboardCounts,
-  type BulkExecutionResult,
 } from "@/features/iiot/equipment/api/reports.api";
 import type { BatchSummary } from "@/features/iiot/equipment/schemas/reports.schema";
 import Pagination from "@/components/ui/Pagination";
-import { WorkflowActionModal } from "../../components/WorkflowActionModal";
 import WorkflowActivityCard from "../components/WorkflowActivityCard";
 import { ROUTES } from "@/config/routes";
 
@@ -116,9 +106,6 @@ export default function MyActionsScreen() {
   const [equipmentTypeFilter, setEquipmentTypeFilter] = useState("ALL");
   const [showActivityChart, setShowActivityChart] = useState(false);
 
-  // Multi-Selection State
-  const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
-
   // Sorting state
   const [sortField, setSortField] = useState<SortField>("lastActionAt");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
@@ -127,15 +114,6 @@ export default function MyActionsScreen() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(5);
 
-  // Modal State (Single & Bulk)
-  const [modalAction, setModalAction] = useState<AllowedWorkflowAction | null>(null);
-  const [selectedItem, setSelectedItem] = useState<MyActionItem | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-
-  const [bulkModalAction, setBulkModalAction] = useState<AllowedWorkflowAction | null>(null);
-  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
-
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [actionsCache, setActionsCache] = useState<Record<string, AllowedWorkflowAction[]>>({});
   const [isResolvingPageActions, setIsResolvingPageActions] = useState(false);
 
@@ -245,92 +223,6 @@ export default function MyActionsScreen() {
   useEffect(() => {
     loadData();
   }, [loadData]);
-
-  // Reconcile selection state when items change
-  useEffect(() => {
-    const validIds = new Set(items.map((i) => i.id));
-    setSelectedTaskIds((prev) => {
-      let hasInvalid = false;
-      for (const id of prev) {
-        if (!validIds.has(id)) {
-          hasInvalid = true;
-          break;
-        }
-      }
-      if (!hasInvalid) return prev;
-      const next = new Set<string>();
-      for (const id of prev) {
-        if (validIds.has(id)) next.add(id);
-      }
-      return next;
-    });
-  }, [items]);
-
-  const handleOpenActionModal = (action: AllowedWorkflowAction, item: MyActionItem) => {
-    setModalAction(action);
-    setSelectedItem(item);
-    setIsModalOpen(true);
-  };
-
-  const handleQuickClaim = async (item: MyActionItem) => {
-    try {
-      const userRole = (loginContext?.roles?.[0] as Record<string, unknown>)?.roleCode as string || "PRODUCTION_REVIEWER";
-      const res = await claimWorkflowTask({
-        batchNo: item.batchNo,
-        lotNo: item.lotNo,
-        equipmentCode: item.equipmentCode,
-        userRole: userRole,
-        tenantId: "TNT-0001",
-      });
-      setSuccessMessage(res.message || `Task ${item.batchNo} assigned to you!`);
-      loadData();
-      setTimeout(() => setSuccessMessage(null), 5000);
-    } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "Failed to claim task");
-    }
-  };
-
-  const handleActionSuccess = () => {
-    setSuccessMessage("Workflow action executed successfully and recorded in audit trail!");
-    loadData();
-    setTimeout(() => setSuccessMessage(null), 5000);
-  };
-
-  const handleOpenBulkActionModal = (action: AllowedWorkflowAction) => {
-    setBulkModalAction(action);
-    setIsBulkModalOpen(true);
-  };
-
-  const handleBulkActionSuccess = (result?: BulkExecutionResult) => {
-    if (result && result.failureCount > 0) {
-      setSuccessMessage(
-        `${result.successCount} of ${result.totalRequested} actions executed successfully. ${result.failureCount} task(s) could not be completed.`
-      );
-    } else {
-      setSuccessMessage(
-        `${selectedTaskIds.size} workflow actions executed successfully and recorded in audit trail!`
-      );
-    }
-    setSelectedTaskIds(new Set());
-    loadData();
-    setTimeout(() => setSuccessMessage(null), 6000);
-  };
-
-  const handleToggleItemSelection = (id: string) => {
-    setSelectedTaskIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  };
-
-  const handleClearSelection = () => {
-    setSelectedTaskIds(new Set());
-  };
 
   // Status-specific counts for quick badge display
   const statusCounts = useMemo(() => {
@@ -533,48 +425,6 @@ export default function MyActionsScreen() {
       isSubscribed = false;
     };
   }, [paginatedItems, actionsCache]);
-
-  const selectedItems = useMemo(() => {
-    return items.filter((it) => selectedTaskIds.has(it.id));
-  }, [items, selectedTaskIds]);
-
-  const visibleIds = useMemo(() => {
-    return paginatedItems.map((it) => it.id);
-  }, [paginatedItems]);
-
-  const isAllVisibleSelected =
-    visibleIds.length > 0 && visibleIds.every((id) => selectedTaskIds.has(id));
-  const isSomeVisibleSelected =
-    visibleIds.some((id) => selectedTaskIds.has(id)) && !isAllVisibleSelected;
-
-  const handleToggleSelectAllVisible = () => {
-    setSelectedTaskIds((prev) => {
-      const next = new Set(prev);
-      if (isAllVisibleSelected) {
-        visibleIds.forEach((id) => next.delete(id));
-      } else {
-        visibleIds.forEach((id) => next.add(id));
-      }
-      return next;
-    });
-  };
-
-  // Calculate common executable actions across all selected items using canonical action codes
-  const commonAllowedActions = useMemo(() => {
-    if (selectedItems.length === 0) return [];
-
-    const firstItemActions = deduplicateAllowedActions(actionsCache[selectedItems[0].id] || selectedItems[0].allowedActions || []);
-    if (firstItemActions.length === 0) return [];
-
-    return firstItemActions.filter((firstAction) => {
-      const firstCode = (firstAction.actionCode || "").toUpperCase();
-      return selectedItems.every((otherItem) => {
-        const otherActions = deduplicateAllowedActions(actionsCache[otherItem.id] || otherItem.allowedActions || []);
-        return otherActions.some((act) => (act.actionCode || "").toUpperCase() === firstCode);
-      });
-    });
-  }, [selectedItems, actionsCache]);
-
   return (
     <div className="flex-1 space-y-4 p-4 sm:p-5 bg-slate-50 text-slate-900 min-h-screen">
       {/* Header */}
@@ -589,21 +439,22 @@ export default function MyActionsScreen() {
           </p>
         </div>
         <button
-          onClick={loadData}
-          disabled={isLoading}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 rounded-lg text-xs sm:text-sm font-medium border border-slate-200 shadow-sm transition self-start md:self-auto"
+          type="button"
+          onClick={() => {
+            if (!isLoading) {
+              loadData();
+            }
+          }}
+          aria-disabled={isLoading}
+          suppressHydrationWarning
+          className={`inline-flex items-center gap-1.5 px-3 py-1.5 bg-white text-slate-700 rounded-lg text-xs sm:text-sm font-medium border border-slate-200 shadow-sm transition self-start md:self-auto ${
+            isLoading ? "opacity-60 cursor-not-allowed pointer-events-none" : "hover:bg-slate-100 cursor-pointer"
+          }`}
         >
           <ArrowClockwise className={`h-4 w-4 text-slate-600 ${isLoading ? "animate-spin" : ""}`} />
           Refresh
         </button>
       </div>
-
-      {successMessage && (
-        <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs sm:text-sm font-medium flex items-center gap-2 shadow-sm animate-in fade-in duration-300">
-          <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-emerald-600 flex-shrink-0" />
-          <span>{successMessage}</span>
-        </div>
-      )}
 
       {/* Metric Cards Grid (4 KPI Cards - Clickable Filters) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
@@ -759,78 +610,12 @@ export default function MyActionsScreen() {
         </span>
       </div>
 
-      {/* Dynamic Bulk Action Toolbar */}
-      {selectedTaskIds.size > 0 && (
-        <div className="p-3 bg-indigo-50/90 border border-indigo-200 rounded-xl flex flex-wrap items-center justify-between gap-2.5 animate-in fade-in duration-200 shadow-sm">
-          <div className="flex items-center gap-2.5">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-indigo-600 text-white rounded-md text-xs font-bold font-mono shadow-sm">
-              <CheckSquare className="h-3.5 w-3.5" />
-              {selectedTaskIds.size} Selected
-            </span>
-            <span className="text-xs text-indigo-950 font-medium">
-              {selectedItems.length === 1
-                ? "1 batch task selected"
-                : `${selectedItems.length} tasks selected across ${new Set(selectedItems.map((i) => i.batchNo)).size} batches`}
-            </span>
-            <button
-              type="button"
-              onClick={handleClearSelection}
-              className="text-xs font-semibold text-indigo-700 hover:text-indigo-900 hover:underline ml-2"
-            >
-              Clear
-            </button>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {commonAllowedActions.length > 0 ? (
-              commonAllowedActions.map((action) => {
-                const isApprove = action.actionType === "APPROVE";
-                const isReject = action.actionType === "REJECT";
-                const isJustify = action.actionType === "JUSTIFY";
-
-                let buttonStyle = "bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm";
-                if (isApprove) buttonStyle = "bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm";
-                if (isReject) buttonStyle = "bg-rose-600 hover:bg-rose-700 text-white shadow-sm";
-                if (isJustify) buttonStyle = "bg-amber-600 hover:bg-amber-700 text-white shadow-sm";
-
-                return (
-                  <button
-                    key={`bulk-btn-${action.actionCode}`}
-                    onClick={() => handleOpenBulkActionModal(action)}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition ${buttonStyle}`}
-                  >
-                    <Lock className="h-3 w-3 opacity-90" />
-                    {action.displayName || action.actionName || action.actionCode} ({selectedTaskIds.size})
-                  </button>
-                );
-              })
-            ) : (
-              <span className="text-xs text-amber-800 bg-amber-100/90 border border-amber-200 px-2.5 py-1 rounded-lg font-medium">
-                No common action is available for selected tasks.
-              </span>
-            )}
-          </div>
-        </div>
-      )}
-
       {/* Task Queue Table */}
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs text-slate-700">
             <thead className="bg-slate-50 text-[10px] font-semibold text-slate-600 uppercase tracking-wider border-b border-slate-200 select-none">
               <tr>
-                <th className="py-2.5 px-3 w-10 text-center">
-                  <input
-                    type="checkbox"
-                    checked={isAllVisibleSelected}
-                    ref={(el) => {
-                      if (el) el.indeterminate = isSomeVisibleSelected;
-                    }}
-                    onChange={handleToggleSelectAllVisible}
-                    aria-label="Select all visible batch tasks"
-                    className="h-3.5 w-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                  />
-                </th>
                 <th
                   onClick={() => handleSortToggle("batchNo")}
                   className="py-2.5 px-3 cursor-pointer hover:bg-slate-100/80 transition"
@@ -885,13 +670,13 @@ export default function MyActionsScreen() {
                     {renderSortIndicator("lastActionAt")}
                   </div>
                 </th>
-                <th className="py-2.5 px-3 text-right">Dynamic Actions</th>
+                <th className="py-2.5 px-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {isLoading ? (
                 <tr>
-                  <td colSpan={8} className="py-8 text-center text-slate-500 font-medium">
+                  <td colSpan={7} className="py-8 text-center text-slate-500 font-medium">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <ArrowClockwise className="h-5 w-5 animate-spin text-indigo-600" />
                       <span className="text-xs">Resolving dynamic state machine authorizations...</span>
@@ -900,7 +685,7 @@ export default function MyActionsScreen() {
                 </tr>
               ) : paginatedItems.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-8 text-center text-slate-500 font-medium">
+                  <td colSpan={7} className="py-8 text-center text-slate-500 font-medium">
                     <div className="flex flex-col items-center justify-center gap-1.5">
                       <CheckCircle className="h-6 w-6 text-emerald-500 opacity-60" />
                       <span className="text-slate-700 font-semibold text-xs">No action items found</span>
@@ -944,24 +729,11 @@ export default function MyActionsScreen() {
                 </tr>
               ) : (
                 paginatedItems.map((item) => {
-                  const isSelected = selectedTaskIds.has(item.id);
-                  const itemActions = actionsCache[item.id] || item.allowedActions || [];
-                  const deduplicatedActions = deduplicateAllowedActions(itemActions);
-
                   return (
                     <tr
                       key={item.id}
-                      className={`transition group ${isSelected ? "bg-indigo-50/60" : "hover:bg-slate-50/80"}`}
+                      className="transition hover:bg-slate-50/80"
                     >
-                      <td className="py-2.5 px-3 w-10 text-center">
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => handleToggleItemSelection(item.id)}
-                          aria-label={`Select task for batch ${item.batchNo} stage ${item.equipmentCode}`}
-                          className="h-3.5 w-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                        />
-                      </td>
                       <td className="py-2.5 px-3 font-mono font-medium text-slate-900">
                         <div className="font-bold text-slate-900 text-xs">{item.batchNo}</div>
                         <div className="text-[10px] text-slate-500 font-sans">{item.lotNo}</div>
@@ -1005,83 +777,20 @@ export default function MyActionsScreen() {
                         <div className="text-[9px] text-slate-400 font-sans">by {item.lastAction}</div>
                       </td>
                       <td className="py-2.5 px-3 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          {/* Canonical Compact View Details Button with Tooltip */}
-                          <button
-                            onClick={() => {
-                              const detailUrl = `${ROUTES.iiotBatchDetails}/${item.batchNo}?lotNo=${encodeURIComponent(
-                                item.lotNo
-                              )}&equipmentCode=${encodeURIComponent(
-                                item.equipmentCode
-                              )}&returnTo=${encodeURIComponent(ROUTES.iiotMyActions)}`;
-                              router.push(detailUrl);
-                            }}
-                            className="p-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 shadow-sm transition hover:text-indigo-600 inline-flex items-center justify-center"
-                            title="View Batch Details"
-                            aria-label="View Batch Details"
-                          >
-                            <Eye className="h-3.5 w-3.5" />
-                          </button>
-
-                          {/* Compact Assign to Me Button with Tooltip */}
-                          {(item.rawStatus === "UNDER_REVIEW" || item.rawStatus === "IN_REVIEW" || item.rawStatus === "PENDING_APPROVAL") && (
-                            <button
-                              onClick={() => handleQuickClaim(item)}
-                              className="p-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 shadow-sm transition inline-flex items-center justify-center"
-                              title="Claim this batch for your review"
-                              aria-label="Claim this batch for your review"
-                            >
-                              <UserPlus className="h-3.5 w-3.5" />
-                            </button>
-                          )}
-
-                          {/* Dynamically configured deduplicated row actions as compact icon buttons */}
-                          {deduplicatedActions.map((action) => {
-                            const code = (action.actionCode || "").toUpperCase();
-                            const type = (action.actionType || "").toUpperCase();
-                            const isApprove = type === "APPROVE" || code.includes("APPROVE");
-                            const isReject = type === "REJECT" || type === "RETURN" || code.includes("REQUEST_ADDITIONAL") || code.includes("REJECT");
-                            const isJustify = type === "JUSTIFY" || type === "RESPONSE" || code.includes("RESPONSE");
-                            const isApprovalSubmit = code.includes("APPROVAL");
-                            const isDefer = type === "DEFER" || code.includes("DEFER");
-
-                            let buttonStyle = "bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm";
-                            if (isApprove) buttonStyle = "bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm";
-                            else if (isReject) buttonStyle = "bg-rose-600 hover:bg-rose-700 text-white shadow-sm";
-                            else if (isJustify) buttonStyle = "bg-amber-600 hover:bg-amber-700 text-white shadow-sm";
-                            else if (isApprovalSubmit) buttonStyle = "bg-blue-600 hover:bg-blue-700 text-white shadow-sm";
-                            else if (isDefer) buttonStyle = "bg-purple-600 hover:bg-purple-700 text-white shadow-sm";
-
-                            const title = action.displayName || action.actionName || action.actionCode;
-
-                            let IconComponent = Lock;
-                            if (code.includes("REVIEW") && (code.includes("SUBMIT") || code.includes("SEND"))) {
-                              IconComponent = PaperPlaneTilt;
-                            } else if (code.includes("APPROVAL") && (code.includes("SUBMIT") || code.includes("SEND"))) {
-                              IconComponent = CheckSquare;
-                            } else if (isReject) {
-                              IconComponent = Question;
-                            } else if (isJustify) {
-                              IconComponent = ChatCenteredText;
-                            } else if (isApprove) {
-                              IconComponent = CheckCircle;
-                            } else if (isDefer) {
-                              IconComponent = ClockCountdown;
-                            }
-
-                            return (
-                              <button
-                                key={action.actionCode}
-                                onClick={() => handleOpenActionModal(action, item)}
-                                title={title}
-                                aria-label={title}
-                                className={`p-1.5 rounded-lg transition inline-flex items-center justify-center ${buttonStyle}`}
-                              >
-                                <IconComponent className="h-3.5 w-3.5" />
-                              </button>
-                            );
-                          })}
-                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const detailUrl = `${ROUTES.iiotBatchDetails}/${item.batchNo}?lotNo=${encodeURIComponent(
+                              item.lotNo
+                            )}&equipmentCode=${encodeURIComponent(
+                              item.equipmentCode
+                            )}&returnTo=${encodeURIComponent(ROUTES.iiotMyActions)}`;
+                            router.push(detailUrl);
+                          }}
+                          className="inline-flex items-center justify-center px-2.5 py-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded-md transition cursor-pointer"
+                        >
+                          View
+                        </button>
                       </td>
                     </tr>
                   );
@@ -1106,55 +815,6 @@ export default function MyActionsScreen() {
           />
         )}
       </div>
-
-      {/* Single Item Workflow Action Modal */}
-      {selectedItem && modalAction && (
-        <WorkflowActionModal
-          isOpen={isModalOpen}
-          onClose={() => {
-            setIsModalOpen(false);
-            setSelectedItem(null);
-            setModalAction(null);
-          }}
-          onSuccess={handleActionSuccess}
-          action={modalAction}
-          batchContext={{
-            batchNo: selectedItem.batchNo,
-            lotNo: selectedItem.lotNo,
-            equipmentCode: selectedItem.equipmentCode,
-            equipmentName: selectedItem.equipmentType,
-            productName: selectedItem.productName,
-            currentStatus: selectedItem.rawStatus,
-          }}
-          tenantId={loginContext?.tenantId ? String(loginContext.tenantId) : "TNT-0001"}
-          plantId={loginContext?.plantId ? String(loginContext.plantId) : "PLNT-0001"}
-        />
-      )}
-
-      {/* Bulk Items Workflow Action Modal */}
-      {bulkModalAction && isBulkModalOpen && (
-        <WorkflowActionModal
-          isOpen={isBulkModalOpen}
-          onClose={() => {
-            setIsBulkModalOpen(false);
-            setBulkModalAction(null);
-          }}
-          onSuccess={handleBulkActionSuccess}
-          action={bulkModalAction}
-          bulkContext={{
-            items: selectedItems.map((i) => ({
-              batchNo: i.batchNo,
-              lotNo: i.lotNo,
-              equipmentCode: i.equipmentCode,
-              productName: i.productName,
-              currentStatus: i.rawStatus,
-            })),
-            commonAction: bulkModalAction,
-          }}
-          tenantId={loginContext?.tenantId ? String(loginContext.tenantId) : "TNT-0001"}
-          plantId={loginContext?.plantId ? String(loginContext.plantId) : "PLNT-0001"}
-        />
-      )}
     </div>
   );
 }

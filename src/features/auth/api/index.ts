@@ -4,6 +4,7 @@ export {
   initiateLogin,
   login,
   logout,
+  sessionHeartbeat,
 } from "./auth.api";
 export {
   adminResetPassword,

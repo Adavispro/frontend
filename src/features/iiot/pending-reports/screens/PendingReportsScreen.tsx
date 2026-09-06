@@ -4,12 +4,10 @@ import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
   ClipboardText,
-  Eye,
   MagnifyingGlass,
   Funnel,
   ArrowClockwise,
   ArrowCounterClockwise,
-  Lock,
   CheckCircle,
   CaretDown,
   CaretUp,
@@ -20,11 +18,6 @@ import {
   Hash,
   Gear,
   WarningCircle,
-  PaperPlaneTilt,
-  CheckSquare,
-  Question,
-  ChatCenteredText,
-  ClockCountdown,
 } from "@phosphor-icons/react";
 import {
   getBatchSummaryPaginated,
@@ -35,7 +28,6 @@ import {
 } from "@/features/iiot/equipment/api/reports.api";
 import type { BatchSummary } from "@/features/iiot/equipment/schemas/reports.schema";
 import Pagination from "@/components/ui/Pagination";
-import { WorkflowActionModal } from "../../components/WorkflowActionModal";
 import { ROUTES } from "@/config/routes";
 
 export interface PendingBatchItem {
@@ -136,11 +128,6 @@ export default function PendingReportsScreen() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
-  // Modal State
-  const [modalAction, setModalAction] = useState<AllowedWorkflowAction | null>(null);
-  const [selectedItem, setSelectedItem] = useState<PendingBatchItem | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [actionsCache, setActionsCache] = useState<Record<string, AllowedWorkflowAction[]>>({});
 
   const loadData = useCallback(async () => {
@@ -260,12 +247,6 @@ export default function PendingReportsScreen() {
   useEffect(() => {
     loadData();
   }, [loadData]);
-
-  const handleActionSuccess = () => {
-    setSuccessMessage("Workflow action executed successfully!");
-    loadData();
-    setTimeout(() => setSuccessMessage(null), 5000);
-  };
 
   // Product Code -> Product Name lookup map
   const productCodeToNameMap = useMemo(() => {
@@ -563,23 +544,23 @@ export default function PendingReportsScreen() {
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <button
-            onClick={loadData}
-            disabled={isLoading}
-            className="inline-flex items-center gap-2 px-3.5 py-2 bg-white hover:bg-slate-100 text-slate-700 rounded-lg text-sm font-medium border border-slate-200 shadow-sm transition"
+            type="button"
+            onClick={() => {
+              if (!isLoading) {
+                loadData();
+              }
+            }}
+            aria-disabled={isLoading}
+            suppressHydrationWarning
+            className={`inline-flex items-center gap-2 px-3.5 py-2 bg-white text-slate-700 rounded-lg text-sm font-medium border border-slate-200 shadow-sm transition ${
+              isLoading ? "opacity-60 cursor-not-allowed pointer-events-none" : "hover:bg-slate-100 cursor-pointer"
+            }`}
           >
             <ArrowClockwise className={`h-4 w-4 text-slate-600 ${isLoading ? "animate-spin" : ""}`} />
             Refresh Queue
           </button>
         </div>
       </div>
-
-      {/* Success Notification */}
-      {successMessage && (
-        <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-sm font-medium flex items-center gap-2 shadow-sm animate-in fade-in duration-300">
-          <CheckCircle className="h-5 w-5 text-emerald-600 flex-shrink-0" />
-          <span>{successMessage}</span>
-        </div>
-      )}
 
       {/* Error Notification */}
       {errorMessage && (
@@ -908,74 +889,20 @@ export default function PendingReportsScreen() {
                       {toDisplayDate(item.pendingSince)}
                     </td>
                     <td className="py-3 px-4 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        {/* Compact View Details Button with Tooltip */}
-                        <button
-                          onClick={() => {
-                            const detailUrl = `${ROUTES.iiotBatchDetails}/${item.batchNo}?lotNo=${encodeURIComponent(
-                              item.lotNo
-                            )}&equipmentCode=${encodeURIComponent(
-                              item.equipmentCode
-                            )}&returnTo=${encodeURIComponent(ROUTES.iiotPendingBatches)}`;
-                            router.push(detailUrl);
-                          }}
-                          title="View Batch Details"
-                          aria-label="View Batch Details"
-                          className="p-2 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 shadow-sm transition hover:text-indigo-600 inline-flex items-center justify-center"
-                        >
-                          <Eye className="h-4 w-4" />
-                        </button>
-
-                        {(actionsCache[item.id] || item.allowedActions || []).map((action) => {
-                          const code = (action.actionCode || "").toUpperCase();
-                          const type = (action.actionType || "").toUpperCase();
-                          const isApprove = type === "APPROVE" || code.includes("APPROVE");
-                          const isReject = type === "REJECT" || type === "RETURN" || code.includes("REQUEST_ADDITIONAL") || code.includes("REJECT");
-                          const isJustify = type === "JUSTIFY" || type === "RESPONSE" || code.includes("RESPONSE");
-                          const isApprovalSubmit = code.includes("APPROVAL");
-                          const isDefer = type === "DEFER" || code.includes("DEFER");
-
-                          let buttonStyle = "bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm";
-                          if (isApprove) buttonStyle = "bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm";
-                          else if (isReject) buttonStyle = "bg-rose-600 hover:bg-rose-700 text-white shadow-sm";
-                          else if (isJustify) buttonStyle = "bg-amber-600 hover:bg-amber-700 text-white shadow-sm";
-                          else if (isApprovalSubmit) buttonStyle = "bg-blue-600 hover:bg-blue-700 text-white shadow-sm";
-                          else if (isDefer) buttonStyle = "bg-purple-600 hover:bg-purple-700 text-white shadow-sm";
-
-                          const title = action.displayName || action.actionName || action.actionCode;
-
-                          let IconComponent = Lock;
-                          if (code.includes("REVIEW") && (code.includes("SUBMIT") || code.includes("SEND"))) {
-                            IconComponent = PaperPlaneTilt;
-                          } else if (code.includes("APPROVAL") && (code.includes("SUBMIT") || code.includes("SEND"))) {
-                            IconComponent = CheckSquare;
-                          } else if (isReject) {
-                            IconComponent = Question;
-                          } else if (isJustify) {
-                            IconComponent = ChatCenteredText;
-                          } else if (isApprove) {
-                            IconComponent = CheckCircle;
-                          } else if (isDefer) {
-                            IconComponent = ClockCountdown;
-                          }
-
-                          return (
-                            <button
-                              key={action.actionCode}
-                              onClick={() => {
-                                setModalAction(action);
-                                setSelectedItem(item);
-                                setIsModalOpen(true);
-                              }}
-                              title={title}
-                              aria-label={title}
-                              className={`p-2 rounded-lg transition inline-flex items-center justify-center ${buttonStyle}`}
-                            >
-                              <IconComponent className="h-4 w-4" />
-                            </button>
-                          );
-                        })}
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const detailUrl = `${ROUTES.iiotBatchDetails}/${item.batchNo}?lotNo=${encodeURIComponent(
+                            item.lotNo
+                          )}&equipmentCode=${encodeURIComponent(
+                            item.equipmentCode
+                          )}&returnTo=${encodeURIComponent(ROUTES.iiotPendingBatches)}`;
+                          router.push(detailUrl);
+                        }}
+                        className="inline-flex items-center justify-center px-2.5 py-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded-md transition cursor-pointer"
+                      >
+                        View
+                      </button>
                     </td>
                   </tr>
                 ))
@@ -1001,30 +928,6 @@ export default function PendingReportsScreen() {
           </div>
         )}
       </div>
-
-      {/* 5-Step Dynamic Workflow Action Modal */}
-      {selectedItem && modalAction && (
-        <WorkflowActionModal
-          isOpen={isModalOpen}
-          onClose={() => {
-            setIsModalOpen(false);
-            setSelectedItem(null);
-            setModalAction(null);
-          }}
-          onSuccess={handleActionSuccess}
-          action={modalAction}
-          batchContext={{
-            batchNo: selectedItem.batchNo,
-            lotNo: selectedItem.lotNo,
-            equipmentCode: selectedItem.equipmentCode,
-            equipmentName: selectedItem.equipmentType,
-            productName: selectedItem.productName,
-            currentStatus: selectedItem.rawStatus,
-          }}
-          tenantId="TNT-0001"
-          plantId="PLNT-0001"
-        />
-      )}
     </div>
   );
 }

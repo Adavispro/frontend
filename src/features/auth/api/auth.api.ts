@@ -52,6 +52,12 @@ export const logout = () =>
     method: "POST",
   });
 
+export const sessionHeartbeat = () =>
+  apiClient<BackendApiResponse<unknown>>(APP_API_ENDPOINTS.auth.heartbeat, {
+    method: "POST",
+    retryOnUnauthorized: false,
+  });
+
 export const getLoginContext = async () => {
   const result = await apiClient<BackendApiResponse<LoginContext>>(
     APP_API_ENDPOINTS.auth.context,

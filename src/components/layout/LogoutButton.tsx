@@ -7,7 +7,7 @@ import { ApiError } from "@/api";
 import { Snackbar } from "@/components/ui";
 import { ROUTES } from "@/config/routes";
 import { logout } from "@/features/auth/api";
-import { invalidateLoginContext } from "@/features/auth/hooks/useCurrentUser";
+import { sessionInactivityManager } from "@/services/session/sessionInactivityManager";
 
 export default function LogoutButton() {
   const router = useRouter();
@@ -21,28 +21,14 @@ export default function LogoutButton() {
     setErrorMessage("");
 
     try {
-      await logout();
-      invalidateLoginContext({ refetch: false });
-      if (typeof window !== "undefined") {
-        window.localStorage.clear();
-        window.sessionStorage.clear();
-      }
-      router.replace(ROUTES.login);
-      router.refresh();
+      await sessionInactivityManager.logoutNow();
     } catch (error) {
-      invalidateLoginContext({ refetch: false });
-      if (typeof window !== "undefined") {
-        window.localStorage.clear();
-        window.sessionStorage.clear();
-      }
       setErrorMessage(
         error instanceof ApiError
           ? error.message
           : "Unable to log out. Please try again.",
       );
       setIsLoggingOut(false);
-      router.replace(ROUTES.login);
-      router.refresh();
     }
   };
 
