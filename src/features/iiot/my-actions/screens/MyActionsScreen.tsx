@@ -421,7 +421,7 @@ export default function MyActionsScreen() {
               Actionable by Me
             </span>
             <span className="text-xl sm:text-2xl font-bold text-indigo-600 font-mono mt-0.5 block">
-              {counts.pendingMyAction}
+              {items.length}
             </span>
             <span className="text-[10px] text-slate-400 mt-0.5 block">Requires your role sign-off</span>
           </div>
@@ -442,7 +442,7 @@ export default function MyActionsScreen() {
               Under Review
             </span>
             <span className="text-xl sm:text-2xl font-bold text-amber-600 font-mono mt-0.5 block">
-              {counts.pendingReview}
+              {statusCounts.underReview}
             </span>
             <span className="text-[10px] text-slate-400 mt-0.5 block">Stages in peer review</span>
           </div>
@@ -463,7 +463,7 @@ export default function MyActionsScreen() {
               Pending QA Approval
             </span>
             <span className="text-xl sm:text-2xl font-bold text-blue-600 font-mono mt-0.5 block">
-              {counts.pendingApproval}
+              {statusCounts.pendingApproval}
             </span>
             <span className="text-[10px] text-slate-400 mt-0.5 block">Awaiting formal release</span>
           </div>
@@ -484,7 +484,7 @@ export default function MyActionsScreen() {
               Completed Actions
             </span>
             <span className="text-xl sm:text-2xl font-bold text-emerald-600 font-mono mt-0.5 block">
-              {counts.completedActions}
+              {statusCounts.approved}
             </span>
             <span className="text-[10px] text-slate-400 mt-0.5 block">Approved batch stages</span>
           </div>
@@ -520,12 +520,12 @@ export default function MyActionsScreen() {
               className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
               <option value="ALL">All Statuses ({items.length})</option>
-              <option value="MY_ACTION">Actionable by Me ({counts.pendingMyAction})</option>
+              <option value="MY_ACTION">Actionable by Me ({items.length})</option>
               <option value="PENDING">Pending Submission ({statusCounts.pendingSubmission})</option>
-              <option value="UNDER_REVIEW">Under Review ({counts.pendingReview})</option>
-              <option value="PENDING_APPROVAL">Pending Approval ({counts.pendingApproval})</option>
+              <option value="UNDER_REVIEW">Under Review ({statusCounts.underReview})</option>
+              <option value="PENDING_APPROVAL">Pending Approval ({statusCounts.pendingApproval})</option>
               <option value="RETURNED">Returned / Rejected ({statusCounts.returned})</option>
-              <option value="APPROVED">Approved / Completed ({counts.completedActions})</option>
+              <option value="APPROVED">Approved / Completed ({statusCounts.approved})</option>
             </select>
 
             <select
