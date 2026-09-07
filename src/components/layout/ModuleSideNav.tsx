@@ -75,6 +75,14 @@ interface NavigationItem {
 
 const iiotNavigationItems: NavigationItem[] = [
   {
+    label: "Pending Batches",
+    icon: ClipboardText,
+    href: ROUTES.iiotPendingReports,
+    isActive: (pathname) =>
+      pathname === ROUTES.iiotPendingReports ||
+      pathname === ROUTES.iiotDeferredBatches,
+  },
+  {
     label: "My Actions",
     icon: ShieldCheck,
     href: ROUTES.iiotMyActions,
@@ -89,14 +97,6 @@ const iiotNavigationItems: NavigationItem[] = [
       pathname.startsWith(`${ROUTES.iiotEquipmentOverview}/`) ||
       pathname === ROUTES.iiotEquipment ||
       pathname.startsWith(`${ROUTES.iiotEquipment}/`),
-  },
-  {
-    label: "Pending Batches",
-    icon: ClipboardText,
-    href: ROUTES.iiotPendingReports,
-    isActive: (pathname) =>
-      pathname === ROUTES.iiotPendingReports ||
-      pathname === ROUTES.iiotDeferredBatches,
   },
   {
     label: "Approved Batches",

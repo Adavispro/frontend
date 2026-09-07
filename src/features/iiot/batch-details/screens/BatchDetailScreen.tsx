@@ -1281,7 +1281,15 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
       setActionSuccessMsg(res.message || "Task successfully assigned to you!");
       await loadBatchData();
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "Failed to claim review task");
+      const isConflict =
+        (err && typeof err === "object" && "status" in err && (err as { status: number }).status === 409) ||
+        (err instanceof Error && (err.message.includes("already claimed") || err.message.includes("409")));
+      if (isConflict) {
+        alert("This batch has already been claimed by another user. Reloading batch status.");
+        await loadBatchData();
+      } else {
+        alert(err instanceof Error ? err.message : "Failed to claim review task");
+      }
     } finally {
       setIsClaiming(false);
     }

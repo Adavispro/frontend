@@ -18,7 +18,6 @@ import {
 } from "@phosphor-icons/react";
 import { useLoginContext } from "@/features/auth/hooks/useCurrentUser";
 import {
-  getBatchSummaryPaginated,
   getWorkflowDashboardCounts,
   getMyActions,
   deduplicateAllowedActions,
@@ -163,55 +162,7 @@ export default function MyActionsScreen() {
         setActionsCache((prev) => ({ ...prev, ...initialCache }));
         setItems(extracted);
       } else {
-        // Fallback to extracting from batch summaries if my-actions returns empty
-        const batchSummaries = await getBatchSummaryPaginated({ limit: 50 }).catch(() => []);
-        const extracted: MyActionItem[] = [];
-
-        for (const summary of batchSummaries) {
-          const batchNo = toText(summary.batchNo);
-          const lotNo = toText(summary.lotNo);
-          const productCode = toText(summary.productCode);
-          const productName = toText(summary.productName);
-          const stages = (summary.stages as Array<Record<string, unknown>>) || [];
-          const summaryId = toText(
-            summary.id || (summary as Record<string, unknown>)._id || `${summary.lineId || "LINE"}_${batchNo}`
-          );
-
-          for (const stage of stages) {
-            const equipmentCode = toText(stage.equipmentCode || stage.equipmentId);
-            const equipmentType = toText(stage.equipmentType || equipmentCode.slice(-3));
-            const approval = (stage.approval as Record<string, unknown>) || {};
-            const rawStatus = toText(approval.status || "PENDING").toUpperCase();
-            const sequence = typeof stage.sequenceOrder === "number" ? stage.sequenceOrder : 1;
-
-            let displayStatus = rawStatus.replace(/_/g, " ");
-            if (rawStatus === "REVIEWER_REVIEWED") displayStatus = "Pending Approval";
-            if (rawStatus === "UNDER_REVIEW") displayStatus = "Under Review";
-            if (rawStatus === "RETURNED_TO_OPERATOR") displayStatus = "Returned to Operator";
-
-            const id = `${summaryId}:${batchNo}:${lotNo}:${equipmentCode}:${sequence}`;
-
-            extracted.push({
-              id,
-              batchNo,
-              lotNo,
-              productCode,
-              productName: productName || "Finasteride USP 5 mg",
-              equipmentCode,
-              equipmentType,
-              workflowStage: `Stage ${sequence} (${equipmentType})`,
-              stageSequence: sequence,
-              rawStatus,
-              displayStatus,
-              lastAction: toText(approval.transitionedBy || stage.operatorName || "-"),
-              lastActionAt: toText(approval.transitionedAt || stage.stageEndAt || summary.updatedAt),
-              allowedActions: [],
-              summaryRef: summary,
-            });
-          }
-        }
-
-        setItems(extracted);
+        setItems([]);
       }
     } catch (err) {
       console.error("Failed to load My Actions data", err);
@@ -683,46 +634,36 @@ export default function MyActionsScreen() {
                     </div>
                   </td>
                 </tr>
+              ) : items.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="py-12 text-center text-slate-500 font-medium">
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      <CheckCircle className="h-8 w-8 text-slate-400 opacity-60" />
+                      <span className="text-slate-700 font-semibold text-sm">No actions assigned to you.</span>
+                      <span className="text-slate-500 text-xs">
+                        Actionable batches assigned to you from Pending Batches will appear here.
+                      </span>
+                    </div>
+                  </td>
+                </tr>
               ) : paginatedItems.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="py-8 text-center text-slate-500 font-medium">
                     <div className="flex flex-col items-center justify-center gap-1.5">
-                      <CheckCircle className="h-6 w-6 text-emerald-500 opacity-60" />
-                      <span className="text-slate-700 font-semibold text-xs">No action items found</span>
+                      <CheckCircle className="h-6 w-6 text-slate-400 opacity-60" />
+                      <span className="text-slate-700 font-semibold text-xs">No matching actions found</span>
                       <span className="text-slate-500 text-[11px] max-w-md">
-                        {statusFilter !== "ALL" || equipmentTypeFilter !== "ALL" || searchTerm
-                          ? `No batch tasks match your filter criteria (${statusFilter === "PENDING_APPROVAL" ? "Pending Approval: 0 tasks" : statusFilter === "UNDER_REVIEW" ? "Under Review: 0 tasks" : "0 tasks"}).`
-                          : "All batches are up to date for your role authorization."}
+                        No batch tasks match your filter criteria.
                       </span>
-                      <div className="flex flex-wrap items-center justify-center gap-2 mt-2">
-                        {statusCounts.pendingSubmission > 0 && statusFilter !== "PENDING" && (
-                          <button
-                            type="button"
-                            onClick={() => handleStatusFilterChange("PENDING")}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg transition"
-                          >
-                            Show Pending Submission ({statusCounts.pendingSubmission})
-                          </button>
-                        )}
-                        {counts.pendingMyAction > 0 && statusFilter !== "MY_ACTION" && (
-                          <button
-                            type="button"
-                            onClick={() => handleStatusFilterChange("MY_ACTION")}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg transition"
-                          >
-                            Show Actionable by Me ({counts.pendingMyAction})
-                          </button>
-                        )}
-                        {(searchTerm || statusFilter !== "ALL" || equipmentTypeFilter !== "ALL") && (
-                          <button
-                            type="button"
-                            onClick={handleResetFilters}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-lg transition"
-                          >
-                            <ArrowCounterClockwise className="h-3 w-3 text-slate-500" />
-                            Show All ({items.length})
-                          </button>
-                        )}
+                      <div className="mt-2">
+                        <button
+                          type="button"
+                          onClick={handleResetFilters}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-lg transition"
+                        >
+                          <ArrowCounterClockwise className="h-3 w-3 text-slate-500" />
+                          Show All ({items.length})
+                        </button>
                       </div>
                     </div>
                   </td>
