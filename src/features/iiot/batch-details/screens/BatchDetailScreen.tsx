@@ -63,6 +63,7 @@ import DynamicProcessTrendChart, {
 import { RMG_ALARM_SUMMARY_MOCK, RMG_AUDIT_TRAIL_MOCK } from "../data/rmgMockData";
 import { FBD_ALARM_SUMMARY_MOCK, FBD_AUDIT_TRAIL_MOCK } from "../data/fbdMockData";
 import { BLE_AUDIT_TRAIL_MOCK } from "../data/bleMockData";
+import { COAT_AUDIT_TRAIL_MOCK } from "../data/coatMockData";
 import Pagination from "@/components/ui/Pagination";
 import { WorkflowActionModal } from "../../components/WorkflowActionModal";
 import {
@@ -604,6 +605,18 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
     );
   }, [targetEquipmentCode]);
 
+  const isCoat = useMemo(() => {
+    const code = (targetEquipmentCode || "").toUpperCase();
+    return (
+      code.includes("COAT") ||
+      code.includes("COTC") ||
+      code === "G5COT" ||
+      code === "G5COAT" ||
+      code === "COATC0223" ||
+      code === "COTC0226"
+    );
+  }, [targetEquipmentCode]);
+
   const activeStatus = toText(
     (batchSummary?.stages &&
       batchSummary.stages.find(
@@ -819,12 +832,21 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
           targetEquipment.toUpperCase().includes("OCB") ||
           targetEquipment === "G5BLE" ||
           targetEquipment === "OCBC0222";
+        const isCoatTarget =
+          targetEquipment.toUpperCase().includes("COAT") ||
+          targetEquipment.toUpperCase().includes("COTC") ||
+          targetEquipment === "G5COT" ||
+          targetEquipment === "G5COAT" ||
+          targetEquipment === "COATC0223" ||
+          targetEquipment === "COTC0226";
         if (isRmgTarget) {
           setEventDataRecords(RMG_AUDIT_TRAIL_MOCK as unknown as Record<string, unknown>[]);
         } else if (isFbdTarget) {
           setEventDataRecords(FBD_AUDIT_TRAIL_MOCK as unknown as Record<string, unknown>[]);
         } else if (isBleTarget) {
           setEventDataRecords(BLE_AUDIT_TRAIL_MOCK as unknown as Record<string, unknown>[]);
+        } else if (isCoatTarget) {
+          setEventDataRecords(COAT_AUDIT_TRAIL_MOCK as unknown as Record<string, unknown>[]);
         } else {
           setEventDataRecords(events as unknown as Record<string, unknown>[]);
         }
@@ -844,12 +866,21 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
           targetEquipment.toUpperCase().includes("OCB") ||
           targetEquipment === "G5BLE" ||
           targetEquipment === "OCBC0222";
+        const isCoatTarget =
+          targetEquipment.toUpperCase().includes("COAT") ||
+          targetEquipment.toUpperCase().includes("COTC") ||
+          targetEquipment === "G5COT" ||
+          targetEquipment === "G5COAT" ||
+          targetEquipment === "COATC0223" ||
+          targetEquipment === "COTC0226";
         if (isRmgTarget) {
           setEventDataRecords(RMG_AUDIT_TRAIL_MOCK as unknown as Record<string, unknown>[]);
         } else if (isFbdTarget) {
           setEventDataRecords(FBD_AUDIT_TRAIL_MOCK as unknown as Record<string, unknown>[]);
         } else if (isBleTarget) {
           setEventDataRecords(BLE_AUDIT_TRAIL_MOCK as unknown as Record<string, unknown>[]);
+        } else if (isCoatTarget) {
+          setEventDataRecords(COAT_AUDIT_TRAIL_MOCK as unknown as Record<string, unknown>[]);
         }
       }
 
@@ -1581,6 +1612,15 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
         equipmentCode: targetEquipmentCode || m.equipmentCode,
       }));
     }
+    if (isCoat) {
+      return (COAT_AUDIT_TRAIL_MOCK as unknown as WorkflowAuditEvent[]).map((m) => ({
+        ...m,
+        tenantId: "TNT-0001",
+        batchNo: queryBatchNo || m.batchNo,
+        lotNo: queryLotNo || m.lotNo,
+        equipmentCode: targetEquipmentCode || m.equipmentCode,
+      }));
+    }
 
     const list: WorkflowAuditEvent[] = [...auditEvents];
     const existingKeys = new Set(list.map((a) => `${toText(a.userId)}_${toText(a.action || a.actionCode)}_${toText(a.timestamp)}`));
@@ -1641,7 +1681,7 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
       }
     }
     return list;
-  }, [isFbd, isRmg, isBle, auditEvents, eventDataRecords, actionHistory, queryBatchNo, queryLotNo, targetEquipmentCode]);
+  }, [isFbd, isRmg, isBle, isCoat, auditEvents, eventDataRecords, actionHistory, queryBatchNo, queryLotNo, targetEquipmentCode]);
 
   // Filtered Audit Events strictly based on Batch Number and Lot Number
   const filteredAuditEvents = useMemo(() => {
