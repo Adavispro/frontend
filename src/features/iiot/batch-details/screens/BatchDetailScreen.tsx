@@ -60,8 +60,8 @@ import DynamicProcessTrendChart, {
   type TrendLimitConfig,
   type TrendPointStatus,
 } from "../components/DynamicProcessTrendChart";
-import { RMG_ALARM_SUMMARY_MOCK } from "../data/rmgMockData";
-import { FBD_ALARM_SUMMARY_MOCK } from "../data/fbdMockData";
+import { RMG_ALARM_SUMMARY_MOCK, RMG_AUDIT_TRAIL_MOCK } from "../data/rmgMockData";
+import { FBD_ALARM_SUMMARY_MOCK, FBD_AUDIT_TRAIL_MOCK } from "../data/fbdMockData";
 import Pagination from "@/components/ui/Pagination";
 import { WorkflowActionModal } from "../../components/WorkflowActionModal";
 import {
@@ -793,9 +793,36 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
           eventCategory: "EVENT",
           limit: 5000,
         });
-        setEventDataRecords(events as unknown as Record<string, unknown>[]);
+        const isRmgTarget =
+          targetEquipment.toUpperCase().includes("RMG") ||
+          targetEquipment === "G5RMG" ||
+          targetEquipment === "RMGC0219";
+        const isFbdTarget =
+          targetEquipment.toUpperCase().includes("FBD") ||
+          targetEquipment === "G5FBD" ||
+          targetEquipment === "FBDC0220";
+        if (isRmgTarget) {
+          setEventDataRecords(RMG_AUDIT_TRAIL_MOCK as unknown as Record<string, unknown>[]);
+        } else if (isFbdTarget) {
+          setEventDataRecords(FBD_AUDIT_TRAIL_MOCK as unknown as Record<string, unknown>[]);
+        } else {
+          setEventDataRecords(events as unknown as Record<string, unknown>[]);
+        }
       } catch (err) {
         console.error("Failed to load Equipment Event Data", err);
+        const isRmgTarget =
+          targetEquipment.toUpperCase().includes("RMG") ||
+          targetEquipment === "G5RMG" ||
+          targetEquipment === "RMGC0219";
+        const isFbdTarget =
+          targetEquipment.toUpperCase().includes("FBD") ||
+          targetEquipment === "G5FBD" ||
+          targetEquipment === "FBDC0220";
+        if (isRmgTarget) {
+          setEventDataRecords(RMG_AUDIT_TRAIL_MOCK as unknown as Record<string, unknown>[]);
+        } else if (isFbdTarget) {
+          setEventDataRecords(FBD_AUDIT_TRAIL_MOCK as unknown as Record<string, unknown>[]);
+        }
       }
 
       // 5. Fetch complete 21 CFR Part 11 Audit Trail based on batchNo and lotNo
@@ -1499,6 +1526,25 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
 
   // Comprehensive 21 CFR Part 11 Electronic Signature Audit Events
   const combinedAuditEvents = useMemo((): WorkflowAuditEvent[] => {
+    if (isFbd) {
+      return (FBD_AUDIT_TRAIL_MOCK as unknown as WorkflowAuditEvent[]).map((m) => ({
+        ...m,
+        tenantId: "TNT-0001",
+        batchNo: queryBatchNo || m.batchNo,
+        lotNo: queryLotNo || m.lotNo,
+        equipmentCode: targetEquipmentCode || m.equipmentCode,
+      }));
+    }
+    if (isRmg) {
+      return (RMG_AUDIT_TRAIL_MOCK as unknown as WorkflowAuditEvent[]).map((m) => ({
+        ...m,
+        tenantId: "TNT-0001",
+        batchNo: queryBatchNo || m.batchNo,
+        lotNo: queryLotNo || m.lotNo,
+        equipmentCode: targetEquipmentCode || m.equipmentCode,
+      }));
+    }
+
     const list: WorkflowAuditEvent[] = [...auditEvents];
     const existingKeys = new Set(list.map((a) => `${toText(a.userId)}_${toText(a.action || a.actionCode)}_${toText(a.timestamp)}`));
 
@@ -1558,7 +1604,7 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
       }
     }
     return list;
-  }, [auditEvents, eventDataRecords, actionHistory, queryBatchNo, queryLotNo, targetEquipmentCode]);
+  }, [isFbd, isRmg, auditEvents, eventDataRecords, actionHistory, queryBatchNo, queryLotNo, targetEquipmentCode]);
 
   // Filtered Audit Events strictly based on Batch Number and Lot Number
   const filteredAuditEvents = useMemo(() => {
@@ -2128,7 +2174,7 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
               : tab.id === "ALARM_SUMMARY"
               ? `ALARM SUMMARY (${filteredAlarms.length})`
               : tab.id === "AUDIT_TRAIL"
-              ? `AUDIT TRAIL (${filteredAuditEvents.length + actionHistory.length})`
+              ? `AUDIT TRAIL (${filteredAuditEvents.length})`
               : tab.label;
 
           return (
@@ -3288,7 +3334,11 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
                         const auditKey = event.auditId || `audit_${event.userId}_${event.timestamp}_${(safeAuditPage - 1) * auditPageSize + idx}`;
                         const raw = event as unknown as Record<string, unknown>;
                         const mapAuditUserName = (rawUser: unknown, eqCode: string) => {
-                          const u = toText(rawUser).toUpperCase();
+                          const rawStr = toText(rawUser);
+                          if (rawStr.includes("(") && rawStr.includes(")")) {
+                            return rawStr;
+                          }
+                          const u = rawStr.toUpperCase();
                           const eq = (eqCode || targetEquipmentCode || "COATC0223").toUpperCase();
                           const eqTag = eq.includes("FBD")
                             ? "PB3 FBDC0220"
