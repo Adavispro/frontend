@@ -29,6 +29,7 @@ import type {
   BatchSummary,
   CppRecord,
 } from "@/features/iiot/equipment/schemas/reports.schema";
+import { RMG_ALARM_SUMMARY_MOCK } from "../batch-details/data/rmgMockData";
 
 export interface BatchDetailModalProps {
   isOpen: boolean;
@@ -147,7 +148,12 @@ export default function BatchDetailModal({
         ]);
 
         if (auditRes.status === "fulfilled") setAuditEvents(auditRes.value);
-        if (alarmsRes.status === "fulfilled") setAlarms(alarmsRes.value);
+        const isRmg = (equipmentCode || "").toUpperCase().includes("RMG") || equipmentCode === "G5RMG" || equipmentCode === "RMGC0219";
+        if (isRmg) {
+          setAlarms(RMG_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[]);
+        } else if (alarmsRes.status === "fulfilled") {
+          setAlarms(alarmsRes.value);
+        }
         if (cppRes.status === "fulfilled") setCppData(cppRes.value);
       } finally {
         setIsLoadingTab(false);
@@ -215,11 +221,43 @@ export default function BatchDetailModal({
   };
 
   const alarmColumns: DataTableColumn<AlarmEventRecord>[] = [
-    { key: "eventAt", header: "Timestamp", render: (row) => toDisplayDate(row.eventAt) },
-    { key: "severity", header: "Severity", render: (row) => <StatusPill label={toText(row.severity)} className={toUpper(row.severity) === "CRITICAL" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"} /> },
-    { key: "eventCategory", header: "Category", render: (row) => toText(row.eventCategory) || "-" },
-    { key: "message", header: "Message", render: (row) => toText(row.message) || "-" },
-    { key: "status", header: "Status", render: (row) => toText(row.status) || "-" },
+    {
+      key: "alarmName",
+      header: "Alarm Name",
+      render: (row) =>
+        toText(
+          (row as Record<string, unknown>).alarmName ||
+            (row as Record<string, unknown>).alarm_name ||
+            row.message ||
+            "-",
+        ),
+    },
+    {
+      key: "occurredTime",
+      header: "Occured Time",
+      render: (row) =>
+        toDisplayDate(
+          (row as Record<string, unknown>).occurredTime ||
+            (row as Record<string, unknown>).occurred_time ||
+            row.eventAt,
+        ),
+    },
+    {
+      key: "resolvedTime",
+      header: "Resolved Time",
+      render: (row) =>
+        toDisplayDate(
+          (row as Record<string, unknown>).resolvedTime ||
+            (row as Record<string, unknown>).resolved_time ||
+            "-",
+        ),
+    },
+    {
+      key: "duration",
+      header: "Duration (HH:MM:SS)",
+      render: (row) =>
+        toText((row as Record<string, unknown>).duration || "-"),
+    },
   ];
 
   const cppColumns: DataTableColumn<CppRecord>[] = [

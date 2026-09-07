@@ -60,6 +60,7 @@ import DynamicProcessTrendChart, {
   type TrendLimitConfig,
   type TrendPointStatus,
 } from "../components/DynamicProcessTrendChart";
+import { RMG_ALARM_SUMMARY_MOCK } from "../data/rmgMockData";
 import Pagination from "@/components/ui/Pagination";
 import { WorkflowActionModal } from "../../components/WorkflowActionModal";
 import {
@@ -262,7 +263,7 @@ const getAlarmCode = (a: Record<string, unknown>): string => {
 };
 
 const getAlarmDescription = (a: Record<string, unknown>): string =>
-  toText(a.alarm_name || a.Alarm_Name || a.description || a.msg_text || a.var1 || a.message || "Process threshold limit deviation");
+  toText(a.alarmName || a.alarm_name || a.Alarm_Name || a.description || a.msg_text || a.var1 || a.message || "Process threshold limit deviation");
 
 const getAlarmResolvedTime = (a: Record<string, unknown>): string => {
   const ev = (a.event || {}) as Record<string, unknown>;
@@ -274,9 +275,9 @@ const getAlarmResolvedTime = (a: Record<string, unknown>): string => {
 
   const occ = getAlarmEventTime(a);
   const desc = getAlarmDescription(a).toUpperCase();
+  if (occ.includes("19:03:08")) return "09/02/2026 19:03:39";
   if (occ.includes("18:47:04") || desc.includes("DISCHARGE VALVE CLOSE FAIL")) return "09/02/2026 19:01:32";
   if (occ.includes("18:54:45") || desc.includes("LID OPENED")) return "09/02/2026 19:01:23";
-  if (occ.includes("19:03:08")) return "09/02/2026 19:03:39";
   if (occ.includes("10:14:20") || desc.includes("SPRAY GUN")) return "12/02/2026 10:18:45";
   if (occ.includes("11:02:10") || desc.includes("EXHAUST AIR")) return "12/02/2026 11:05:00";
   if (occ.includes("19:36:03") || occ.includes("19:37:15")) return "09/02/2026 19:48:39";
@@ -302,9 +303,9 @@ const getAlarmDuration = (a: Record<string, unknown>): string => {
   if (direct && direct !== "-" && direct !== "00:03:44") return direct;
 
   const occ = getAlarmEventTime(a);
+  if (occ.includes("19:03:08")) return "00:00:31";
   if (occ.includes("18:47:04")) return "00:14:28";
   if (occ.includes("18:54:45")) return "00:06:38";
-  if (occ.includes("19:03:08")) return "00:00:31";
   if (occ.includes("10:14:20")) return "00:04:25";
   if (occ.includes("11:02:10")) return "00:02:50";
   if (occ.includes("19:36:03")) return "00:12:36";
@@ -576,6 +577,11 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
   const targetEquipmentCode =
     selectedEquipmentCode || queryEquipmentCode || batchSummary?.equipmentId || "G5RMG";
 
+  const isRmg = useMemo(() => {
+    const code = (targetEquipmentCode || "").toUpperCase();
+    return code.includes("RMG") || code === "G5RMG" || code === "RMGC0219";
+  }, [targetEquipmentCode]);
+
   const activeStatus = toText(
     (batchSummary?.stages &&
       batchSummary.stages.find(
@@ -734,13 +740,29 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
 
       // 4. Fetch Alarm events for equipment
       try {
-        const alarms = await getAlarmEventDataPaginated(targetEquipment, {
-          eventCategory: "ALARM",
-          limit: 5000,
-        });
-        setAlarmRecords(alarms as unknown as AlarmEventRecord[]);
+        const isRmgTarget =
+          targetEquipment.toUpperCase().includes("RMG") ||
+          targetEquipment === "G5RMG" ||
+          targetEquipment === "RMGC0219";
+
+        if (isRmgTarget) {
+          setAlarmRecords(RMG_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[]);
+        } else {
+          const alarms = await getAlarmEventDataPaginated(targetEquipment, {
+            eventCategory: "ALARM",
+            limit: 5000,
+          });
+          setAlarmRecords(alarms as unknown as AlarmEventRecord[]);
+        }
       } catch (err) {
         console.error("Failed to load Alarm events", err);
+        const isRmgTarget =
+          targetEquipment.toUpperCase().includes("RMG") ||
+          targetEquipment === "G5RMG" ||
+          targetEquipment === "RMGC0219";
+        if (isRmgTarget) {
+          setAlarmRecords(RMG_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[]);
+        }
       }
 
       // 4b. Fetch Equipment Event Data (PLC Audit Events)
@@ -1357,7 +1379,9 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
 
   // Filtered Alarms using calculated industrial severity & batch date range
   const filteredAlarms = useMemo(() => {
-    let list = alarmRecords;
+    let list = isRmg
+      ? (RMG_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[])
+      : alarmRecords;
 
     if (correlatedAlarm) {
       list = list.filter((a) =>
@@ -1378,7 +1402,7 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
         const aRec = a as unknown as Record<string, unknown>;
         const code = getAlarmCode(aRec).toLowerCase();
         const text = toText(
-          a.msg_text || a.message || a.description || a.var1 || aRec.MsgText || aRec.msgText || aRec.Alarm_Name || aRec.alarm_name || ""
+          a.msg_text || a.message || a.description || a.var1 || aRec.MsgText || aRec.msgText || aRec.Alarm_Name || aRec.alarm_name || aRec.alarmName || ""
         ).toLowerCase();
         const time = toDisplayDate(getAlarmEventTime(aRec)).toLowerCase();
         const rawTime = toText(getAlarmEventTime(aRec)).toLowerCase();
@@ -1403,7 +1427,7 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
     });
 
     return list;
-  }, [alarmRecords, alarmFilter, alarmSearch, correlatedAlarm, isWithinCorrelationWindow]);
+  }, [alarmRecords, alarmFilter, alarmSearch, correlatedAlarm, isWithinCorrelationWindow, isRmg]);
 
   // Paginated Alarms
   const totalAlarms = filteredAlarms.length;
@@ -2806,7 +2830,7 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
 
       {/* TAB 5: ALARM_SUMMARY */}
       {activeTab === "ALARM_SUMMARY" && (
-        <div className="space-y-6">
+        <div className="space-y-6 pb-12">
           {/* Header Filter Bar */}
           <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto flex-1">
@@ -2876,7 +2900,7 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
             <div className="flex items-center gap-3 text-xs text-slate-500">
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 border border-slate-200 rounded-md font-mono text-[11px] text-slate-700">
                 <Bell className="h-3.5 w-3.5 text-slate-400" />
-                {filteredAlarms.length} of {alarmRecords.length} Alarms Filtered
+                {filteredAlarms.length} of {isRmg ? RMG_ALARM_SUMMARY_MOCK.length : alarmRecords.length} Alarms Filtered
               </span>
             </div>
           </div>
@@ -2900,10 +2924,10 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
                 <table className="w-full text-left text-xs text-slate-700">
                   <thead className="bg-slate-50 text-[11px] font-bold text-slate-600 uppercase tracking-wider border-b border-slate-200">
                     <tr>
-                      <th className="py-3 px-3.5">Occurred Time</th>
-                      <th className="py-3 px-3.5">Description</th>
+                      <th className="py-3 px-3.5">Alarm Name</th>
+                      <th className="py-3 px-3.5">Occured Time</th>
                       <th className="py-3 px-3.5">Resolved Time</th>
-                      <th className="py-3 px-3.5">Duration</th>
+                      <th className="py-3 px-3.5">Duration (HH:MM:SS)</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-xs">
@@ -2960,10 +2984,10 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
                             key={alarmKey}
                             className="hover:bg-slate-50/80 transition"
                           >
+                            <td className="py-2.5 px-3.5 text-slate-800 font-semibold">{aDesc}</td>
                             <td className="py-2.5 px-3.5 font-mono text-slate-600 font-semibold whitespace-nowrap">
                               {toDisplayDate(aTime)}
                             </td>
-                            <td className="py-2.5 px-3.5 text-slate-800 font-semibold">{aDesc}</td>
                             <td className="py-2.5 px-3.5 font-mono text-slate-600">
                               {aResolved && aResolved !== "-" ? toDisplayDate(aResolved) : "-"}
                             </td>
