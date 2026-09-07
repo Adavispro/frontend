@@ -63,7 +63,7 @@ import DynamicProcessTrendChart, {
 import { RMG_ALARM_SUMMARY_MOCK, RMG_AUDIT_TRAIL_MOCK } from "../data/rmgMockData";
 import { FBD_ALARM_SUMMARY_MOCK, FBD_AUDIT_TRAIL_MOCK } from "../data/fbdMockData";
 import { BLE_AUDIT_TRAIL_MOCK } from "../data/bleMockData";
-import { COAT_AUDIT_TRAIL_MOCK } from "../data/coatMockData";
+import { COAT_ALARM_SUMMARY_MOCK, COAT_AUDIT_TRAIL_MOCK } from "../data/coatMockData";
 import Pagination from "@/components/ui/Pagination";
 import { WorkflowActionModal } from "../../components/WorkflowActionModal";
 import {
@@ -784,10 +784,20 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
           targetEquipment === "G5FBD" ||
           targetEquipment === "FBDC0220";
 
+        const isCoatTarget =
+          targetEquipment.toUpperCase().includes("COAT") ||
+          targetEquipment.toUpperCase().includes("COTC") ||
+          targetEquipment === "G5COT" ||
+          targetEquipment === "G5COAT" ||
+          targetEquipment === "COATC0223" ||
+          targetEquipment === "COTC0226";
+
         if (isRmgTarget) {
           setAlarmRecords(RMG_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[]);
         } else if (isFbdTarget) {
           setAlarmRecords(FBD_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[]);
+        } else if (isCoatTarget) {
+          setAlarmRecords(COAT_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[]);
         } else {
           const alarms = await getAlarmEventDataPaginated(targetEquipment, {
             eventCategory: "ALARM",
@@ -805,10 +815,19 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
           targetEquipment.toUpperCase().includes("FBD") ||
           targetEquipment === "G5FBD" ||
           targetEquipment === "FBDC0220";
+        const isCoatTarget =
+          targetEquipment.toUpperCase().includes("COAT") ||
+          targetEquipment.toUpperCase().includes("COTC") ||
+          targetEquipment === "G5COT" ||
+          targetEquipment === "G5COAT" ||
+          targetEquipment === "COATC0223" ||
+          targetEquipment === "COTC0226";
         if (isRmgTarget) {
           setAlarmRecords(RMG_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[]);
         } else if (isFbdTarget) {
           setAlarmRecords(FBD_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[]);
+        } else if (isCoatTarget) {
+          setAlarmRecords(COAT_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[]);
         }
       }
 
@@ -1491,6 +1510,8 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
       ? (RMG_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[])
       : isFbd
       ? (FBD_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[])
+      : isCoat
+      ? (COAT_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[])
       : alarmRecords;
 
     if (correlatedAlarm) {
@@ -1537,7 +1558,7 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
     });
 
     return list;
-  }, [alarmRecords, alarmFilter, alarmSearch, correlatedAlarm, isWithinCorrelationWindow, isRmg, isFbd]);
+  }, [alarmRecords, alarmFilter, alarmSearch, correlatedAlarm, isWithinCorrelationWindow, isRmg, isFbd, isCoat]);
 
   // Paginated Alarms
   const totalAlarms = filteredAlarms.length;
@@ -3047,7 +3068,7 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
             <div className="flex items-center gap-3 text-xs text-slate-500">
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 border border-slate-200 rounded-md font-mono text-[11px] text-slate-700">
                 <Bell className="h-3.5 w-3.5 text-slate-400" />
-                {filteredAlarms.length} of {isRmg ? RMG_ALARM_SUMMARY_MOCK.length : isFbd ? FBD_ALARM_SUMMARY_MOCK.length : alarmRecords.length} Alarms Filtered
+                {filteredAlarms.length} of {isRmg ? RMG_ALARM_SUMMARY_MOCK.length : isFbd ? FBD_ALARM_SUMMARY_MOCK.length : isCoat ? COAT_ALARM_SUMMARY_MOCK.length : alarmRecords.length} Alarms Filtered
               </span>
             </div>
           </div>

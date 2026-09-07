@@ -18,7 +18,23 @@ export const COAT_BATCH_SUMMARY_MOCK = {
   supervisorName: "98204 (PB3 COTC0226 Supervisor)",
 };
 
-export const COAT_ALARM_SUMMARY_MOCK: unknown[] = [];
+export const COAT_ALARM_SUMMARY_MOCK = [
+  {
+    alarmCode: "ALM-301",
+    alarmName: "INLET AIR TEMP HIGH",
+    description: "INLET AIR TEMP HIGH",
+    occurredTime: "23/02/2026 12:14:46",
+    occurred_time: "23/02/2026 12:14:46",
+    resolvedTime: "23/02/2026 12:14:58",
+    resolved_time: "23/02/2026 12:14:58",
+    duration: "00:00:12",
+    severity: "CRITICAL",
+    equipmentId: "COTC0226",
+    batchNo: "NL0026008",
+    lotNo: "1",
+    eventCategory: "ALARM",
+  },
+];
 
 const RAW_COAT_AUDIT_ROWS = [
   { dt: "23/02/2026 11:36:50", desc: "BATCH START", oldV: "-", newV: "-", reason: "-", user: "98204 (PB3 COTC0226 Supervisor)", role: "PRODUCTION_SUPERVISOR" },
