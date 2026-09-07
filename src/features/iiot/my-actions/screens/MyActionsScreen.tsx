@@ -195,6 +195,34 @@ export default function MyActionsScreen() {
     return { pendingSubmission, underReview, pendingApproval, returned, approved };
   }, [items]);
 
+  const actionableCount = useMemo(() => {
+    const rawRoles = (loginContext?.roles as Array<unknown>) || [];
+    const userRoles = rawRoles.map((r) => {
+      if (typeof r === "string") return r.toUpperCase();
+      if (r && typeof r === "object") {
+        const code =
+          (r as Record<string, unknown>).roleCode ??
+          (r as Record<string, unknown>).role ??
+          (r as Record<string, unknown>).name;
+        return typeof code === "string" ? code.toUpperCase() : "";
+      }
+      return "";
+    });
+    const isApprover = userRoles.some((r) => r.includes("APPROVER") || r.includes("ADMIN"));
+    const isReviewer = userRoles.some((r) => r.includes("REVIEWER") || r.includes("ADMIN"));
+    const isOperator = userRoles.some((r) => r.includes("OPERATOR") || r.includes("ADMIN"));
+
+    return items.filter((item) => {
+      const itemActions = actionsCache[item.id] || item.allowedActions || [];
+      const hasDynamicActions = itemActions.length > 0;
+      const isRoleActionable =
+        (isApprover && (item.rawStatus === "REVIEWER_REVIEWED" || item.rawStatus === "PENDING_APPROVAL")) ||
+        (isReviewer && (item.rawStatus === "UNDER_REVIEW" || item.rawStatus === "IN_REVIEW")) ||
+        (isOperator && (item.rawStatus === "RETURNED_TO_OPERATOR" || item.rawStatus === "PENDING"));
+      return hasDynamicActions || isRoleActionable;
+    }).length;
+  }, [items, actionsCache, loginContext]);
+
   // Filter Handlers with automatic reset to page 1
   const handleSearchChange = (val: string) => {
     setSearchTerm(val);
@@ -421,7 +449,7 @@ export default function MyActionsScreen() {
               Actionable by Me
             </span>
             <span className="text-xl sm:text-2xl font-bold text-indigo-600 font-mono mt-0.5 block">
-              {items.length}
+              {actionableCount}
             </span>
             <span className="text-[10px] text-slate-400 mt-0.5 block">Requires your role sign-off</span>
           </div>
@@ -520,7 +548,7 @@ export default function MyActionsScreen() {
               className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
               <option value="ALL">All Statuses ({items.length})</option>
-              <option value="MY_ACTION">Actionable by Me ({items.length})</option>
+              <option value="MY_ACTION">Actionable by Me ({actionableCount})</option>
               <option value="PENDING">Pending Submission ({statusCounts.pendingSubmission})</option>
               <option value="UNDER_REVIEW">Under Review ({statusCounts.underReview})</option>
               <option value="PENDING_APPROVAL">Pending Approval ({statusCounts.pendingApproval})</option>
