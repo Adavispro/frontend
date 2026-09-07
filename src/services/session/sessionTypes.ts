@@ -1,7 +1,7 @@
-export const SESSION_INACTIVITY_LIMIT_MS = 10 * 60 * 1000; // 10 minutes (600,000 ms) of user inactivity
+export const SESSION_INACTIVITY_LIMIT_MS = 2 * 60 * 60 * 1000; // 2 hours (7,200,000 ms) of user inactivity
 export const SESSION_COUNTDOWN_DURATION_MS = 30 * 1000; // 30 seconds (30,000 ms) warning countdown
 export const SESSION_MAX_LIFETIME_MS =
-  SESSION_INACTIVITY_LIMIT_MS + SESSION_COUNTDOWN_DURATION_MS; // 10m 30s (630,000 ms) until auto-logout
+  SESSION_INACTIVITY_LIMIT_MS + SESSION_COUNTDOWN_DURATION_MS; // 2h 30s (7,230,000 ms) until auto-logout
 
 // Backward-compatible aliases
 export const SESSION_IDLE_TIMEOUT_MS = SESSION_INACTIVITY_LIMIT_MS;
