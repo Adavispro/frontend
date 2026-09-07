@@ -577,7 +577,21 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
 
   const loginContext = useLoginContext();
   const currentUser = loginContext?.user;
-  const userRole = (loginContext?.roles?.[0] as Record<string, unknown>)?.roleCode as string || "PRODUCTION_REVIEWER";
+  const userRoles = useMemo(() => {
+    const rawRoles = (loginContext?.roles as Array<unknown>) || [];
+    return rawRoles.map((r) => {
+      if (typeof r === "string") return r.toUpperCase();
+      if (r && typeof r === "object") {
+        const code =
+          (r as Record<string, unknown>).roleCode ??
+          (r as Record<string, unknown>).role ??
+          (r as Record<string, unknown>).name;
+        return typeof code === "string" ? code.toUpperCase() : "";
+      }
+      return "";
+    });
+  }, [loginContext?.roles]);
+  const userRole = (loginContext?.roles?.[0] as Record<string, unknown>)?.roleCode as string || userRoles[0] || "PRODUCTION_REVIEWER";
   const [workflowInstance, setWorkflowInstance] = useState<Record<string, unknown> | null>(null);
   const [isClaiming, setIsClaiming] = useState(false);
 
@@ -645,17 +659,73 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
   );
 
   const roleScope = useMemo(() => {
-    const r = (userRole || "").toUpperCase();
-    if (r.includes("APPROVER") || activeStatus === "PENDING_APPROVAL" || activeStatus === "REVIEWER_REVIEWED") {
+    const hasApprover = userRoles.some((r) => r.includes("APPROVER"));
+    const hasReviewer = userRoles.some((r) => r.includes("REVIEWER"));
+    const hasOperator = userRoles.some((r) => r.includes("OPERATOR"));
+
+    if (hasApprover && !hasReviewer && !hasOperator) {
       return "QA_APPROVER";
     }
-    if (r.includes("REVIEWER") || activeStatus === "UNDER_REVIEW" || activeStatus === "IN_REVIEW") {
+    if (hasReviewer && !hasApprover && !hasOperator) {
       return "PRODUCTION_REVIEWER";
     }
+    if (hasOperator && !hasApprover && !hasReviewer) {
+      return "PRODUCTION_OPERATOR";
+    }
+
+    if (activeStatus === "PENDING_APPROVAL" || activeStatus === "REVIEWER_REVIEWED") {
+      return "QA_APPROVER";
+    }
+    if (activeStatus === "UNDER_REVIEW" || activeStatus === "IN_REVIEW") {
+      return "PRODUCTION_REVIEWER";
+    }
+    if (hasApprover) return "QA_APPROVER";
+    if (hasReviewer) return "PRODUCTION_REVIEWER";
     return "PRODUCTION_OPERATOR";
-  }, [userRole, activeStatus]);
+  }, [userRoles, activeStatus]);
 
   const roleTitle = useMemo(() => roleScope.replace(/_/g, " "), [roleScope]);
+
+  const isApproverRole = useMemo(() => {
+    if (userRoles.some((r) => r.includes("APPROVER")) && !userRoles.some((r) => r.includes("OPERATOR") || r.includes("REVIEWER"))) {
+      return true;
+    }
+    return roleScope === "QA_APPROVER";
+  }, [userRoles, roleScope]);
+
+  const isReviewerRole = useMemo(() => {
+    if (isApproverRole) return false;
+    if (userRoles.some((r) => r.includes("REVIEWER")) && !userRoles.some((r) => r.includes("OPERATOR"))) {
+      return true;
+    }
+    return roleScope === "PRODUCTION_REVIEWER";
+  }, [userRoles, isApproverRole, roleScope]);
+
+  const isOperatorRole = useMemo(() => {
+    return !isApproverRole && !isReviewerRole;
+  }, [isApproverRole, isReviewerRole]);
+
+  // Role-adaptive Button name and stage-wise labels:
+  // For Operator Role - View & Proceed (Viewed)
+  // For Reviewer Role - Review & Proceed (Reviewed)
+  // For Approver Role - Approve & Proceed (Approved)
+  const roleButtonLabel = isOperatorRole
+    ? "View & Proceed"
+    : isReviewerRole
+    ? "Review & Proceed"
+    : "Approve & Proceed";
+
+  const roleStageWiseLabel = isOperatorRole
+    ? "Viewed"
+    : isReviewerRole
+    ? "Reviewed"
+    : "Approved";
+
+  const roleAllTabsLabel = isOperatorRole
+    ? `All ${TAB_SEQUENCE.length} Tabs Viewed`
+    : isReviewerRole
+    ? `All ${TAB_SEQUENCE.length} Tabs Reviewed`
+    : `All ${TAB_SEQUENCE.length} Tabs Approved`;
 
   // Modal State
   const [modalAction, setModalAction] = useState<AllowedWorkflowAction | null>(null);
@@ -1161,6 +1231,7 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
         console.error("Failed to persist tab reviews", e);
       }
 
+      const actionVerb = isOperatorRole ? "VIEWED" : isReviewerRole ? "REVIEWED" : "PASSED";
       const newAudit: WorkflowAuditEvent = {
         auditId: `audit_tab_${tab}_${Date.now()}`,
         tenantId: "TNT-0001",
@@ -1169,15 +1240,15 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
         equipmentCode: targetEquipmentCode,
         previousStatus: tabReviews[tab]?.status || "PENDING",
         newStatus: "PASSED",
-        action: `TAB REVIEW: ${tab.replace(/_/g, " ")} PASSED (${roleTitle})`,
-        actionCode: `TAB_REVIEW_${tab}_PASSED`,
+        action: `TAB REVIEW: ${tab.replace(/_/g, " ")} ${actionVerb} (${roleTitle})`,
+        actionCode: `TAB_REVIEW_${tab}_${actionVerb}`,
         userId: currentUser?.userId || "OPERATOR_01",
         userName: currentUser?.username || roleTitle,
         userRole: userRole,
-        comments: `${roleTitle} checkpoint verification passed for ${tab.replace(/_/g, " ")}`,
+        comments: `${roleTitle} checkpoint verification ${roleStageWiseLabel.toLowerCase()} for ${tab.replace(/_/g, " ")}`,
         timestamp: new Date().toISOString(),
         esignatureVerified: true,
-        esignatureReason: "Tab Review Checkpoint Approval",
+        esignatureReason: isOperatorRole ? "Tab Review Checkpoint Viewed" : isReviewerRole ? "Tab Review Checkpoint Reviewed" : "Tab Review Checkpoint Approval",
         regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant tab verification.",
       };
       setAuditEvents((prev) => [newAudit, ...prev]);
@@ -1190,10 +1261,10 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
       setActionSuccessMsg(
         isAlreadyPassed
           ? `Moved to next pending tab "${nextTabObj?.shortName || nextPendingTab}".`
-          : `✓ Tab "${tab.replace(/_/g, " ")}" Approved! Navigating to "${nextTabObj?.shortName || nextPendingTab}".`
+          : `✓ Tab "${tab.replace(/_/g, " ")}" ${roleStageWiseLabel}! Navigating to "${nextTabObj?.shortName || nextPendingTab}".`
       );
     } else {
-      setActionSuccessMsg(`✓ All ${TAB_SEQUENCE.length} tabs approved for ${roleTitle} stage! Stage workflow action is now ready.`);
+      setActionSuccessMsg(`✓ All ${TAB_SEQUENCE.length} tabs ${roleStageWiseLabel.toLowerCase()} for ${roleTitle} stage! Stage workflow action is now ready.`);
     }
     setTimeout(() => setActionSuccessMsg(null), 4000);
   };
@@ -1937,9 +2008,17 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
 
         <div className="flex items-center gap-2">
           <button
-            onClick={loadBatchData}
+            type="button"
+            onClick={() => {
+              if (!isLoading) {
+                loadBatchData();
+              }
+            }}
             disabled={isLoading}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 rounded-lg text-xs font-semibold border border-slate-200 shadow-sm transition disabled:opacity-50"
+            suppressHydrationWarning
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 bg-white text-slate-700 rounded-lg text-xs font-semibold border border-slate-200 shadow-sm transition disabled:opacity-50 ${
+              isLoading ? "opacity-50 cursor-not-allowed pointer-events-none" : "hover:bg-slate-100 cursor-pointer"
+            }`}
           >
             <ArrowsClockwise className={`h-3.5 w-3.5 ${isLoading ? "animate-spin" : ""}`} />
             Refresh
@@ -1988,11 +2067,11 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
         const activeReviewerRole = toText((workflowInstance?.context as Record<string, unknown>)?.activeReviewerRole);
         const claimedAt = toText((workflowInstance?.context as Record<string, unknown>)?.claimedAt);
 
-        const isApprover = userRole?.toUpperCase().includes("APPROVER") || activeStatus === "PENDING_APPROVAL" || activeStatus === "REVIEWER_REVIEWED";
-        const isReviewer = userRole?.toUpperCase().includes("REVIEWER") || activeStatus === "UNDER_REVIEW" || activeStatus === "IN_REVIEW";
-        const isOperator = userRole?.toUpperCase().includes("OPERATOR") || (!isApprover && !isReviewer);
+        const isApprover = isApproverRole;
+        const isReviewer = isReviewerRole;
+        const isOperator = isOperatorRole;
 
-        const roleTitle = isApprover ? "APPROVER" : isReviewer ? "REVIEWER" : "OPERATOR";
+        const bannerRoleTitle = isApprover ? "APPROVER" : isReviewer ? "REVIEWER" : "OPERATOR";
         const roleDisplay = isApprover ? "QA Approver" : isReviewer ? "Production Reviewer" : "Production Operator";
         const actionLabel = isApprover ? "QA APPROVAL" : isReviewer ? "REVIEW" : "OPERATION";
         const buttonLabel = isApprover ? "Assign to Me / Start Approval" : isReviewer ? "Assign to Me / Start Review" : "Assign to Me / Start Operation";
@@ -2298,7 +2377,7 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
               {isPassed ? (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
                   <CheckCircle className="h-3.5 w-3.5 text-emerald-600" weight="fill" />
-                  <span>Approved</span>
+                  <span>{roleStageWiseLabel}</span>
                 </span>
               ) : hasQuery ? (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
@@ -3601,7 +3680,7 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
             <span>Request Additional Information</span>
           </button>
 
-          {/* Approved & Next Button - Shown while required tabs are still pending */}
+          {/* Role-Adaptive Proceed Button - Shown while required tabs are still pending */}
           {!isAllTabsPassed && !isApprovedBatch && (
             <button
               type="button"
@@ -3609,20 +3688,20 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
               className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition shadow-md cursor-pointer"
               title={
                 tabReviews[activeTab]?.status === "PASSED"
-                  ? "Current tab already approved. Navigate to next pending tab."
-                  : "Approve current tab and navigate to next pending tab"
+                  ? `Current tab already ${roleStageWiseLabel.toLowerCase()}. Navigate to next pending tab.`
+                  : `${isOperatorRole ? "View" : isReviewerRole ? "Review" : "Approve"} current tab and navigate to next pending tab`
               }
             >
               <CheckCircle className="h-4 w-4" weight="bold" />
-              <span>Approved & Next</span>
+              <span>{roleButtonLabel}</span>
             </button>
           )}
 
-          {/* All Tabs Approved Badge Indicator */}
+          {/* All Tabs Passed Badge Indicator */}
           {isAllTabsPassed && !isApprovedBatch && (
             <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
               <CheckCircle className="h-4 w-4 text-emerald-600" weight="fill" />
-              <span>All 6 Tabs Approved</span>
+              <span>{roleAllTabsLabel}</span>
             </span>
           )}
 
