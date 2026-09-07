@@ -768,7 +768,7 @@ export default async function ModuleRoutePage({
   }
 
   if (moduleItem.id === "iiot" || moduleItem.id === "ai-iot") {
-    return <PendingReportsScreen />;
+    return <MyActionsScreen />;
   }
 
   return (

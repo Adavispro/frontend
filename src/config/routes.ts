@@ -44,7 +44,7 @@ export const ROUTES = {
   masterWorkflowMdm: "/master-management/workflow-mdm",
   iiotManufacturingOverview: "/iiot/manufacturing-overview",
   iiotEquipmentOverview: "/iiot/equipment-overview",
-  iiot: "/iiot/pending-reports",
+  iiot: "/iiot/my-actions",
   iiotMonitoring: "/iiot/monitoring-console",
   iiotAnalytics: "/iiot/analytics",
   iiotPendingReports: "/iiot/pending-reports",
