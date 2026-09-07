@@ -22,6 +22,9 @@ export const notificationItemSchema = z.object({
   readAt: z.string().optional().nullable(),
   actorUserId: z.string().optional().nullable(),
   deepLink: z.string().optional().nullable(),
+  assignedTo: z.string().optional().nullable(),
+  assignedRole: z.string().optional().nullable(),
+  assignmentScope: z.string().optional().nullable(),
 });
 
 export type NotificationItem = z.infer<typeof notificationItemSchema>;

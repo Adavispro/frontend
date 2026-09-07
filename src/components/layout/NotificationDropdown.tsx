@@ -13,6 +13,7 @@ import {
   X,
 } from "@phosphor-icons/react";
 import { ROUTES } from "@/config/routes";
+import { useCurrentUser } from "@/features/auth/hooks/useCurrentUser";
 import { useNotifications } from "@/features/notifications/hooks/useNotifications";
 import type { NotificationItem } from "@/features/notifications/schemas/notifications.schema";
 
@@ -40,6 +41,7 @@ const formatTime = (isoString: string) => {
 
 export default function NotificationDropdown() {
   const router = useRouter();
+  const currentUser = useCurrentUser();
   const {
     notifications,
     unreadCount,
@@ -84,12 +86,6 @@ export default function NotificationDropdown() {
     }
     setIsOpen(false);
 
-    // Deep link navigation
-    if (item.deepLink && item.deepLink.startsWith("/")) {
-      router.push(item.deepLink);
-      return;
-    }
-
     const state = item.workflowState?.toUpperCase() || "";
     const eventCode = item.eventCode?.toUpperCase() || "";
     const type = item.type?.toUpperCase() || "";
@@ -97,18 +93,67 @@ export default function NotificationDropdown() {
     if (type === "ALARM" || eventCode.includes("ALARM")) {
       const eqParam = item.equipmentCode ? `?equipmentId=${encodeURIComponent(item.equipmentCode)}` : "";
       router.push(`/iiot/reports/alarm-events${eqParam}`);
-    } else if (state === "APPROVED") {
+      return;
+    }
+
+    if (state === "APPROVED") {
       const batchParam = item.batchNo ? `?batchNo=${encodeURIComponent(item.batchNo)}` : "";
       router.push(`${ROUTES.iiotApprovedBatches}${batchParam}`);
-    } else if (state === "DEFERRED") {
+      return;
+    }
+
+    if (state === "DEFERRED") {
       const batchParam = item.batchNo ? `?batchNo=${encodeURIComponent(item.batchNo)}` : "";
       router.push(`${ROUTES.iiotDeferredBatches}${batchParam}`);
-    } else if (state === "REJECTED" || state === "RETURNED_TO_OPERATOR" || state === "RETURNED" || state === "PENDING") {
+      return;
+    }
+
+    const currentUserId = currentUser?.userId?.toUpperCase();
+    const currentUsername = currentUser?.username?.toUpperCase();
+    const assignedTo = item.assignedTo?.toUpperCase();
+    const isAssignedToMe = Boolean(
+      assignedTo &&
+        (assignedTo === currentUserId ||
+          assignedTo === currentUsername ||
+          (currentUsername && assignedTo.includes(currentUsername)))
+    );
+    const isGroupScope =
+      item.assignmentScope === "GROUP" ||
+      (!item.assignedTo && item.assignmentScope !== "USER");
+
+    // If task is specifically assigned to the logged-in user -> route to My Actions
+    if (isAssignedToMe) {
+      const batchParam = item.batchNo ? `?batchNo=${encodeURIComponent(item.batchNo)}` : "";
+      const eqParam = item.equipmentCode ? `&equipmentCode=${encodeURIComponent(item.equipmentCode)}` : "";
+      router.push(`${ROUTES.iiotMyActions}${batchParam}${eqParam}`);
+      return;
+    }
+
+    // If task is globally assigned to the user's role/group -> route to Pending Batches
+    if (isGroupScope && !isAssignedToMe) {
+      const batchParam = item.batchNo ? `?batchNo=${encodeURIComponent(item.batchNo)}` : "";
+      const eqParam = item.equipmentCode ? `&equipmentCode=${encodeURIComponent(item.equipmentCode)}` : "";
+      router.push(`${ROUTES.iiotPendingReports}${batchParam}${eqParam}`);
+      return;
+    }
+
+    // Deep link navigation fallback if explicitly set on item
+    if (item.deepLink && item.deepLink.startsWith("/")) {
+      router.push(item.deepLink);
+      return;
+    }
+
+    if (
+      state === "REJECTED" ||
+      state === "RETURNED_TO_OPERATOR" ||
+      state === "RETURNED" ||
+      state === "PENDING"
+    ) {
       const batchParam = item.batchNo ? `?batchNo=${encodeURIComponent(item.batchNo)}` : "";
       router.push(`${ROUTES.iiotPendingReports}${batchParam}`);
     } else {
       const batchParam = item.batchNo ? `?batchNo=${encodeURIComponent(item.batchNo)}` : "";
-      router.push(`${ROUTES.iiotMyActions}${batchParam}`);
+      router.push(`${ROUTES.iiotPendingReports}${batchParam}`);
     }
   };
 
