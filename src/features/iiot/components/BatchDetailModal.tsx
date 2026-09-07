@@ -30,6 +30,7 @@ import type {
   CppRecord,
 } from "@/features/iiot/equipment/schemas/reports.schema";
 import { RMG_ALARM_SUMMARY_MOCK } from "../batch-details/data/rmgMockData";
+import { FBD_ALARM_SUMMARY_MOCK } from "../batch-details/data/fbdMockData";
 
 export interface BatchDetailModalProps {
   isOpen: boolean;
@@ -149,8 +150,11 @@ export default function BatchDetailModal({
 
         if (auditRes.status === "fulfilled") setAuditEvents(auditRes.value);
         const isRmg = (equipmentCode || "").toUpperCase().includes("RMG") || equipmentCode === "G5RMG" || equipmentCode === "RMGC0219";
+        const isFbd = (equipmentCode || "").toUpperCase().includes("FBD") || equipmentCode === "G5FBD" || equipmentCode === "FBDC0220";
         if (isRmg) {
           setAlarms(RMG_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[]);
+        } else if (isFbd) {
+          setAlarms(FBD_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[]);
         } else if (alarmsRes.status === "fulfilled") {
           setAlarms(alarmsRes.value);
         }

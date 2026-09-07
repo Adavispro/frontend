@@ -61,6 +61,7 @@ import DynamicProcessTrendChart, {
   type TrendPointStatus,
 } from "../components/DynamicProcessTrendChart";
 import { RMG_ALARM_SUMMARY_MOCK } from "../data/rmgMockData";
+import { FBD_ALARM_SUMMARY_MOCK } from "../data/fbdMockData";
 import Pagination from "@/components/ui/Pagination";
 import { WorkflowActionModal } from "../../components/WorkflowActionModal";
 import {
@@ -271,9 +272,11 @@ const getAlarmResolvedTime = (a: Record<string, unknown>): string => {
     a.resolved_time || a.Resolved_Time || a.resolvedTime || a.resolvedAt ||
     ev.resolved_time || ev.Resolved_Time || ev.resolvedTime || ""
   );
-  if (direct && direct !== "-") return direct;
+  if (direct === "-") return "-";
+  if (direct) return direct;
 
   const occ = getAlarmEventTime(a);
+  if (occ.includes("18:43:46") || occ.includes("18:44:55")) return "-";
   const desc = getAlarmDescription(a).toUpperCase();
   if (occ.includes("19:03:08")) return "09/02/2026 19:03:39";
   if (occ.includes("18:47:04") || desc.includes("DISCHARGE VALVE CLOSE FAIL")) return "09/02/2026 19:01:32";
@@ -300,9 +303,11 @@ const getAlarmDuration = (a: Record<string, unknown>): string => {
     a.duration || a.Duration || a.time_string || a.timeString ||
     ev.duration || ev.Duration || ""
   );
-  if (direct && direct !== "-" && direct !== "00:03:44") return direct;
+  if (direct === "-") return "-";
+  if (direct && direct !== "00:03:44") return direct;
 
   const occ = getAlarmEventTime(a);
+  if (occ.includes("18:43:46") || occ.includes("18:44:55")) return "-";
   if (occ.includes("19:03:08")) return "00:00:31";
   if (occ.includes("18:47:04")) return "00:14:28";
   if (occ.includes("18:54:45")) return "00:06:38";
@@ -324,7 +329,7 @@ const getAlarmDuration = (a: Record<string, unknown>): string => {
   if (occ.includes("22:47:01")) return "00:38:17";
   if (occ.includes("22:48:04")) return "00:37:14";
 
-  return direct || "00:03:44";
+  return direct || "-";
 };
 
 const getAlarmAcknowledgedBy = (a: Record<string, unknown>): string =>
@@ -582,6 +587,11 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
     return code.includes("RMG") || code === "G5RMG" || code === "RMGC0219";
   }, [targetEquipmentCode]);
 
+  const isFbd = useMemo(() => {
+    const code = (targetEquipmentCode || "").toUpperCase();
+    return code.includes("FBD") || code === "G5FBD" || code === "FBDC0220";
+  }, [targetEquipmentCode]);
+
   const activeStatus = toText(
     (batchSummary?.stages &&
       batchSummary.stages.find(
@@ -744,9 +754,15 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
           targetEquipment.toUpperCase().includes("RMG") ||
           targetEquipment === "G5RMG" ||
           targetEquipment === "RMGC0219";
+        const isFbdTarget =
+          targetEquipment.toUpperCase().includes("FBD") ||
+          targetEquipment === "G5FBD" ||
+          targetEquipment === "FBDC0220";
 
         if (isRmgTarget) {
           setAlarmRecords(RMG_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[]);
+        } else if (isFbdTarget) {
+          setAlarmRecords(FBD_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[]);
         } else {
           const alarms = await getAlarmEventDataPaginated(targetEquipment, {
             eventCategory: "ALARM",
@@ -760,8 +776,14 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
           targetEquipment.toUpperCase().includes("RMG") ||
           targetEquipment === "G5RMG" ||
           targetEquipment === "RMGC0219";
+        const isFbdTarget =
+          targetEquipment.toUpperCase().includes("FBD") ||
+          targetEquipment === "G5FBD" ||
+          targetEquipment === "FBDC0220";
         if (isRmgTarget) {
           setAlarmRecords(RMG_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[]);
+        } else if (isFbdTarget) {
+          setAlarmRecords(FBD_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[]);
         }
       }
 
@@ -1381,6 +1403,8 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
   const filteredAlarms = useMemo(() => {
     let list = isRmg
       ? (RMG_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[])
+      : isFbd
+      ? (FBD_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[])
       : alarmRecords;
 
     if (correlatedAlarm) {
@@ -1427,7 +1451,7 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
     });
 
     return list;
-  }, [alarmRecords, alarmFilter, alarmSearch, correlatedAlarm, isWithinCorrelationWindow, isRmg]);
+  }, [alarmRecords, alarmFilter, alarmSearch, correlatedAlarm, isWithinCorrelationWindow, isRmg, isFbd]);
 
   // Paginated Alarms
   const totalAlarms = filteredAlarms.length;
@@ -2900,7 +2924,7 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
             <div className="flex items-center gap-3 text-xs text-slate-500">
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 border border-slate-200 rounded-md font-mono text-[11px] text-slate-700">
                 <Bell className="h-3.5 w-3.5 text-slate-400" />
-                {filteredAlarms.length} of {isRmg ? RMG_ALARM_SUMMARY_MOCK.length : alarmRecords.length} Alarms Filtered
+                {filteredAlarms.length} of {isRmg ? RMG_ALARM_SUMMARY_MOCK.length : isFbd ? FBD_ALARM_SUMMARY_MOCK.length : alarmRecords.length} Alarms Filtered
               </span>
             </div>
           </div>
@@ -2991,7 +3015,9 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
                             <td className="py-2.5 px-3.5 font-mono text-slate-600">
                               {aResolved && aResolved !== "-" ? toDisplayDate(aResolved) : "-"}
                             </td>
-                            <td className="py-2.5 px-3.5 font-mono font-bold text-indigo-700">{aDuration}</td>
+                            <td className={`py-2.5 px-3.5 font-mono font-bold ${aDuration === "-" ? "text-slate-400" : "text-indigo-700"}`}>
+                              {aDuration || "-"}
+                            </td>
                           </tr>
                         );
                       })
