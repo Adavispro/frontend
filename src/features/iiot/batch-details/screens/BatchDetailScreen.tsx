@@ -107,6 +107,58 @@ export const TAB_SEQUENCE: { id: TabType; label: string; shortName: string }[] =
   { id: "AUDIT_TRAIL", label: "AUDIT TRAIL", shortName: "Audit Trail" },
 ];
 
+export function normalizeTabKey(raw: unknown): TabType | null {
+  if (!raw || typeof raw !== "string") return null;
+  const clean = raw.trim().toLowerCase().replace(/[-_\s]/g, "");
+  switch (clean) {
+    case "parametersettings":
+    case "parametersetting":
+    case "parameter":
+    case "parameters":
+      return "PARAMETER_SETTINGS";
+    case "operationalvalue":
+    case "operationalvalues":
+    case "operational":
+      return "OPERATIONAL_VALUE";
+    case "operationaldetailvalues":
+    case "operationaldetailvalue":
+    case "operationaldetails":
+    case "operationaldetail":
+    case "detailvalues":
+      return "OPERATIONAL_DETAIL_VALUES";
+    case "trends":
+    case "trend":
+      return "TRENDS";
+    case "alarmsummary":
+    case "alarms":
+    case "alarm":
+      return "ALARM_SUMMARY";
+    case "audittrail":
+    case "audit":
+    case "audits":
+      return "AUDIT_TRAIL";
+    default:
+      return null;
+  }
+}
+
+export function getTabQueryParam(tab: TabType): string {
+  switch (tab) {
+    case "PARAMETER_SETTINGS":
+      return "parameterSettings";
+    case "OPERATIONAL_VALUE":
+      return "operationalValue";
+    case "OPERATIONAL_DETAIL_VALUES":
+      return "operationalDetailValues";
+    case "TRENDS":
+      return "trends";
+    case "ALARM_SUMMARY":
+      return "alarmSummary";
+    case "AUDIT_TRAIL":
+      return "auditTrail";
+  }
+}
+
 const toText = (value: unknown): string =>
   typeof value === "string" ? value.trim() : value == null ? "" : String(value).trim();
 
@@ -751,6 +803,123 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
   );
   const isAllTabsPassed = passedCount === TAB_SEQUENCE.length || isApprovedBatch;
 
+  // Centralized Sequential Tab Progression Logic (Enforces left-to-right progression for all roles)
+  const isTabCompleted = useCallback(
+    (tabId: TabType): boolean => {
+      if (isApprovedBatch) return true;
+      const status = tabReviews[tabId]?.status;
+      return status === "PASSED" || status === "HAS_QUERIES";
+    },
+    [isApprovedBatch, tabReviews]
+  );
+
+  const nextAvailableTab = useMemo<TabType | null>(() => {
+    if (isApprovedBatch) return null;
+    const pending = TAB_SEQUENCE.find((t) => !isTabCompleted(t.id));
+    return pending ? pending.id : null;
+  }, [isApprovedBatch, isTabCompleted]);
+
+  const isTabAllowed = useCallback(
+    (tabId: TabType): boolean => {
+      if (isApprovedBatch) return true;
+      if (tabId === "PARAMETER_SETTINGS") return true;
+      const targetIndex = TAB_SEQUENCE.findIndex((t) => t.id === tabId);
+      if (targetIndex < 0) return false;
+
+      // Completed tabs are always accessible
+      if (isTabCompleted(tabId)) return true;
+
+      // An uncompleted tab is only accessible if all prior tabs in sequence are completed
+      const priorTabsCompleted = TAB_SEQUENCE.slice(0, targetIndex).every((t) =>
+        isTabCompleted(t.id)
+      );
+      return priorTabsCompleted;
+    },
+    [isApprovedBatch, isTabCompleted]
+  );
+
+  const getLatestAllowedTab = useCallback((): TabType => {
+    if (isApprovedBatch) return "AUDIT_TRAIL";
+    if (nextAvailableTab) return nextAvailableTab;
+    return TAB_SEQUENCE[TAB_SEQUENCE.length - 1].id;
+  }, [isApprovedBatch, nextAvailableTab]);
+
+  const selectTab = useCallback(
+    (tabId: TabType, updateHistory = true) => {
+      if (!isTabAllowed(tabId)) {
+        const targetIndex = TAB_SEQUENCE.findIndex((t) => t.id === tabId);
+        const prevTabObj = targetIndex > 0 ? TAB_SEQUENCE[targetIndex - 1] : null;
+        const msg = prevTabObj
+          ? `Please complete "${prevTabObj.shortName}" first.`
+          : "Please complete the previous section first.";
+        setActionSuccessMsg(msg);
+        setTimeout(() => setActionSuccessMsg(null), 3500);
+        return;
+      }
+
+      setActiveTab(tabId);
+
+      if (updateHistory && typeof window !== "undefined") {
+        const currentUrl = new URL(window.location.href);
+        const queryParam = getTabQueryParam(tabId);
+        if (currentUrl.searchParams.get("tab") !== queryParam) {
+          currentUrl.searchParams.set("tab", queryParam);
+          window.history.pushState(null, "", currentUrl.toString());
+        }
+      }
+    },
+    [isTabAllowed]
+  );
+
+  // Direct URL Protection & Query String Synchronization
+  useEffect(() => {
+    const rawTab = searchParams.get("tab");
+    if (!rawTab) return;
+    const requestedTab = normalizeTabKey(rawTab);
+    if (!requestedTab) return;
+
+    if (isTabAllowed(requestedTab)) {
+      setActiveTab((current) => (current !== requestedTab ? requestedTab : current));
+    } else {
+      // Direct URL attempt to bypass progression: clamp to latest allowed tab
+      const fallbackTab = getLatestAllowedTab();
+      setActiveTab(fallbackTab);
+      if (typeof window !== "undefined") {
+        const cleanUrl = new URL(window.location.href);
+        cleanUrl.searchParams.set("tab", getTabQueryParam(fallbackTab));
+        window.history.replaceState(null, "", cleanUrl.toString());
+      }
+      const requestedObj = TAB_SEQUENCE.find((t) => t.id === requestedTab);
+      setActionSuccessMsg(
+        `"${requestedObj?.shortName || requestedTab}" is locked. Please proceed sequentially.`
+      );
+      setTimeout(() => setActionSuccessMsg(null), 3500);
+    }
+  }, [searchParams, isTabAllowed, getLatestAllowedTab]);
+
+  // Browser Back / Forward History Guard
+  useEffect(() => {
+    const handlePopState = () => {
+      if (typeof window === "undefined") return;
+      const url = new URL(window.location.href);
+      const urlTab = normalizeTabKey(url.searchParams.get("tab")) || "PARAMETER_SETTINGS";
+      if (isTabAllowed(urlTab)) {
+        setActiveTab(urlTab);
+      } else {
+        const fallbackTab = getLatestAllowedTab();
+        setActiveTab(fallbackTab);
+        const cleanUrl = new URL(window.location.href);
+        cleanUrl.searchParams.set("tab", getTabQueryParam(fallbackTab));
+        window.history.replaceState(null, "", cleanUrl.toString());
+        setActionSuccessMsg("Progression state enforced: redirected to available tab.");
+        setTimeout(() => setActionSuccessMsg(null), 3000);
+      }
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [isTabAllowed, getLatestAllowedTab]);
+
 
   // Filter States
   const [parameterSearch, setParameterSearch] = useState("");
@@ -1254,14 +1423,27 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
       setAuditEvents((prev) => [newAudit, ...prev]);
     }
 
-    const nextPendingTab = getNextPendingTab(tab, updated);
-    if (nextPendingTab) {
-      setActiveTab(nextPendingTab);
-      const nextTabObj = TAB_SEQUENCE.find((t) => t.id === nextPendingTab);
+    const currentIdx = TAB_SEQUENCE.findIndex((t) => t.id === tab);
+    const directNextTab = currentIdx >= 0 && currentIdx < TAB_SEQUENCE.length - 1
+      ? TAB_SEQUENCE[currentIdx + 1].id
+      : null;
+    const targetNextTab = directNextTab || getNextPendingTab(tab, updated);
+
+    if (targetNextTab) {
+      setActiveTab(targetNextTab);
+      if (typeof window !== "undefined") {
+        const currentUrl = new URL(window.location.href);
+        const queryParam = getTabQueryParam(targetNextTab);
+        if (currentUrl.searchParams.get("tab") !== queryParam) {
+          currentUrl.searchParams.set("tab", queryParam);
+          window.history.pushState(null, "", currentUrl.toString());
+        }
+      }
+      const nextTabObj = TAB_SEQUENCE.find((t) => t.id === targetNextTab);
       setActionSuccessMsg(
         isAlreadyPassed
-          ? `Moved to next pending tab "${nextTabObj?.shortName || nextPendingTab}".`
-          : `✓ Tab "${tab.replace(/_/g, " ")}" ${roleStageWiseLabel}! Navigating to "${nextTabObj?.shortName || nextPendingTab}".`
+          ? `Moved to next tab "${nextTabObj?.shortName || targetNextTab}".`
+          : `✓ Tab "${tab.replace(/_/g, " ")}" ${roleStageWiseLabel}! Navigating to "${nextTabObj?.shortName || targetNextTab}".`
       );
     } else {
       setActionSuccessMsg(`✓ All ${TAB_SEQUENCE.length} tabs ${roleStageWiseLabel.toLowerCase()} for ${roleTitle} stage! Stage workflow action is now ready.`);
@@ -1401,7 +1583,7 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
   // Alarm Correlation Handler
   const handleCorrelateAlarm = (alarm: AlarmEventRecord) => {
     setCorrelatedAlarm(alarm);
-    setActiveTab("OPERATIONAL_DETAIL_VALUES");
+    selectTab("OPERATIONAL_DETAIL_VALUES", true);
     setParametersPage(1);
   };
 
@@ -2339,12 +2521,20 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
         </div>
       </div>
 
-      {/* Tabs Navigation: 6 Defined GxP Tabs */}
-      <div className="flex border-b border-slate-200 text-xs font-medium space-x-1 sm:space-x-2 overflow-x-auto pb-0.5">
+      {/* Tabs Navigation: 6 Defined GxP Tabs (Strict Sequential Navigation) */}
+      <div
+        className="flex border-b border-slate-200 text-xs font-medium space-x-1 sm:space-x-2 overflow-x-auto pb-0.5"
+        role="tablist"
+        aria-label="Batch Details Sections"
+      >
         {TAB_SEQUENCE.map((tab) => {
           const tabReview = tabReviews[tab.id];
           const isPassed = tabReview?.status === "PASSED" || isApprovedBatch;
           const hasQuery = tabReview?.status === "HAS_QUERIES";
+          const isAllowed = isTabAllowed(tab.id);
+          const isLocked = !isAllowed;
+          const isCurrent = activeTab === tab.id;
+          const isAvailable = !isPassed && !hasQuery && isAllowed;
 
           let TabIcon = SlidersHorizontal;
           if (tab.id === "OPERATIONAL_VALUE") TabIcon = Gauge;
@@ -2362,14 +2552,36 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
               ? `AUDIT TRAIL (${filteredAuditEvents.length})`
               : tab.label;
 
+          const targetIndex = TAB_SEQUENCE.findIndex((t) => t.id === tab.id);
+          const prevTabObj = targetIndex > 0 ? TAB_SEQUENCE[targetIndex - 1] : null;
+
           return (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`pb-2.5 px-3.5 flex items-center gap-2 border-b-2 text-xs transition whitespace-nowrap cursor-pointer ${
-                activeTab === tab.id
-                  ? "border-indigo-600 text-indigo-600 font-bold"
-                  : "border-transparent text-slate-500 hover:text-slate-900 font-semibold"
+              type="button"
+              role="tab"
+              id={`batch-tab-${tab.id.toLowerCase()}`}
+              aria-controls={`batch-tabpanel-${tab.id.toLowerCase()}`}
+              aria-selected={isCurrent}
+              disabled={isLocked}
+              aria-disabled={isLocked}
+              tabIndex={isLocked ? -1 : 0}
+              title={
+                isLocked
+                  ? prevTabObj
+                    ? `Locked. Complete "${prevTabObj.shortName}" first.`
+                    : "Locked. Complete previous tabs sequentially to unlock."
+                  : isPassed
+                  ? `${tabLabel} - ${roleStageWiseLabel}`
+                  : `${tabLabel} - Available`
+              }
+              onClick={() => selectTab(tab.id)}
+              className={`pb-2.5 px-3.5 flex items-center gap-2 border-b-2 text-xs transition whitespace-nowrap ${
+                isCurrent
+                  ? "border-indigo-600 text-indigo-600 font-bold bg-indigo-50/20"
+                  : isLocked
+                  ? "border-transparent text-slate-400 cursor-not-allowed opacity-60"
+                  : "border-transparent text-slate-600 hover:text-slate-900 font-semibold cursor-pointer"
               }`}
             >
               <TabIcon className="h-4 w-4 flex-shrink-0" />
@@ -2384,9 +2596,14 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
                   <WarningCircle className="h-3.5 w-3.5 text-amber-600" weight="fill" />
                   <span>Query</span>
                 </span>
+              ) : isAvailable ? (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                  <span className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
+                  <span>Available</span>
+                </span>
               ) : (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
-                  <Clock className="h-3.5 w-3.5 text-slate-400" />
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-400 border border-slate-200">
+                  <Lock className="h-3 w-3 text-slate-400" weight="bold" />
                   <span>Pending</span>
                 </span>
               )}
@@ -2439,7 +2656,12 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
 
       {/* TAB 1: PARAMETER SETTINGS */}
       {activeTab === "PARAMETER_SETTINGS" && (
-        <div className="space-y-6">
+        <div
+          role="tabpanel"
+          id="batch-tabpanel-parameter_settings"
+          aria-labelledby="batch-tab-parameter_settings"
+          className="space-y-6"
+        >
           <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-slate-100">
               <div>
@@ -2620,7 +2842,12 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
 
       {/* TAB 2: OPERATIONAL VALUE (Summary Cards & Range Table) */}
       {activeTab === "OPERATIONAL_VALUE" && (
-        <div className="space-y-6">
+        <div
+          role="tabpanel"
+          id="batch-tabpanel-operational_value"
+          aria-labelledby="batch-tab-operational_value"
+          className="space-y-6"
+        >
           <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-slate-100">
               <div>
@@ -2781,7 +3008,12 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
 
       {/* TAB 3: OPERATIONAL DETAIL VALUES (Chronological Process Timeline Table) */}
       {activeTab === "OPERATIONAL_DETAIL_VALUES" && (
-        <div className="space-y-6">
+        <div
+          role="tabpanel"
+          id="batch-tabpanel-operational_detail_values"
+          aria-labelledby="batch-tab-operational_detail_values"
+          className="space-y-6"
+        >
           {/* Header Filter Bar */}
           <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto flex-1">
@@ -3006,7 +3238,12 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
 
       {/* TAB 4: TRENDS */}
       {activeTab === "TRENDS" && (
-        <div className="space-y-4">
+        <div
+          role="tabpanel"
+          id="batch-tabpanel-trends"
+          aria-labelledby="batch-tab-trends"
+          className="space-y-4"
+        >
           {correlatedAlarm && (
             <div className="p-3.5 bg-white border border-slate-200 rounded-xl shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex items-center gap-2 text-xs font-semibold text-slate-700">
@@ -3085,7 +3322,12 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
 
       {/* TAB 5: ALARM_SUMMARY */}
       {activeTab === "ALARM_SUMMARY" && (
-        <div className="space-y-6 pb-12">
+        <div
+          role="tabpanel"
+          id="batch-tabpanel-alarm_summary"
+          aria-labelledby="batch-tab-alarm_summary"
+          className="space-y-6 pb-12"
+        >
           {/* Header Filter Bar */}
           <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto flex-1">
@@ -3280,7 +3522,12 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
 
       {/* TAB 6: AUDIT TRAIL */}
       {activeTab === "AUDIT_TRAIL" && (
-        <div className="space-y-6">
+        <div
+          role="tabpanel"
+          id="batch-tabpanel-audit_trail"
+          aria-labelledby="batch-tab-audit_trail"
+          className="space-y-6"
+        >
           {/* Card 0: User Login/Logout Records */}
           <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-slate-100">
