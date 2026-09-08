@@ -871,6 +871,20 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
     [isTabAllowed]
   );
 
+  const currentTabIndex = useMemo(
+    () => TAB_SEQUENCE.findIndex((t) => t.id === activeTab),
+    [activeTab]
+  );
+
+  const isFirstTab = currentTabIndex <= 0;
+  const hasNextTab = currentTabIndex >= 0 && currentTabIndex < TAB_SEQUENCE.length - 1;
+
+  const handlePreviousTab = useCallback(() => {
+    if (isFirstTab || currentTabIndex <= 0) return;
+    const prevTab = TAB_SEQUENCE[currentTabIndex - 1].id;
+    selectTab(prevTab);
+  }, [isFirstTab, currentTabIndex, selectTab]);
+
   // Direct URL Protection & Query String Synchronization
   useEffect(() => {
     const rawTab = searchParams.get("tab");
@@ -3898,6 +3912,28 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
 
         {/* Action Buttons at Bottom */}
         <div className="flex items-center gap-2.5 w-full lg:w-auto justify-end flex-wrap">
+          {/* Previous Tab Navigation Button */}
+          <button
+            type="button"
+            id="batch-nav-previous-btn"
+            disabled={isFirstTab}
+            aria-disabled={isFirstTab}
+            onClick={handlePreviousTab}
+            className={`inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl font-bold text-xs transition shadow-sm ${
+              isFirstTab
+                ? "bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60"
+                : "bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 hover:border-slate-400 cursor-pointer"
+            }`}
+            title={
+              isFirstTab
+                ? "No previous section available"
+                : `Return to previous section "${TAB_SEQUENCE[currentTabIndex - 1]?.shortName || "Previous"}"`
+            }
+          >
+            <ArrowLeft className="h-4 w-4" weight="bold" />
+            <span>Previous</span>
+          </button>
+
           {/* Consolidated Queries Dispatch button if queries are open */}
           {existingQueryList.length > 0 && (
             <button
@@ -3927,16 +3963,17 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
             <span>Request Additional Information</span>
           </button>
 
-          {/* Role-Adaptive Proceed Button - Shown while required tabs are still pending */}
-          {!isAllTabsPassed && !isApprovedBatch && (
+          {/* Role-Adaptive Proceed Button - Shown while there is a next tab or required tabs are still pending */}
+          {!isApprovedBatch && (hasNextTab || !isAllTabsPassed) && (
             <button
               type="button"
+              id="batch-nav-proceed-btn"
               onClick={() => handlePassAndNext(activeTab)}
               className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition shadow-md cursor-pointer"
               title={
                 tabReviews[activeTab]?.status === "PASSED"
-                  ? `Current tab already ${roleStageWiseLabel.toLowerCase()}. Navigate to next pending tab.`
-                  : `${isOperatorRole ? "View" : isReviewerRole ? "Review" : "Approve"} current tab and navigate to next pending tab`
+                  ? `Current tab already ${roleStageWiseLabel.toLowerCase()}. Navigate to next tab.`
+                  : `${isOperatorRole ? "View" : isReviewerRole ? "Review" : "Approve"} current tab and navigate to next tab`
               }
             >
               <CheckCircle className="h-4 w-4" weight="bold" />
