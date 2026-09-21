@@ -60,6 +60,34 @@ export default function ModulesScreen() {
     currentUser?.firstName?.trim() || currentUser?.username || "User";
   const userInitial = displayName.charAt(0).toUpperCase();
 
+  // Derive a friendly role label from the user's assigned roles
+  const ROLE_LABEL_MAP: Record<string, string> = {
+    SUPER_ADMIN: "Super Admin",
+    PLATFORM_SUPER_ADMIN: "Super Admin",
+    PLATFORM_ADMIN: "Admin",
+    IT_ADMIN: "Admin",
+    ADMIN: "Admin",
+    QA_APPROVER_1: "Approver",
+    QA_APPROVER_2: "Approver",
+    QA_APPROVER: "Approver",
+    APPROVER: "Approver",
+    QA_REVIEWER: "Reviewer",
+    PRODUCTION_REVIEWER: "Reviewer",
+    REVIEWER: "Reviewer",
+    PRODUCTION_OPERATOR: "Operator",
+    OPERATOR: "Operator",
+  };
+  // Priority order: most privileged first
+  const ROLE_PRIORITY = [
+    "SUPER_ADMIN", "PLATFORM_SUPER_ADMIN", "PLATFORM_ADMIN", "IT_ADMIN", "ADMIN",
+    "QA_APPROVER_1", "QA_APPROVER_2", "QA_APPROVER", "APPROVER",
+    "QA_REVIEWER", "PRODUCTION_REVIEWER", "REVIEWER",
+    "PRODUCTION_OPERATOR", "OPERATOR",
+  ];
+  const roleCodes: string[] = roles.map((r: any) => r.roleCode || "");
+  const matchedRole = ROLE_PRIORITY.find((rc) => roleCodes.includes(rc));
+  const roleLabel = matchedRole ? ROLE_LABEL_MAP[matchedRole] : null;
+
   const isModuleAuthorized = (moduleId: string): boolean => {
     // Under-development modules are informational previews
     if (moduleId !== "master-management" && moduleId !== "iiot") {
@@ -155,7 +183,7 @@ export default function ModulesScreen() {
           <div className="relative z-10 flex h-full flex-col justify-center px-8 sm:px-12">
             <h1 className="mb-1.5 text-[1.65rem] font-semibold leading-tight">
               <span className="text-[#ffd33f]">
-                Welcome {displayName} !
+                Welcome {roleLabel ?? displayName} !
               </span>
             </h1>
             <p className="mb-2 text-[0.94rem] font-medium text-white">
