@@ -373,8 +373,11 @@ export interface WorkflowAuditEvent {
   actionCode?: string;
   userId: string;
   userName?: string;
+  performedBy?: string;
   userRole?: string;
   comments?: string;
+  reason?: string;
+  printCount?: number;
   esignatureVerified?: boolean;
   esignatureReason?: string;
   regulatoryStatement?: string;
@@ -696,6 +699,102 @@ export const downloadBatchPdfBlob = async (
   link.click();
   document.body.removeChild(link);
   window.URL.revokeObjectURL(downloadUrl);
+};
+
+export interface PrintBatchPdfPayload {
+  batchNo: string;
+  lotNo?: string;
+  equipmentCode?: string;
+  reason: string;
+  password: string;
+  tenantId?: string;
+  plantId?: string;
+}
+
+export interface PrintBatchPdfResult {
+  blob: Blob;
+  printCount?: number;
+  printedBy?: string;
+  printedAt?: string;
+  batchId?: string;
+}
+
+export const printBatchPdf = async (
+  payload: PrintBatchPdfPayload,
+): Promise<PrintBatchPdfResult> => {
+  const url = resourcePath(`batch-reports/${encodeURIComponent(payload.batchNo)}/print`);
+  const response = await fetch(url, {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/pdf, application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    let msg = `Failed to process controlled PDF print (HTTP ${response.status}).`;
+    try {
+      const parsed = JSON.parse(errorText);
+      if (parsed.message) msg = parsed.message;
+    } catch {
+      if (errorText && errorText.length < 200 && !errorText.includes("<!DOCTYPE")) {
+        msg = errorText;
+      }
+    }
+    throw new Error(msg);
+  }
+
+  const printCountHeader = response.headers.get("X-Print-Count");
+  const batchIdHeader = response.headers.get("X-Batch-Id");
+  const printedByHeader = response.headers.get("X-Printed-By");
+  const printedAtHeader = response.headers.get("X-Printed-At");
+
+  const blob = await response.blob();
+  return {
+    blob,
+    printCount: printCountHeader ? parseInt(printCountHeader, 10) : undefined,
+    batchId: batchIdHeader || payload.batchNo,
+    printedBy: printedByHeader || undefined,
+    printedAt: printedAtHeader || undefined,
+  };
+};
+
+/**
+ * Invokes native browser print dialog for a PDF blob without saving to downloads folder.
+ */
+export const invokeBrowserPdfPrint = (blob: Blob): void => {
+  const pdfBlob = new Blob([blob], { type: "application/pdf" });
+  const blobUrl = window.URL.createObjectURL(pdfBlob);
+
+  const iframe = document.createElement("iframe");
+  iframe.style.position = "fixed";
+  iframe.style.right = "0";
+  iframe.style.bottom = "0";
+  iframe.style.width = "0";
+  iframe.style.height = "0";
+  iframe.style.border = "0";
+  iframe.src = blobUrl;
+  document.body.appendChild(iframe);
+
+  iframe.onload = () => {
+    try {
+      setTimeout(() => {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+        setTimeout(() => {
+          if (document.body.contains(iframe)) {
+            document.body.removeChild(iframe);
+          }
+          window.URL.revokeObjectURL(blobUrl);
+        }, 60000);
+      }, 300);
+    } catch {
+      window.open(blobUrl, "_blank");
+    }
+  };
 };
 
 export const getWorkflowDashboardCounts = async (

@@ -892,7 +892,7 @@ export default function PendingReportsScreen() {
                       <button
                         type="button"
                         onClick={() => {
-                          const detailUrl = `${ROUTES.iiotBatchDetails}/${item.batchNo}?lotNo=${encodeURIComponent(
+                          const detailUrl = `${ROUTES.iiotBatchInfo}/${item.batchNo}?lotNo=${encodeURIComponent(
                             item.lotNo
                           )}&equipmentCode=${encodeURIComponent(
                             item.equipmentCode

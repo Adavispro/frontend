@@ -847,7 +847,7 @@ export default function DeferredBatchesScreen() {
                       <div className="flex items-center justify-end gap-2">
                         <button
                           onClick={() => {
-                            const detailUrl = `${ROUTES.iiotBatchDetails}/${item.batchNo}?lotNo=${encodeURIComponent(
+                            const detailUrl = `${ROUTES.iiotBatchInfo}/${item.batchNo}?lotNo=${encodeURIComponent(
                               item.lotNo
                             )}&equipmentCode=${encodeURIComponent(
                               item.equipmentCode

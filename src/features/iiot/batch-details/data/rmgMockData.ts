@@ -603,7 +603,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: null,
     esignatureVerified: true,
     esignatureReason: null,
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-02",
@@ -629,7 +629,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: null,
     esignatureVerified: true,
     esignatureReason: null,
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-03",
@@ -655,7 +655,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: null,
     esignatureVerified: true,
     esignatureReason: null,
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-04",
@@ -681,7 +681,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: null,
     esignatureVerified: true,
     esignatureReason: null,
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-05",
@@ -707,7 +707,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: null,
     esignatureVerified: true,
     esignatureReason: null,
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-06",
@@ -733,7 +733,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: null,
     esignatureVerified: true,
     esignatureReason: null,
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-07",
@@ -759,7 +759,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: null,
     esignatureVerified: true,
     esignatureReason: null,
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-08",
@@ -785,7 +785,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: "BINDER/GRANULATING AGENT ADDITION",
     esignatureVerified: true,
     esignatureReason: "BINDER/GRANULATING AGENT ADDITION",
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-09",
@@ -811,7 +811,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: null,
     esignatureVerified: true,
     esignatureReason: null,
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-10",
@@ -837,7 +837,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: null,
     esignatureVerified: true,
     esignatureReason: null,
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-11",
@@ -863,7 +863,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: null,
     esignatureVerified: true,
     esignatureReason: null,
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-12",
@@ -889,7 +889,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: null,
     esignatureVerified: true,
     esignatureReason: null,
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-13",
@@ -915,7 +915,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: "BINDER/GRANULATING AGENT ADDITION",
     esignatureVerified: true,
     esignatureReason: "BINDER/GRANULATING AGENT ADDITION",
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-14",
@@ -941,7 +941,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: null,
     esignatureVerified: true,
     esignatureReason: null,
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-15",
@@ -967,7 +967,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: null,
     esignatureVerified: true,
     esignatureReason: null,
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-16",
@@ -993,7 +993,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: "BINDER/GRANULATING AGENT ADDITION",
     esignatureVerified: true,
     esignatureReason: "BINDER/GRANULATING AGENT ADDITION",
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-17",
@@ -1019,7 +1019,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: null,
     esignatureVerified: true,
     esignatureReason: null,
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-18",
@@ -1045,7 +1045,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: null,
     esignatureVerified: true,
     esignatureReason: null,
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-19",
@@ -1071,7 +1071,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: null,
     esignatureVerified: true,
     esignatureReason: null,
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-20",
@@ -1097,7 +1097,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: null,
     esignatureVerified: true,
     esignatureReason: null,
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-21",
@@ -1123,7 +1123,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: null,
     esignatureVerified: true,
     esignatureReason: null,
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-22",
@@ -1149,7 +1149,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: "RACKING/SCRAPPING",
     esignatureVerified: true,
     esignatureReason: "RACKING/SCRAPPING",
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-23",
@@ -1175,7 +1175,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: null,
     esignatureVerified: true,
     esignatureReason: null,
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-24",
@@ -1201,7 +1201,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: "RACKING/SCRAPPING",
     esignatureVerified: true,
     esignatureReason: "RACKING/SCRAPPING",
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-25",
@@ -1227,7 +1227,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: null,
     esignatureVerified: true,
     esignatureReason: null,
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-26",
@@ -1253,7 +1253,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: "RACKING/SCRAPPING",
     esignatureVerified: true,
     esignatureReason: "RACKING/SCRAPPING",
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-27",
@@ -1279,7 +1279,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: null,
     esignatureVerified: true,
     esignatureReason: null,
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-28",
@@ -1305,7 +1305,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: "RACKING/SCRAPPING",
     esignatureVerified: true,
     esignatureReason: "RACKING/SCRAPPING",
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-29",
@@ -1331,7 +1331,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: null,
     esignatureVerified: true,
     esignatureReason: null,
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-30",
@@ -1357,7 +1357,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: "RACKING/SCRAPPING",
     esignatureVerified: true,
     esignatureReason: "RACKING/SCRAPPING",
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-31",
@@ -1383,7 +1383,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: null,
     esignatureVerified: true,
     esignatureReason: null,
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-32",
@@ -1409,7 +1409,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: "RACKING/SCRAPPING",
     esignatureVerified: true,
     esignatureReason: "RACKING/SCRAPPING",
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-33",
@@ -1435,7 +1435,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: null,
     esignatureVerified: true,
     esignatureReason: null,
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-34",
@@ -1461,7 +1461,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: "RACKING/SCRAPPING",
     esignatureVerified: true,
     esignatureReason: "RACKING/SCRAPPING",
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-35",
@@ -1487,7 +1487,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: null,
     esignatureVerified: true,
     esignatureReason: null,
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-36",
@@ -1513,7 +1513,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: "RACKING/SCRAPPING",
     esignatureVerified: true,
     esignatureReason: "RACKING/SCRAPPING",
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-37",
@@ -1539,7 +1539,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: null,
     esignatureVerified: true,
     esignatureReason: null,
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-38",
@@ -1565,7 +1565,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: "RACKING/SCRAPPING",
     esignatureVerified: true,
     esignatureReason: "RACKING/SCRAPPING",
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-39",
@@ -1591,7 +1591,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: null,
     esignatureVerified: true,
     esignatureReason: null,
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-40",
@@ -1617,7 +1617,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: "RACKING/SCRAPPING",
     esignatureVerified: true,
     esignatureReason: "RACKING/SCRAPPING",
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-41",
@@ -1643,7 +1643,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: null,
     esignatureVerified: true,
     esignatureReason: null,
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-42",
@@ -1669,7 +1669,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: "RACKING/SCRAPPING",
     esignatureVerified: true,
     esignatureReason: "RACKING/SCRAPPING",
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-43",
@@ -1695,7 +1695,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: null,
     esignatureVerified: true,
     esignatureReason: null,
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-44",
@@ -1721,7 +1721,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: "RACKING/SCRAPPING",
     esignatureVerified: true,
     esignatureReason: "RACKING/SCRAPPING",
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-45",
@@ -1747,7 +1747,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: null,
     esignatureVerified: true,
     esignatureReason: null,
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-46",
@@ -1773,7 +1773,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: "RACKING/SCRAPPING",
     esignatureVerified: true,
     esignatureReason: "RACKING/SCRAPPING",
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-47",
@@ -1799,7 +1799,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: null,
     esignatureVerified: true,
     esignatureReason: null,
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-48",
@@ -1825,7 +1825,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: "RACKING/SCRAPPING",
     esignatureVerified: true,
     esignatureReason: "RACKING/SCRAPPING",
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-49",
@@ -1851,7 +1851,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: null,
     esignatureVerified: true,
     esignatureReason: null,
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-50",
@@ -1877,7 +1877,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: "RACKING/SCRAPPING",
     esignatureVerified: true,
     esignatureReason: "RACKING/SCRAPPING",
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-51",
@@ -1903,7 +1903,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: null,
     esignatureVerified: true,
     esignatureReason: null,
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-52",
@@ -1929,7 +1929,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: "RACKING/SCRAPPING",
     esignatureVerified: true,
     esignatureReason: "RACKING/SCRAPPING",
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-53",
@@ -1955,7 +1955,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: null,
     esignatureVerified: true,
     esignatureReason: null,
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-54",
@@ -1981,7 +1981,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: "RACKING/SCRAPPING",
     esignatureVerified: true,
     esignatureReason: "RACKING/SCRAPPING",
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-55",
@@ -2007,7 +2007,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: null,
     esignatureVerified: true,
     esignatureReason: null,
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-56",
@@ -2033,7 +2033,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: "RACKING/SCRAPPING",
     esignatureVerified: true,
     esignatureReason: "RACKING/SCRAPPING",
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-57",
@@ -2059,7 +2059,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: null,
     esignatureVerified: true,
     esignatureReason: null,
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-58",
@@ -2085,7 +2085,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: "RACKING/SCRAPPING",
     esignatureVerified: true,
     esignatureReason: "RACKING/SCRAPPING",
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-59",
@@ -2111,7 +2111,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: null,
     esignatureVerified: true,
     esignatureReason: null,
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-60",
@@ -2137,7 +2137,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: "RACKING/SCRAPPING",
     esignatureVerified: true,
     esignatureReason: "RACKING/SCRAPPING",
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-61",
@@ -2163,7 +2163,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: null,
     esignatureVerified: true,
     esignatureReason: null,
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-62",
@@ -2189,7 +2189,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: null,
     esignatureVerified: true,
     esignatureReason: null,
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-63",
@@ -2215,7 +2215,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: null,
     esignatureVerified: true,
     esignatureReason: null,
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-64",
@@ -2241,7 +2241,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: null,
     esignatureVerified: true,
     esignatureReason: null,
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-65",
@@ -2267,7 +2267,7 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: "PROCESS OVER",
     esignatureVerified: true,
     esignatureReason: "PROCESS OVER",
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
   {
     auditId: "AUD-RMG-66",
@@ -2293,6 +2293,6 @@ export const RMG_AUDIT_TRAIL_MOCK = [
     comments: null,
     esignatureVerified: true,
     esignatureReason: null,
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    regulatoryStatement: "Legally binding electronic signature.",
   },
 ];

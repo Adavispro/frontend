@@ -5,6 +5,7 @@ export const ALLOWED_RETURN_ROUTES: readonly string[] = [
   ROUTES.iiotPendingReports,
   ROUTES.iiotDeferredBatches,
   ROUTES.iiotApprovedBatches,
+  ROUTES.iiotBatchInfo,
   ROUTES.iiotEquipmentOverview,
   ROUTES.iiotMonitoring,
   ROUTES.iiotAnalytics,

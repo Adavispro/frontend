@@ -273,11 +273,11 @@ export function RequestInformationModal({
             />
           </div>
 
-          {/* 21 CFR Part 11 Electronic Signature Block */}
+          {/* Electronic Signature Block */}
           <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
             <div className="flex items-center gap-2 text-slate-700">
               <ShieldCheck className="h-4 w-4 text-indigo-600" />
-              <span className="text-xs font-bold uppercase tracking-wider">21 CFR Part 11 Electronic Signature</span>
+              <span className="text-xs font-bold uppercase tracking-wider">Electronic Signature</span>
             </div>
 
             <div className="space-y-2">

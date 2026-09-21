@@ -33,6 +33,8 @@ import {
   getEquipmentStatusFilter,
   isBatchDetailsPath,
   getBatchDetailsId,
+  isBatchInfoPath,
+  getBatchInfoId,
 } from "./_route-model";
 
 interface ModuleRouteLayoutProps {
@@ -60,7 +62,17 @@ export default async function ModuleRouteLayout({
       moduleId={moduleItem?.id}
       title={getModulePageTitle(modulePath, moduleItem?.id, moduleItem?.title)}
       breadcrumbs={
-        isBatchDetailsPath(modulePath)
+        isBatchInfoPath(modulePath)
+          ? [
+              { label: "My Actions", href: ROUTES.iiotMyActions },
+              {
+                label: getBatchInfoId(modulePath)
+                  ? `Batch ${getBatchInfoId(modulePath)}`
+                  : "Batch Info",
+                active: true,
+              },
+            ]
+          : isBatchDetailsPath(modulePath)
           ? [
               { label: "My Actions", href: ROUTES.iiotMyActions },
               {

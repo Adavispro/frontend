@@ -143,7 +143,7 @@ export const COAT_AUDIT_TRAIL_MOCK = RAW_COAT_AUDIT_ROWS.map((row, idx) => {
     userRole: row.role,
     comments: row.reason,
     esignatureVerified: true,
-    esignatureReason: row.reason === "-" ? "21 CFR Part 11 Process Audit Record" : row.reason,
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    esignatureReason: row.reason === "-" ? "Process Audit Record" : row.reason,
+    regulatoryStatement: "Legally binding electronic signature.",
   };
 });

@@ -10,6 +10,7 @@ import {
   ArrowClockwise,
   ArrowCounterClockwise,
   DownloadSimple,
+  Printer,
   CheckCircle,
   CaretUp,
   CaretDown,
@@ -28,6 +29,8 @@ import {
   getBatchSummaryPaginated,
   downloadBatchPdfBlob,
 } from "@/features/iiot/equipment/api/reports.api";
+import { useLoginContext } from "@/features/auth/hooks/useCurrentUser";
+import { ControlledPrintModal } from "../../components/ControlledPrintModal";
 import type { BatchSummary } from "@/features/iiot/equipment/schemas/reports.schema";
 import Pagination from "@/components/ui/Pagination";
 import { ROUTES } from "@/config/routes";
@@ -47,6 +50,10 @@ export interface ApprovedBatchItem {
   rawStatus: string;
   displayStatus: string;
   pdfDocumentId?: string;
+  printCount: number;
+  lastPrintedBy?: string | null;
+  lastPrintedAt?: string | null;
+  lastPrintReason?: string | null;
   summaryRef: BatchSummary;
 }
 
@@ -116,10 +123,16 @@ const toDisplayDate = (value: unknown) => {
 
 export default function ApprovedBatchesScreen() {
   const router = useRouter();
+  const loginContext = useLoginContext();
+  const currentUser = loginContext?.user;
+
   const [items, setItems] = useState<ApprovedBatchItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [downloadingBatchNo, setDownloadingBatchNo] = useState<string | null>(null);
+  const [selectedPrintItem, setSelectedPrintItem] = useState<ApprovedBatchItem | null>(null);
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+  const [actionSuccessMsg, setActionSuccessMsg] = useState<string | null>(null);
 
   // In-Page Hierarchical Explicit Filters
   const [filters, setFilters] = useState<ApprovedBatchFilters>(defaultFilters);
@@ -166,6 +179,16 @@ export default function ApprovedBatchesScreen() {
           const sequence = typeof stage.sequenceOrder === "number" ? stage.sequenceOrder : 1;
           const id = `${summaryId}:${batchNo}:${lotNo}:${equipmentCode}:${sequence}`;
 
+          const stagePrintCount = typeof (stage as Record<string, unknown>).printCount === "number"
+            ? ((stage as Record<string, unknown>).printCount as number)
+            : (typeof (approval as Record<string, unknown>).printCount === "number"
+            ? ((approval as Record<string, unknown>).printCount as number)
+            : 0);
+
+          const stageLastPrintedBy = toText((stage as Record<string, unknown>).lastPrintedBy) || null;
+          const stageLastPrintedAt = (stage as Record<string, unknown>).lastPrintedAt ? String((stage as Record<string, unknown>).lastPrintedAt) : null;
+          const stageLastPrintReason = toText((stage as Record<string, unknown>).lastPrintReason) || null;
+
           extracted.push({
             id,
             batchNo,
@@ -181,6 +204,10 @@ export default function ApprovedBatchesScreen() {
             rawStatus,
             displayStatus: "Approved",
             pdfDocumentId: toText(approval.pdfDocumentId || summary.pdfDocumentId),
+            printCount: stagePrintCount,
+            lastPrintedBy: stageLastPrintedBy,
+            lastPrintedAt: stageLastPrintedAt,
+            lastPrintReason: stageLastPrintReason,
             summaryRef: summary,
           });
         }
@@ -475,6 +502,13 @@ export default function ApprovedBatchesScreen() {
         </div>
       </div>
 
+      {actionSuccessMsg && (
+        <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs sm:text-sm font-medium flex items-center gap-2 shadow-sm animate-in fade-in duration-300">
+          <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-emerald-600 flex-shrink-0" />
+          <span>{actionSuccessMsg}</span>
+        </div>
+      )}
+
       {errorMessage && (
         <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 flex items-center gap-3 text-xs shadow-sm">
           <WarningCircle className="h-5 w-5 flex-shrink-0 text-rose-600" />
@@ -744,7 +778,7 @@ export default function ApprovedBatchesScreen() {
                 </tr>
               ) : (
                 paginatedItems.map((item) => {
-                  const detailUrl = `${ROUTES.iiotBatchDetails}/${encodeURIComponent(
+                  const detailUrl = `${ROUTES.iiotBatchInfo}/${encodeURIComponent(
                     item.batchNo
                   )}?batchNo=${encodeURIComponent(item.batchNo)}&lotNo=${encodeURIComponent(
                     item.lotNo
@@ -784,6 +818,9 @@ export default function ApprovedBatchesScreen() {
                           <CheckCircle className="h-3 w-3" />
                           {item.displayStatus}
                         </span>
+                        <div className="text-[10px] text-slate-500 font-mono mt-0.5" title="Controlled print copy count">
+                          {item.printCount ? `${item.printCount} ${item.printCount === 1 ? "print" : "prints"}` : "0 prints"}
+                        </div>
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-1.5">
@@ -797,19 +834,18 @@ export default function ApprovedBatchesScreen() {
                             <Eye className="h-4 w-4" />
                           </button>
 
-                          {/* Compact Download PDF Button with Tooltip */}
+                          {/* Compact Controlled Print PDF Button with Tooltip */}
                           <button
-                            onClick={() => handleDownloadPdf(item)}
-                            disabled={isDownloading}
-                            title="Download GxP Batch Dossier PDF"
-                            aria-label="Download GxP Batch Dossier PDF"
-                            className="p-2 rounded-lg text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm transition disabled:opacity-50 inline-flex items-center justify-center"
+                            type="button"
+                            onClick={() => {
+                              setSelectedPrintItem(item);
+                              setIsPrintModalOpen(true);
+                            }}
+                            title="Print Controlled Batch Dossier PDF"
+                            aria-label="Print Controlled Batch Dossier PDF"
+                            className="p-2 rounded-lg text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm transition disabled:opacity-50 inline-flex items-center justify-center cursor-pointer"
                           >
-                            {isDownloading ? (
-                              <SpinnerGap className="h-4 w-4 animate-spin text-white" />
-                            ) : (
-                              <DownloadSimple className="h-4 w-4" />
-                            )}
+                            <Printer className="h-4 w-4" />
                           </button>
                         </div>
                       </td>
@@ -838,6 +874,49 @@ export default function ApprovedBatchesScreen() {
           </div>
         )}
       </div>
+
+      {/* Controlled Print PDF Modal with Electronic Signature */}
+      {selectedPrintItem && (
+        <ControlledPrintModal
+          isOpen={isPrintModalOpen}
+          onClose={() => {
+            setIsPrintModalOpen(false);
+            setSelectedPrintItem(null);
+          }}
+          onSuccess={(res) => {
+            setIsPrintModalOpen(false);
+            setSelectedPrintItem(null);
+            loadData();
+            setActionSuccessMsg(
+              `Controlled Print authorized & dispatched to print dialog for batch ${selectedPrintItem.batchNo}. (Print Count: ${
+                res?.printCount ?? ((selectedPrintItem.printCount ?? 0) + 1)
+              })`
+            );
+            setTimeout(() => setActionSuccessMsg(null), 6000);
+          }}
+          batchContext={{
+            batchNo: selectedPrintItem.batchNo,
+            lotNo: selectedPrintItem.lotNo,
+            equipmentCode: selectedPrintItem.equipmentCode,
+            productName: selectedPrintItem.productName,
+            currentStatus: selectedPrintItem.rawStatus,
+            printCount: selectedPrintItem.printCount ?? 0,
+            lastPrintedBy: selectedPrintItem.lastPrintedBy,
+            lastPrintedAt: selectedPrintItem.lastPrintedAt,
+            lastPrintReason: selectedPrintItem.lastPrintReason,
+          }}
+          currentUser={
+            currentUser
+              ? {
+                  userId: currentUser.userId,
+                  username: currentUser.username,
+                  fullName: currentUser.username || currentUser.userId,
+                  role: "QA Approver",
+                }
+              : undefined
+          }
+        />
+      )}
     </div>
   );
 }

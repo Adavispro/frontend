@@ -113,6 +113,27 @@ export function getBatchDetailsId(modulePath: ModulePath) {
   return undefined;
 }
 
+export function isBatchInfoPath(modulePath: ModulePath) {
+  const norm = modulePath[0] === "modules" ? modulePath.slice(1) : modulePath;
+  return (
+    norm[0] === "iiot" &&
+    norm[1] === "batch-info" &&
+    norm.length >= 2
+  );
+}
+
+export function getBatchInfoId(modulePath: ModulePath) {
+  const norm = modulePath[0] === "modules" ? modulePath.slice(1) : modulePath;
+  if (
+    norm[0] === "iiot" &&
+    norm[1] === "batch-info" &&
+    norm.length >= 3
+  ) {
+    return decodeURIComponent(norm[2]);
+  }
+  return undefined;
+}
+
 export function isEditProfilePath(modulePath: ModulePath) {
   return `/${modulePath.join("/")}` === ROUTES.editProfile;
 }
@@ -360,7 +381,8 @@ export function isIiotChildRoute(modulePath: ModulePath) {
     isDeferredBatchesPath(modulePath) ||
     isMyActionsPath(modulePath) ||
     isApprovedBatchesPath(modulePath) ||
-    isBatchDetailsPath(modulePath)
+    isBatchDetailsPath(modulePath) ||
+    isBatchInfoPath(modulePath)
   );
 }
 
@@ -414,6 +436,8 @@ export function getModulePageTitle(
   if (isDeferredBatchesPath(modulePath)) return "Deferred Batches";
   if (isMyActionsPath(modulePath)) return "My Actions";
   if (isApprovedBatchesPath(modulePath)) return "Approved Batches";
+  if (isBatchDetailsPath(modulePath)) return "Batch Details";
+  if (isBatchInfoPath(modulePath)) return "Batch Info";
   if (isEditProfilePath(modulePath)) return "Edit Profile";
   if (isUpdatePasswordPath(modulePath)) return "Update Password";
   if (isUserManagementPath(modulePath)) return "System Admin Dashboard";

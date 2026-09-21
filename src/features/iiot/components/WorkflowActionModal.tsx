@@ -105,15 +105,15 @@ export function WorkflowActionModal({
       setBulkResult(null);
 
       if (isApprove) {
-        setEsignReason(isBulk ? "Bulk Batch Stage Release Approval (21 CFR Part 11)" : "Batch Stage Release Approval (21 CFR Part 11)");
+        setEsignReason(isBulk ? "Bulk Batch Stage Release Approval" : "Batch Stage Release Approval");
       } else if (isDefer) {
-        setEsignReason(isBulk ? "Bulk Batch Decision Deferral (21 CFR Part 11)" : "Batch Decision Deferral (21 CFR Part 11)");
+        setEsignReason(isBulk ? "Bulk Batch Decision Deferral" : "Batch Decision Deferral");
       } else if (isRequestAdditionalInfo) {
-        setEsignReason(isBulk ? "Bulk Additional Information Request (21 CFR Part 11)" : "Additional Information Request (21 CFR Part 11)");
+        setEsignReason(isBulk ? "Bulk Additional Information Request" : "Additional Information Request");
       } else if (isSubmitResponse) {
-        setEsignReason(isBulk ? "Bulk Response to Additional Information Request (21 CFR Part 11)" : "Response to Additional Information Request (21 CFR Part 11)");
+        setEsignReason(isBulk ? "Bulk Response to Additional Information Request" : "Response to Additional Information Request");
       } else {
-        setEsignReason(isBulk ? "Bulk Workflow Stage Transition Sign-off (21 CFR Part 11)" : "Workflow Stage Transition Sign-off (21 CFR Part 11)");
+        setEsignReason(isBulk ? "Bulk Workflow Stage Transition Sign-off" : "Workflow Stage Transition Sign-off");
       }
     }
   }, [isOpen, action, isApprove, isDefer, isRequestAdditionalInfo, isSubmitResponse, isBulk]);
@@ -152,7 +152,7 @@ export function WorkflowActionModal({
     }
 
     if (action.requiresEsign && !password.trim()) {
-      setErrorMessage("Electronic signature password is required under 21 CFR Part 11.");
+      setErrorMessage("Electronic signature password is required.");
       return;
     }
 
@@ -432,12 +432,12 @@ export function WorkflowActionModal({
               />
             </div>
 
-            {/* 21 CFR Part 11 Electronic Signature Section */}
+            {/* Electronic Signature Section */}
             {action.requiresEsign && (
               <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
                 <div className="flex items-center gap-2 font-bold text-xs text-slate-800">
                   <Lock className="h-4 w-4 text-indigo-600" />
-                  <span>21 CFR Part 11 Electronic Signature Verification</span>
+                  <span>Electronic Signature Verification</span>
                 </div>
                 <p className="text-[11px] text-slate-500 leading-relaxed">
                   By entering your system password, you attest to the accuracy and completeness of this

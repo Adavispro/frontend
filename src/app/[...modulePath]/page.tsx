@@ -5,6 +5,7 @@ import MasterManagementGuard from "@/components/guards/MasterManagementGuard";
 import AnalyticsOeeScreen from "@/features/iiot/analytics/screens/AnalyticsOeeScreen";
 import ApprovedBatchesScreen from "@/features/iiot/approved-batches/screens/ApprovedBatchesScreen";
 import BatchDetailScreen from "@/features/iiot/batch-details/screens/BatchDetailScreen";
+import BatchInfoScreen from "@/features/iiot/batch-info/screens/BatchInfoScreen";
 import EquipmentDetailScreen from "@/features/iiot/equipment/screens/EquipmentDetailScreen";
 import EquipmentOverviewScreen from "@/features/iiot/equipment/screens/EquipmentOverviewScreen";
 import EquipmentStatusListScreen from "@/features/iiot/equipment/screens/EquipmentStatusListScreen";
@@ -57,6 +58,8 @@ import {
   isApprovedBatchesPath,
   isBatchDetailsPath,
   getBatchDetailsId,
+  isBatchInfoPath,
+  getBatchInfoId,
   isAssignmentManagementPath,
   isAuditLogsPath,
   isBulkUploadPath,
@@ -141,6 +144,9 @@ export function generateStaticParams() {
     },
     {
       modulePath: ROUTES.iiotBatchDetails.slice(1).split("/"),
+    },
+    {
+      modulePath: ROUTES.iiotBatchInfo.slice(1).split("/"),
     },
     {
       modulePath: ROUTES.editProfile.slice(1).split("/"),
@@ -316,6 +322,12 @@ export async function generateMetadata({
   if (isBatchDetailsPath(modulePath)) {
     return {
       title: "Batch Details | ADAVIS",
+    };
+  }
+
+  if (isBatchInfoPath(modulePath)) {
+    return {
+      title: "Batch Info | ADAVIS",
     };
   }
 
@@ -530,6 +542,15 @@ export default async function ModuleRoutePage({
     return (
       <BatchDetailScreen
         batchId={getBatchDetailsId(modulePath)}
+        searchParams={query}
+      />
+    );
+  }
+
+  if (isBatchInfoPath(modulePath)) {
+    return (
+      <BatchInfoScreen
+        batchId={getBatchInfoId(modulePath)}
         searchParams={query}
       />
     );

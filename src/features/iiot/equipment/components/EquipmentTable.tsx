@@ -4,6 +4,7 @@ import DataTable, {
   type DataTableColumn,
 } from "@/components/table/DataTable";
 import type { EquipmentRow } from "../data/equipment-overview";
+import { ROUTES } from "@/config/routes";
 
 const statusClasses: Record<EquipmentRow["status"], string> = {
   Running: "bg-[#DFF8EA] text-[#158047]",
@@ -16,9 +17,9 @@ const statusClasses: Record<EquipmentRow["status"], string> = {
 export const getBatchDetailHref = (row: EquipmentRow) => {
   if (row.lastBatchNo && row.lastBatchNo !== "-" && row.lastBatchNo !== "N/A") {
     const lot = row.lastLotNo && row.lastLotNo !== "-" && row.lastLotNo !== "N/A" ? row.lastLotNo : "01 of 05";
-    return `/iiot/batch-details/${encodeURIComponent(row.lastBatchNo)}?lotNo=${encodeURIComponent(
+    return `${ROUTES.iiotBatchInfo}/${encodeURIComponent(row.lastBatchNo)}?lotNo=${encodeURIComponent(
       lot
-    )}&equipmentCode=${encodeURIComponent(row.id)}&returnTo=${encodeURIComponent("/iiot/equipment-overview")}`;
+    )}&equipmentCode=${encodeURIComponent(row.id)}&returnTo=${encodeURIComponent(ROUTES.iiotEquipmentOverview)}`;
   }
   return `/iiot/equipment/${encodeURIComponent(row.id)}`;
 };

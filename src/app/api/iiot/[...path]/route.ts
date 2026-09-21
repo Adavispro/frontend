@@ -58,17 +58,30 @@ async function proxy(
   const selectedPlantId = request.headers.get(SELECTED_PLANT_HEADER)?.trim();
   const upstreamPath = `/api/v1/iiot/${path.map(encodeURIComponent).join("/")}${requestUrl.search}`;
 
-  // Handle direct binary PDF download
+  // Handle direct binary PDF download & controlled print
   const isPdfRequest = path[0] === "batch-reports" && path[path.length - 1] === "pdf";
-  if (method === "GET" && isPdfRequest) {
+  const isPrintRequest = path[0] === "batch-reports" && path[path.length - 1] === "print";
+
+  if ((method === "GET" && isPdfRequest) || (method === "POST" && isPrintRequest)) {
     try {
+      let reqBody: string | undefined = undefined;
+      if (method === "POST") {
+        try {
+          reqBody = JSON.stringify(await request.json());
+        } catch {
+          reqBody = undefined;
+        }
+      }
+
       const upstreamRes = await fetch(`${SERVER_API_CONFIG.iiotServiceUrl}${upstreamPath}`, {
-        method: "GET",
+        method,
         headers: {
           Authorization: `Bearer ${accessToken}`,
           Accept: "application/pdf, application/json",
+          ...(reqBody ? { "Content-Type": "application/json" } : {}),
           ...(selectedPlantId ? { [SELECTED_PLANT_HEADER]: selectedPlantId } : {}),
         },
+        body: reqBody,
         cache: "no-store",
       });
 
@@ -89,6 +102,18 @@ async function proxy(
           responseHeaders["Content-Length"] = contentLength;
         }
 
+        // Forward custom print tracking headers
+        const printCount = upstreamRes.headers.get("X-Print-Count");
+        const batchId = upstreamRes.headers.get("X-Batch-Id") || upstreamRes.headers.get("X-Batch-No");
+        const printedBy = upstreamRes.headers.get("X-Printed-By");
+        const printedAt = upstreamRes.headers.get("X-Printed-At");
+        if (printCount) responseHeaders["X-Print-Count"] = printCount;
+        if (batchId) responseHeaders["X-Batch-Id"] = batchId;
+        if (printedBy) responseHeaders["X-Printed-By"] = printedBy;
+        if (printedAt) responseHeaders["X-Printed-At"] = printedAt;
+        responseHeaders["Access-Control-Expose-Headers"] =
+          "X-Print-Count, X-Batch-Id, X-Printed-By, X-Printed-At, Content-Disposition";
+
         return new NextResponse(buffer, {
           status: upstreamRes.status,
           headers: responseHeaders,
@@ -97,15 +122,15 @@ async function proxy(
 
       // If upstream returned an error (JSON or text)
       const errText = await upstreamRes.text();
-      let errBody: Record<string, unknown> = { success: false, message: "PDF generation failed." };
+      let errBody: Record<string, unknown> = { success: false, message: "PDF request failed." };
       try {
         errBody = JSON.parse(errText);
       } catch {
-        errBody.message = errText || `PDF generation failed with status ${upstreamRes.status}.`;
+        errBody.message = errText || `PDF request failed with status ${upstreamRes.status}.`;
       }
       return NextResponse.json(errBody, { status: upstreamRes.status || 500 });
     } catch (err) {
-      console.error("PDF stream proxy failed", err);
+      console.error("PDF proxy failed", err);
       return errorResponse(
         503,
         err instanceof Error ? err.message : "The IIOT PDF service is unavailable.",

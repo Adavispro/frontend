@@ -94,7 +94,7 @@ export default function ModuleTopBar({
       return;
     }
 
-    if (pathname.startsWith(ROUTES.iiotBatchDetails)) {
+    if (pathname.startsWith(ROUTES.iiotBatchDetails) || pathname.startsWith(ROUTES.iiotBatchInfo)) {
       router.push(getSafeReturnTo(returnTo, ROUTES.iiotMyActions));
       return;
     }

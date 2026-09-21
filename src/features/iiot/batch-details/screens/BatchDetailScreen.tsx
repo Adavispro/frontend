@@ -223,6 +223,18 @@ const toDisplayDate = (value: unknown): string => {
   return text || "-";
 };
 
+export function cleanAuditContent(text: unknown): string {
+  const str = toText(text);
+  if (!str || str === "-") return "-";
+  return (
+    str
+      .replace(/\[VERIFIED\]\s*/gi, "")
+      .replace(/\s*\(?21\s*CFR(?:\s*Part\s*11)?\)?/gi, "")
+      .replace(/\s{2,}/g, " ")
+      .trim() || "-"
+  );
+}
+
 const getStatusBadge = (status: string) => {
   const normalized = status.toUpperCase();
   if (normalized === "APPROVED" || normalized === "COMPLETED") {
@@ -783,6 +795,7 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
   const [modalAction, setModalAction] = useState<AllowedWorkflowAction | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [actionSuccessMsg, setActionSuccessMsg] = useState<string | null>(null);
+  const [actionErrorMsg, setActionErrorMsg] = useState<string | null>(null);
   // Tab Checkpoint Review States & Queries
   const initialTabReviews: Record<TabType, TabReviewItem> = useMemo(() => ({
     PARAMETER_SETTINGS: { status: "PENDING" },
@@ -1156,7 +1169,7 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
         }
       }
 
-      // 5. Fetch complete 21 CFR Part 11 Audit Trail based on batchNo and lotNo
+      // 5. Fetch complete Audit Trail based on batchNo and lotNo
       try {
         const audit = await getWorkflowAuditTrail({
           batchNo: queryBatchNo,
@@ -1228,7 +1241,7 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
     }).filter((q) => Boolean(q.queryComments && tabReviews[q.tabKey as TabType]?.status === "HAS_QUERIES"));
   }, [tabReviews]);
 
-  // Memoized Request Additional Information & Response Audit Trail (21 CFR Part 11)
+  // Memoized Request Additional Information & Response Audit Trail
   const additionalInfoAuditTrail = useMemo(() => {
     interface QueryAuditRow {
       id: string;
@@ -1432,7 +1445,7 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
         timestamp: new Date().toISOString(),
         esignatureVerified: true,
         esignatureReason: isOperatorRole ? "Tab Review Checkpoint Viewed" : isReviewerRole ? "Tab Review Checkpoint Reviewed" : "Tab Review Checkpoint Approval",
-        regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant tab verification.",
+        regulatoryStatement: "Legally binding electronic signature.",
       };
       setAuditEvents((prev) => [newAudit, ...prev]);
     }
@@ -1523,7 +1536,7 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
       timestamp: new Date().toISOString(),
       esignatureVerified: true,
       esignatureReason: "Request for Information & Process Clarification",
-      regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant query submission.",
+      regulatoryStatement: "Legally binding electronic signature.",
     };
     setAuditEvents((prev) => [newAudit, ...prev]);
   };
@@ -1550,12 +1563,14 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
     } catch (err: unknown) {
       const isConflict =
         (err && typeof err === "object" && "status" in err && (err as { status: number }).status === 409) ||
-        (err instanceof Error && (err.message.includes("already claimed") || err.message.includes("409")));
+        (err instanceof Error && (err.message.includes("already assigned") || err.message.includes("already claimed") || err.message.includes("409")));
       if (isConflict) {
-        alert("This batch has already been claimed by another user. Reloading batch status.");
+        setActionErrorMsg("This batch has already been assigned to another user. The page has been refreshed with the latest status.");
+        setTimeout(() => setActionErrorMsg(null), 6000);
         await loadBatchData();
       } else {
-        alert(err instanceof Error ? err.message : "Failed to claim review task");
+        setActionErrorMsg(err instanceof Error ? err.message : "Failed to assign task. Please try again.");
+        setTimeout(() => setActionErrorMsg(null), 5000);
       }
     } finally {
       setIsClaiming(false);
@@ -1575,7 +1590,8 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
       setActionSuccessMsg(res.message || "Task released back to group queue.");
       await loadBatchData();
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "Failed to release review task");
+      setActionErrorMsg(err instanceof Error ? err.message : "Failed to release the task. Please try again.");
+      setTimeout(() => setActionErrorMsg(null), 5000);
     } finally {
       setIsClaiming(false);
     }
@@ -1588,7 +1604,8 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
       await downloadBatchPdfBlob(queryBatchNo, queryLotNo, queryEquipmentCode);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to download batch dossier PDF.";
-      alert(msg);
+      setActionErrorMsg(msg);
+      setTimeout(() => setActionErrorMsg(null), 5000);
     } finally {
       setIsExporting(false);
     }
@@ -1879,104 +1896,111 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
     return filteredEventData.slice(start, start + eventDataPageSize);
   }, [filteredEventData, safeEventDataPage, eventDataPageSize]);
 
-  // Comprehensive 21 CFR Part 11 Electronic Signature Audit Events
+  // Comprehensive Electronic Signature Audit Events
   const combinedAuditEvents = useMemo((): WorkflowAuditEvent[] => {
+    let list: WorkflowAuditEvent[] = [];
     if (isFbd) {
-      return (FBD_AUDIT_TRAIL_MOCK as unknown as WorkflowAuditEvent[]).map((m) => ({
+      list = (FBD_AUDIT_TRAIL_MOCK as unknown as WorkflowAuditEvent[]).map((m) => ({
         ...m,
         tenantId: "TNT-0001",
         batchNo: queryBatchNo || m.batchNo,
         lotNo: queryLotNo || m.lotNo,
         equipmentCode: targetEquipmentCode || m.equipmentCode,
       }));
-    }
-    if (isRmg) {
-      return (RMG_AUDIT_TRAIL_MOCK as unknown as WorkflowAuditEvent[]).map((m) => ({
+    } else if (isRmg) {
+      list = (RMG_AUDIT_TRAIL_MOCK as unknown as WorkflowAuditEvent[]).map((m) => ({
         ...m,
         tenantId: "TNT-0001",
         batchNo: queryBatchNo || m.batchNo,
         lotNo: queryLotNo || m.lotNo,
         equipmentCode: targetEquipmentCode || m.equipmentCode,
       }));
-    }
-    if (isBle) {
-      return (BLE_AUDIT_TRAIL_MOCK as unknown as WorkflowAuditEvent[]).map((m) => ({
+    } else if (isBle) {
+      list = (BLE_AUDIT_TRAIL_MOCK as unknown as WorkflowAuditEvent[]).map((m) => ({
         ...m,
         tenantId: "TNT-0001",
         batchNo: queryBatchNo || m.batchNo,
         lotNo: queryLotNo || m.lotNo,
         equipmentCode: targetEquipmentCode || m.equipmentCode,
       }));
-    }
-    if (isCoat) {
-      return (COAT_AUDIT_TRAIL_MOCK as unknown as WorkflowAuditEvent[]).map((m) => ({
+    } else if (isCoat) {
+      list = (COAT_AUDIT_TRAIL_MOCK as unknown as WorkflowAuditEvent[]).map((m) => ({
         ...m,
         tenantId: "TNT-0001",
         batchNo: queryBatchNo || m.batchNo,
         lotNo: queryLotNo || m.lotNo,
         equipmentCode: targetEquipmentCode || m.equipmentCode,
       }));
-    }
+    } else {
+      list = [...auditEvents];
+      const existingKeys = new Set(list.map((a) => `${toText(a.userId)}_${toText(a.action || a.actionCode)}_${toText(a.timestamp)}`));
 
-    const list: WorkflowAuditEvent[] = [...auditEvents];
-    const existingKeys = new Set(list.map((a) => `${toText(a.userId)}_${toText(a.action || a.actionCode)}_${toText(a.timestamp)}`));
+      // Incorporate PLC / Ingested process audit records from eventDataRecords
+      for (const ev of eventDataRecords) {
+        const timeStr = getEventDataTime(ev);
+        const desc = getEventDataDescription(ev) || "PROCESS EVENT";
+        const uName = getEventDataUserId(ev) || "Operator";
+        const key = `${uName}_${desc}_${timeStr}`;
+        if (!existingKeys.has(key)) {
+          list.push({
+            auditId: toText(ev.record_id || ev.RecordID || `audit_${uName}_${timeStr}`),
+            tenantId: "TNT-0001",
+            batchNo: queryBatchNo,
+            lotNo: queryLotNo,
+            equipmentCode: targetEquipmentCode,
+            previousStatus: toText(ev.old_value || ev.OldValue || "-"),
+            newStatus: toText(ev.new_value || ev.NewValue || "-"),
+            action: desc,
+            actionCode: desc,
+            userId: uName,
+            userName: uName,
+            userRole: uName.includes("Supervisor") ? "PRODUCTION_SUPERVISOR" : "PRODUCTION_OPERATOR",
+            comments: toText(ev.reason || ev.Reason || "-"),
+            timestamp: timeStr,
+            esignatureVerified: true,
+            esignatureReason: toText(ev.reason || ev.Reason || "Process Audit Record"),
+            regulatoryStatement: "Legally binding electronic signature.",
+          });
+          existingKeys.add(key);
+        }
+      }
 
-    // Incorporate PLC / Ingested process audit records from eventDataRecords
-    for (const ev of eventDataRecords) {
-      const timeStr = getEventDataTime(ev);
-      const desc = getEventDataDescription(ev) || "PROCESS EVENT";
-      const uName = getEventDataUserId(ev) || "Operator";
-      const key = `${uName}_${desc}_${timeStr}`;
-      if (!existingKeys.has(key)) {
-        list.push({
-          auditId: toText(ev.record_id || ev.RecordID || `audit_${uName}_${timeStr}`),
-          tenantId: "TNT-0001",
-          batchNo: queryBatchNo,
-          lotNo: queryLotNo,
-          equipmentCode: targetEquipmentCode,
-          previousStatus: toText(ev.old_value || ev.OldValue || "-"),
-          newStatus: toText(ev.new_value || ev.NewValue || "-"),
-          action: desc,
-          actionCode: desc,
-          userId: uName,
-          userName: uName,
-          userRole: uName.includes("Supervisor") ? "PRODUCTION_SUPERVISOR" : "PRODUCTION_OPERATOR",
-          comments: toText(ev.reason || ev.Reason || "-"),
-          timestamp: timeStr,
-          esignatureVerified: true,
-          esignatureReason: toText(ev.reason || ev.Reason || "21 CFR Part 11 Process Audit Record"),
-          regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
-        });
-        existingKeys.add(key);
+      for (const h of actionHistory) {
+        const key = `${toText(h.performedBy)}_${toText(h.actionCode)}_${toText(h.timestamp)}`;
+        if (!existingKeys.has(key)) {
+          list.push({
+            auditId: h.historyId || `audit_${h.performedBy}_${h.timestamp}`,
+            tenantId: h.tenantId || "TNT-0001",
+            batchNo: h.batchNo || queryBatchNo,
+            lotNo: h.lotNo || queryLotNo,
+            equipmentCode: h.equipmentCode || targetEquipmentCode,
+            previousStatus: h.previousStatus || "PENDING",
+            newStatus: h.newStatus || "UNDER_REVIEW",
+            action: h.actionCode || h.actionName || "STAGE_TRANSITION",
+            actionCode: h.actionCode || "STAGE_TRANSITION",
+            userId: h.performedBy || "OPERATOR_01",
+            userName: h.performerName || h.performedBy || "Operator",
+            userRole: h.performerRole || "PRODUCTION_OPERATOR",
+            comments: h.comments || "Electronic signature verification",
+            timestamp: toText(h.timestamp) || new Date().toISOString(),
+            esignatureVerified: h.esignatureVerified ?? true,
+            esignatureReason: h.esignatureReason || "Workflow Stage Transition Sign-off",
+            regulatoryStatement: "Legally binding electronic signature.",
+          });
+          existingKeys.add(key);
+        }
       }
     }
 
-    for (const h of actionHistory) {
-      const key = `${toText(h.performedBy)}_${toText(h.actionCode)}_${toText(h.timestamp)}`;
-      if (!existingKeys.has(key)) {
-        list.push({
-          auditId: h.historyId || `audit_${h.performedBy}_${h.timestamp}`,
-          tenantId: h.tenantId || "TNT-0001",
-          batchNo: h.batchNo || queryBatchNo,
-          lotNo: h.lotNo || queryLotNo,
-          equipmentCode: h.equipmentCode || targetEquipmentCode,
-          previousStatus: h.previousStatus || "PENDING",
-          newStatus: h.newStatus || "UNDER_REVIEW",
-          action: h.actionCode || h.actionName || "STAGE_TRANSITION",
-          actionCode: h.actionCode || "STAGE_TRANSITION",
-          userId: h.performedBy || "OPERATOR_01",
-          userName: h.performerName || h.performedBy || "Operator",
-          userRole: h.performerRole || "PRODUCTION_OPERATOR",
-          comments: h.comments || "Electronic signature verification",
-          timestamp: toText(h.timestamp) || new Date().toISOString(),
-          esignatureVerified: h.esignatureVerified ?? true,
-          esignatureReason: h.esignatureReason || "Workflow Stage Transition Sign-off",
-          regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
-        });
-        existingKeys.add(key);
-      }
-    }
-    return list;
+    // Exclude print-related logs from audit trail
+    return list.filter((a) => {
+      const raw = a as unknown as Record<string, unknown>;
+      const act = toText(raw.action || raw.actionCode || a.action || a.actionCode).toUpperCase();
+      const desc = toText(raw.description || a.action || "").toUpperCase();
+      const reason = toText(raw.reason || a.esignatureReason).toUpperCase();
+      const comments = toText(raw.comments || a.comments).toUpperCase();
+      return !act.includes("PRINT") && !desc.includes("PRINT") && !reason.includes("PRINT") && !comments.includes("PRINT");
+    });
   }, [isFbd, isRmg, isBle, isCoat, auditEvents, eventDataRecords, actionHistory, queryBatchNo, queryLotNo, targetEquipmentCode]);
 
   // Filtered Audit Events strictly based on Batch Number and Lot Number
@@ -2225,7 +2249,7 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
               onClick={handleDownloadPdf}
               disabled={isExporting || !queryBatchNo}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-sm transition disabled:opacity-50"
-              title="Download Official 21 CFR Part 11 GxP PDF Dossier"
+              title="Download Official GxP PDF Dossier"
             >
               {isExporting ? (
                 <SpinnerGap className="h-3.5 w-3.5 animate-spin" />
@@ -2255,6 +2279,13 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
         </div>
       )}
 
+      {actionErrorMsg && (
+        <div className="p-3 bg-red-50 border border-red-200 text-red-800 rounded-xl text-xs sm:text-sm font-medium flex items-center gap-2 shadow-sm animate-in fade-in duration-300">
+          <XCircle className="h-4 w-4 sm:h-5 sm:w-5 text-red-600 flex-shrink-0" />
+          <span>{actionErrorMsg}</span>
+        </div>
+      )}
+
       {/* Concurrency Review / Approval Lock Banners */}
       {(() => {
         if (isEquipmentOverviewSource) return null;
@@ -2270,7 +2301,7 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
         const bannerRoleTitle = isApprover ? "APPROVER" : isReviewer ? "REVIEWER" : "OPERATOR";
         const roleDisplay = isApprover ? "QA Approver" : isReviewer ? "Production Reviewer" : "Production Operator";
         const actionLabel = isApprover ? "QA APPROVAL" : isReviewer ? "REVIEW" : "OPERATION";
-        const buttonLabel = isApprover ? "Assign to Me / Start Approval" : isReviewer ? "Assign to Me / Start Review" : "Assign to Me / Start Operation";
+        const buttonLabel = isApprover ? "Assign Task to Me / Start Approval" : isReviewer ? "Assign Task to Me / Start Review" : "Assign Task to Me / Start Operation";
         const isAssignableStage = activeStatus !== "COMPLETED" && activeStatus !== "REJECTED";
 
         const isClaimedByMe = Boolean(assignedTo && assignedTo.toUpperCase() === currentUserId.toUpperCase());
@@ -2297,7 +2328,7 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
                     </span>
                   </div>
                   <p className="text-xs text-rose-950 font-semibold mt-1">
-                    <strong>{assignedTo}</strong> ({activeReviewerRole || roleDisplay}) is actively managing this batch dossier (Claimed at {claimedAt ? toDisplayDate(claimedAt) : "just now"}). Action sign-offs are locked for other team members to prevent conflicting duplicate actions.
+                    <strong>{assignedTo}</strong> ({activeReviewerRole || roleDisplay}) is actively managing this batch task (Claimed at {claimedAt ? toDisplayDate(claimedAt) : "just now"}). Action sign-offs are locked for other team members to prevent conflicting duplicate actions.
                   </p>
                 </div>
               </div>
@@ -2306,10 +2337,10 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
                   onClick={handleClaimReview}
                   disabled={isClaiming}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-rose-50 text-rose-900 border border-rose-300 font-semibold text-xs transition shadow-sm"
-                  title="Override assignment if the primary user is unavailable"
+                  title="Override task assignment if the primary user is unavailable"
                 >
                   <Lightning className="h-3.5 w-3.5 text-rose-600" />
-                  {isClaiming ? "Overriding..." : "Takeover Assignment"}
+                  {isClaiming ? "Overriding..." : "Takeover Task"}
                 </button>
               </div>
             </div>
@@ -2327,14 +2358,14 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] font-black uppercase tracking-wider text-emerald-950 bg-emerald-300 px-2 py-0.5 rounded shadow-xs">
-                      ✅ ASSIGNED TO YOU ({roleTitle})
+                      ✅ TASK ASSIGNED TO YOU ({roleTitle})
                     </span>
                     <span className="text-xs font-mono font-bold text-slate-800">
-                      {claimedAt ? `Claimed at ${toDisplayDate(claimedAt)}` : "Active Assignment"}
+                      {claimedAt ? `Claimed at ${toDisplayDate(claimedAt)}` : "Active Task"}
                     </span>
                   </div>
                   <p className="text-xs text-emerald-950 font-semibold mt-1">
-                    You are the active assignee for this batch stage. You have exclusive sign-off authorization to operate, review, and execute workflow transitions.
+                    You are the active assignee for this batch task. You have exclusive sign-off authorization to operate, review, and execute workflow transitions.
                   </p>
                 </div>
               </div>
@@ -2345,7 +2376,7 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 font-semibold text-xs transition shadow-sm"
                 >
                   <XCircle className="h-3.5 w-3.5 text-slate-500" />
-                  {isClaiming ? "Releasing..." : "Release Assignment"}
+                  {isClaiming ? "Releasing..." : "Release Task"}
                 </button>
               </div>
             </div>
@@ -2364,14 +2395,14 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] font-black uppercase tracking-wider text-amber-950 bg-amber-300 px-2 py-0.5 rounded shadow-xs">
-                      ⚡ BATCH READY FOR {actionLabel} — UNASSIGNED
+                      ⚡ BATCH TASK READY FOR {actionLabel} — UNASSIGNED
                     </span>
                     <span className="text-xs font-mono font-bold text-slate-800">
                       Stage: {targetEquipmentCode} &bull; Batch: {queryBatchNo}
                     </span>
                   </div>
                   <p className="text-xs text-amber-950 font-semibold mt-1">
-                    This batch is available in your group queue. Click <strong>&quot;Assign to Me&quot;</strong> to claim execution/review and notify other team members so duplicate work is avoided.
+                    This batch is available in your group queue. Click <strong>&quot;Assign Task to Me&quot;</strong> to claim task and notify other team members so duplicate work is avoided.
                   </p>
                 </div>
               </div>
@@ -2382,7 +2413,7 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
                   className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition shadow-sm"
                 >
                   <UserPlus className="h-4 w-4" />
-                  {isClaiming ? "Assigning..." : buttonLabel}
+                  {isClaiming ? "Assigning Task..." : buttonLabel}
                 </button>
               </div>
             </div>
@@ -3617,7 +3648,7 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
             </div>
           </div>
 
-          {/* Card: 21 CFR Part 11 Request Additional Information & Response Tracking */}
+          {/* Card: Request Additional Information & Response Tracking */}
           <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-slate-100">
               <div>
@@ -3626,7 +3657,7 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
                   Additional Information Requests & Responses Trail
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Batch: <strong className="text-slate-600 font-mono">{queryBatchNo || "-"}</strong> &bull; Traceable Request & Clarification History (21 CFR Part 11)
+                  Batch: <strong className="text-slate-600 font-mono">{queryBatchNo || "-"}</strong> &bull; Traceable Request & Clarification History
                 </p>
               </div>
             </div>
@@ -3704,7 +3735,7 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
             </div>
           </div>
 
-          {/* Card 1: 21 CFR Part 11 Audit Trail Table */}
+          {/* Card 1: Audit Trail Table */}
           <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-slate-100">
               <div>
@@ -3806,7 +3837,7 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
                               {toDisplayDate(event.timestamp)}
                             </td>
                             <td className="py-2.5 px-3.5 font-bold text-slate-900">
-                              {toText(raw.description || event.actionCode || event.action || "BATCH EVENT")}
+                              {cleanAuditContent(toText(raw.description || event.actionCode || event.action || "BATCH EVENT"))}
                             </td>
                             <td className="py-2.5 px-3.5 font-mono text-slate-600">
                               {toText(raw.old_value || raw.oldValue || "-")}
@@ -3815,7 +3846,7 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
                               {toText(raw.new_value || raw.newValue || "-")}
                             </td>
                             <td className="py-2.5 px-3.5 text-slate-700">
-                              {toText(raw.reason || event.esignatureReason || "-")}
+                              {cleanAuditContent(toText(raw.reason || event.esignatureReason || "-"))}
                             </td>
                             <td className="py-2.5 px-3.5 font-semibold text-slate-800">
                               {mapAuditUserName(raw.user_name || raw.userName || event.userName || event.userId, event.equipmentCode || targetEquipmentCode)}
@@ -3875,7 +3906,7 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
                     </span>
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
                       <span className="font-bold text-slate-900 text-xs">
-                        Action: <strong className="text-indigo-600 font-bold">{item.actionName || item.actionCode}</strong> ({item.fromStageCode || "STAGE"} &rarr; {item.toStageCode || "NEXT"})
+                        Action: <strong className="text-indigo-600 font-bold">{cleanAuditContent(item.actionName || item.actionCode)}</strong> ({item.fromStageCode || "STAGE"} &rarr; {item.toStageCode || "NEXT"})
                       </span>
                       <span className="text-xs font-mono text-slate-500 font-semibold">
                         {toDisplayDate(item.timestamp)}
@@ -3886,7 +3917,7 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
                     </p>
                     {item.comments && (
                       <p className="text-xs text-slate-600 mt-1 italic bg-slate-50 p-2.5 rounded-lg border border-slate-200 font-medium">
-                        &quot;{item.comments}&quot;
+                        &quot;{cleanAuditContent(item.comments)}&quot;
                       </p>
                     )}
                   </div>

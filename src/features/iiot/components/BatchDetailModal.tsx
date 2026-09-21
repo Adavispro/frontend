@@ -62,6 +62,18 @@ const toDisplayDate = (value: unknown) => {
   }).format(date);
 };
 
+function cleanAuditContent(text: unknown): string {
+  const str = toText(text);
+  if (!str || str === "-") return "-";
+  return (
+    str
+      .replace(/\[VERIFIED\]\s*/gi, "")
+      .replace(/\s*\(?21\s*CFR(?:\s*Part\s*11)?\)?/gi, "")
+      .replace(/\s{2,}/g, " ")
+      .trim() || "-"
+  );
+}
+
 export default function BatchDetailModal({
   isOpen,
   onClose,
@@ -83,6 +95,15 @@ export default function BatchDetailModal({
   const [snackbarMessage, setSnackbarMessage] = useState("");
   const [isActionDialogOpen, setIsActionDialogOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<"UNDER_REVIEW" | "REVIEWER_REVIEWED" | "APPROVED" | "REJECTED" | null>(null);
+
+  const displayedAuditEvents = useMemo(() => {
+    return auditEvents.filter((a) => {
+      const act = (a.action || a.actionCode || "").toUpperCase();
+      const comments = (a.comments || "").toUpperCase();
+      const reason = (a.esignatureReason || "").toUpperCase();
+      return !act.includes("PRINT") && !comments.includes("PRINT") && !reason.includes("PRINT");
+    });
+  }, [auditEvents]);
 
   const currentUserId = toUpper(loginContext?.user?.userId);
   const roleCodes = useMemo(() => {
@@ -366,7 +387,7 @@ export default function BatchDetailModal({
                   : "text-slate-500 hover:text-slate-800"
               }`}
             >
-              <ShieldCheck size={16} /> Workflow Audit Trail ({auditEvents.length})
+              <ShieldCheck size={16} /> Workflow Audit Trail ({displayedAuditEvents.length})
             </button>
             <button
               type="button"
@@ -414,12 +435,12 @@ export default function BatchDetailModal({
 
             {activeTab === "AUDIT_TRAIL" && (
               <div className="space-y-3">
-                {auditEvents.length === 0 ? (
+                {displayedAuditEvents.length === 0 ? (
                   <div className="text-center py-8 text-slate-400 text-xs">
                     {isLoadingTab ? "Loading audit trail..." : "No previous workflow transition audit records found."}
                   </div>
                 ) : (
-                  auditEvents.map((evt, idx) => (
+                  displayedAuditEvents.map((evt, idx) => (
                     <div key={evt._id || idx} className="flex items-start gap-3 bg-white p-3.5 rounded-lg border border-slate-200 shadow-sm text-xs">
                       <div className="mt-0.5 text-primary">
                         <Clock size={16} />
@@ -427,7 +448,7 @@ export default function BatchDetailModal({
                       <div className="flex-1">
                         <div className="flex items-center justify-between">
                           <span className="font-semibold text-slate-800">
-                            {evt.previousStatus || "START"} <ArrowRight className="inline mx-1" size={12} /> {evt.newStatus}
+                            {cleanAuditContent(evt.previousStatus || "START")} <ArrowRight className="inline mx-1" size={12} /> {cleanAuditContent(evt.newStatus)}
                           </span>
                           <span className="text-slate-400 text-[11px]">{toDisplayDate(evt.timestamp || evt.createdAt)}</span>
                         </div>
@@ -436,7 +457,7 @@ export default function BatchDetailModal({
                         </p>
                         {evt.comments && (
                           <p className="text-slate-500 mt-0.5 bg-slate-50 p-1.5 rounded border border-slate-100">
-                            Reason/Comments: {evt.comments}
+                            Reason/Comments: {cleanAuditContent(evt.comments)}
                           </p>
                         )}
                       </div>

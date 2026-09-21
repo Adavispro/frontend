@@ -133,8 +133,8 @@ export const FBD_AUDIT_TRAIL_MOCK = RAW_FBD_AUDIT_ROWS.map((row, idx) => {
     userRole: row.role,
     comments: row.reason !== "-" ? row.reason : "-",
     esignatureVerified: true,
-    esignatureReason: row.reason !== "-" ? row.reason : "21 CFR Part 11 Process Audit Record",
-    regulatoryStatement: "21 CFR Part 11 / EU Annex 11 compliant legally binding electronic signature.",
+    esignatureReason: row.reason !== "-" ? row.reason : "Process Audit Record",
+    regulatoryStatement: "Legally binding electronic signature.",
   };
 });
 

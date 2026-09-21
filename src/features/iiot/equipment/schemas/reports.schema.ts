@@ -43,6 +43,24 @@ export const batchSummarySchema = z
     alarmCount: z.number().optional().nullable(),
     eventCount: z.number().optional().nullable(),
     overallStatus: z.string().optional().nullable(),
+    printCount: z.number().optional().nullable(),
+    lastPrintedBy: z.string().optional().nullable(),
+    lastPrintedAt: z.string().optional().nullable(),
+    lastPrintReason: z.string().optional().nullable(),
+    printHistory: z
+      .array(
+        z.object({
+          copyNo: z.number().optional().nullable(),
+          printedBy: z.string().optional().nullable(),
+          printedUserId: z.string().optional().nullable(),
+          userRole: z.string().optional().nullable(),
+          printedAt: z.string().optional().nullable(),
+          reason: z.string().optional().nullable(),
+          regulatoryStatement: z.string().optional().nullable(),
+        })
+      )
+      .optional()
+      .nullable(),
     createdAt: z.string().optional().nullable(),
     updatedAt: z.string().optional().nullable(),
     stages: z
@@ -203,6 +221,7 @@ export const oeeAnalyticsPayloadSchema = z.object({
 
 export type EquipmentLiveStatus = z.infer<typeof equipmentLiveStatusSchema>;
 export type BatchSummary = z.infer<typeof batchSummarySchema>;
+export type PrintHistoryRecord = NonNullable<NonNullable<BatchSummary["printHistory"]>[number]>;
 export type CppRecord = z.infer<typeof cppRecordSchema>;
 export type AlarmEventRecord = z.infer<typeof alarmEventRecordSchema>;
 export type CriticalParameterLimit = z.infer<typeof criticalParameterLimitSchema>;
