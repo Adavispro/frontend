@@ -4,7 +4,7 @@ export const FBD_BATCH_SUMMARY_MOCK = {
   lotNo: "01 of 05",
   equipmentId: "FBDC0220",
   equipmentName: "FLUID BED DRYER",
-  productName: "Finasteride USP 5 mg",
+  productName: "Mirtazapine Tablets USP 5 mg",
   productCode: "STFS7000",
   recipeName: "STFS7000",
   batchSize: "900.000 Kg",

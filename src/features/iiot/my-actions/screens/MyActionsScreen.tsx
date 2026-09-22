@@ -145,7 +145,7 @@ export default function MyActionsScreen() {
             batchNo: item.batchNo,
             lotNo: item.lotNo,
             productCode: item.productCode,
-            productName: item.productName || "Finasteride USP 5 mg",
+            productName: item.productName || "Mirtazapine Tablets USP 5 mg",
             equipmentCode: item.equipmentCode,
             equipmentType: item.equipmentType,
             workflowStage: item.workflowStage,

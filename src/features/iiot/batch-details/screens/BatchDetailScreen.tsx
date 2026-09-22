@@ -2510,8 +2510,8 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
             </div>
             <div className="p-2.5 bg-slate-50/80 rounded-xl border border-slate-200/80">
               <span className="text-[10px] uppercase font-bold text-slate-400 block">Product Name</span>
-              <span className="font-bold text-slate-900 mt-0.5 block truncate" title={toText(batchSummary?.productName) || "Finasteride USP 5 mg"}>
-                {toText(batchSummary?.productName) || "Finasteride USP 5 mg"}
+              <span className="font-bold text-slate-900 mt-0.5 block truncate" title={toText(batchSummary?.productName) || "Mirtazapine Tablets USP 5 mg"}>
+                {toText(batchSummary?.productName) || "Mirtazapine Tablets USP 5 mg"}
               </span>
             </div>
             <div className="p-2.5 bg-slate-50/80 rounded-xl border border-slate-200/80">

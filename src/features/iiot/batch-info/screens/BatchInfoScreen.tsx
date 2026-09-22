@@ -1748,8 +1748,8 @@ export default function BatchInfoScreen({ batchId }: BatchInfoScreenProps) {
               </div>
               <div className="p-2.5 bg-slate-50/80 rounded-xl border border-slate-200/80">
                 <span className="text-[10px] uppercase font-bold text-slate-400 block">Product Name</span>
-                <span className="font-bold text-slate-900 mt-0.5 block truncate" title={toText(batchSummary?.productName) || "Finasteride USP 5 mg"}>
-                  {toText(batchSummary?.productName) || "Finasteride USP 5 mg"}
+                <span className="font-bold text-slate-900 mt-0.5 block truncate" title={toText(batchSummary?.productName) || "Mirtazapine Tablets USP 5 mg"}>
+                  {toText(batchSummary?.productName) || "Mirtazapine Tablets USP 5 mg"}
                 </span>
               </div>
               <div className="p-2.5 bg-slate-50/80 rounded-xl border border-slate-200/80">
@@ -1859,11 +1859,11 @@ export default function BatchInfoScreen({ batchId }: BatchInfoScreenProps) {
                 onClick={() => handlePassSection("OPERATIONAL_DETAIL_VALUES")}
                 className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg font-bold text-xs transition shadow-sm cursor-pointer ${
                   sectionReviews.OPERATIONAL_DETAIL_VALUES.status === "PASSED"
-                    ? "bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100"
-                    : "bg-emerald-600 hover:bg-emerald-700 text-white"
+                    ? "bg-emerald-600 hover:bg-emerald-700 text-white border border-emerald-600"
+                    : "bg-blue-600 hover:bg-blue-700 text-white animate-blue-blink"
                 }`}
               >
-                <CheckCircle className="h-3.5 w-3.5" weight="bold" />
+                <CheckCircle className="h-3.5 w-3.5" weight={sectionReviews.OPERATIONAL_DETAIL_VALUES.status === "PASSED" ? "fill" : "bold"} />
                 <span>{sectionReviews.OPERATIONAL_DETAIL_VALUES.status === "PASSED" ? `Verified (${roleStageWiseLabel})` : `Verify Section (${isOperatorRole ? "Mark Viewed" : isReviewerRole ? "Review" : "Approve"})`}</span>
               </button>
             )}
@@ -2118,11 +2118,11 @@ export default function BatchInfoScreen({ batchId }: BatchInfoScreenProps) {
                 onClick={() => handlePassSection("ALARM_SUMMARY")}
                 className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg font-bold text-xs transition shadow-sm cursor-pointer ${
                   sectionReviews.ALARM_SUMMARY.status === "PASSED"
-                    ? "bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100"
-                    : "bg-emerald-600 hover:bg-emerald-700 text-white"
+                    ? "bg-emerald-600 hover:bg-emerald-700 text-white border border-emerald-600"
+                    : "bg-blue-600 hover:bg-blue-700 text-white animate-blue-blink"
                 }`}
               >
-                <CheckCircle className="h-3.5 w-3.5" weight="bold" />
+                <CheckCircle className="h-3.5 w-3.5" weight={sectionReviews.ALARM_SUMMARY.status === "PASSED" ? "fill" : "bold"} />
                 <span>{sectionReviews.ALARM_SUMMARY.status === "PASSED" ? `Verified (${roleStageWiseLabel})` : `Verify Section (${isOperatorRole ? "Mark Viewed" : isReviewerRole ? "Review" : "Approve"})`}</span>
               </button>
             )}
@@ -2325,11 +2325,11 @@ export default function BatchInfoScreen({ batchId }: BatchInfoScreenProps) {
                 onClick={() => handlePassSection("AUDIT_TRAIL")}
                 className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg font-bold text-xs transition shadow-sm cursor-pointer ${
                   sectionReviews.AUDIT_TRAIL.status === "PASSED"
-                    ? "bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100"
-                    : "bg-emerald-600 hover:bg-emerald-700 text-white"
+                    ? "bg-emerald-600 hover:bg-emerald-700 text-white border border-emerald-600"
+                    : "bg-blue-600 hover:bg-blue-700 text-white animate-blue-blink"
                 }`}
               >
-                <CheckCircle className="h-3.5 w-3.5" weight="bold" />
+                <CheckCircle className="h-3.5 w-3.5" weight={sectionReviews.AUDIT_TRAIL.status === "PASSED" ? "fill" : "bold"} />
                 <span>{sectionReviews.AUDIT_TRAIL.status === "PASSED" ? `Verified (${roleStageWiseLabel})` : `Verify Section (${isOperatorRole ? "Mark Viewed" : isReviewerRole ? "Review" : "Approve"})`}</span>
               </button>
             )}
@@ -2649,7 +2649,7 @@ export default function BatchInfoScreen({ batchId }: BatchInfoScreenProps) {
               </p>
             </div>
             <span className="text-xs font-mono font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-lg border border-indigo-200">
-              Current: {activeStatus.replace(/_/g, " ")}
+              Current Status: {activeStatus.replace(/_/g, " ")}
             </span>
           </div>
 
@@ -2962,7 +2962,7 @@ export default function BatchInfoScreen({ batchId }: BatchInfoScreenProps) {
             lotNo: queryLotNo || toText(batchSummary?.lotNo) || "01 of 05",
             equipmentCode: queryEquipmentCode || toText(batchSummary?.equipmentId) || "PB3 RMGC0219",
             equipmentName: toText(batchSummary?.equipmentId || "Equipment"),
-            productName: toText(batchSummary?.productName || "Finasteride USP 5 mg"),
+            productName: toText(batchSummary?.productName || "Mirtazapine Tablets USP 5 mg"),
             currentStatus: activeStatus,
           }}
           tenantId="TNT-0001"
@@ -2983,7 +2983,7 @@ export default function BatchInfoScreen({ batchId }: BatchInfoScreenProps) {
           lotNo: queryLotNo || toText(batchSummary?.lotNo) || "01 of 05",
           equipmentCode: queryEquipmentCode || toText(batchSummary?.equipmentId) || "PB3 RMGC0219",
           equipmentName: toText(batchSummary?.equipmentId || "Equipment"),
-          productName: toText(batchSummary?.productName || "Finasteride USP 5 mg"),
+          productName: toText(batchSummary?.productName || "Mirtazapine Tablets USP 5 mg"),
           currentStatus: activeStatus,
         }}
         tenantId="TNT-0001"
@@ -3041,7 +3041,7 @@ export default function BatchInfoScreen({ batchId }: BatchInfoScreenProps) {
           batchNo: queryBatchNo,
           lotNo: queryLotNo || toText(batchSummary?.lotNo) || "01 of 05",
           equipmentCode: queryEquipmentCode || toText(batchSummary?.equipmentId) || targetEquipmentCode,
-          productName: toText(batchSummary?.productName) || "Finasteride USP 5 mg",
+          productName: toText(batchSummary?.productName) || "Mirtazapine Tablets USP 5 mg",
           currentStatus: activeStatus,
           printCount: currentPrintCount,
           lastPrintedBy: currentLastPrintedBy,

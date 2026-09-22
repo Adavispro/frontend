@@ -4,7 +4,7 @@ export const BLE_BATCH_SUMMARY_MOCK = {
   lotNo: "01 of 05",
   equipmentId: "OCBC0222",
   equipmentName: "OCTAGONAL BLENDER",
-  productName: "Finasteride USP 5 mg",
+  productName: "Mirtazapine Tablets USP 5 mg",
   productCode: "STFS7000",
   recipeName: "STFS7000",
   batchSize: "900.000 Kg",
