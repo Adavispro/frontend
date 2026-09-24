@@ -12,16 +12,22 @@ import type {
   IiotMasterRecord,
   IiotMasterSection,
   ProductMaster,
+  RecipeManagement,
+  RecipeMaster,
   UpdateCriticalParameterLimitValues,
   UpdateCriticalParameterValues,
   UpdateIiotAssetValues,
   UpdateProductMasterValues,
+  UpdateRecipeManagementValues,
+  UpdateRecipeMasterValues,
 } from "../api";
 import {
   updateCriticalParameterLimitSchema,
   updateCriticalParameterSchema,
   updateIiotAssetSchema,
   updateProductMasterSchema,
+  updateRecipeManagementSchema,
+  updateRecipeMasterSchema,
 } from "../schemas";
 
 type EditValues = Record<string, string | boolean>;
@@ -41,6 +47,8 @@ interface IiotMasterEditDialogProps {
   record: IiotMasterRecord | null;
   equipments: IiotAsset[];
   criticalParameters: CriticalParameter[];
+  products?: ProductMaster[];
+  recipeMasters?: RecipeMaster[];
   isSaving?: boolean;
   onClose: () => void;
   onSave: (
@@ -48,7 +56,9 @@ interface IiotMasterEditDialogProps {
       | UpdateIiotAssetValues
       | UpdateCriticalParameterValues
       | UpdateCriticalParameterLimitValues
-      | UpdateProductMasterValues,
+      | UpdateProductMasterValues
+      | UpdateRecipeMasterValues
+      | UpdateRecipeManagementValues,
   ) => Promise<void>;
 }
 
@@ -57,6 +67,8 @@ const sectionTitles: Record<IiotMasterSection, string> = {
   "critical-parameters": "Edit Critical Parameter",
   "critical-parameter-limits": "Edit Critical Parameter Limit",
   "product-master": "Edit Product Master",
+  "recipe-master": "Edit Recipe Master",
+  "recipe-management": "Edit Recipe Parameter Limit",
 };
 
 const option = (value: string, label = value) => ({ value, label });
@@ -164,6 +176,40 @@ const initialValues = (
     };
   }
 
+  if (section === "recipe-master" && record && "recipeId" in record) {
+    const recipe = record as RecipeMaster;
+    return {
+      recipeCode: recipe.recipeCode,
+      recipeName: recipe.recipeName,
+      productId: recipe.productId,
+      description: recipe.description ?? "",
+      version: recipe.version ?? "1.0",
+      associatedBatchSizes: Array.isArray(recipe.associatedBatchSizes)
+        ? recipe.associatedBatchSizes.join(", ")
+        : String(recipe.associatedBatchSizes ?? ""),
+      tenantId: recipe.tenantId,
+      plantId: recipe.plantId,
+      isActive: Boolean(recipe.isActive),
+    };
+  }
+
+  if (section === "recipe-management" && record && "recipeManagementId" in record) {
+    const rm = record as RecipeManagement;
+    return {
+      recipeId: rm.recipeId,
+      productId: rm.productId,
+      batchSize: rm.batchSize,
+      equipmentId: rm.equipmentId,
+      parameterCode: rm.parameterCode,
+      targetSetpoint: String(rm.targetSetpoint),
+      lowLimit: String(rm.lowLimit),
+      highLimit: String(rm.highLimit),
+      tenantId: rm.tenantId,
+      plantId: rm.plantId,
+      isActive: Boolean(rm.isActive),
+    };
+  }
+
   return {};
 };
 
@@ -173,6 +219,8 @@ export default function IiotMasterEditDialog({
   record,
   equipments,
   criticalParameters,
+  products = [],
+  recipeMasters = [],
   isSaving = false,
   onClose,
   onSave,
@@ -361,6 +409,43 @@ export default function IiotMasterEditDialog({
       ];
     }
 
+    if (section === "recipe-master") {
+      const productOptions = [
+        emptyOption("Select Product"),
+        ...products
+          .filter((p) => p.isActive)
+          .map((p) =>
+            option(
+              p.productId,
+              `${p.productName} (${p.productCode || p.productId})`,
+            ),
+          ),
+      ];
+      return [
+        { id: "productId", label: "Product", kind: "select", options: productOptions },
+        { id: "recipeCode", label: "Recipe Code", disabled: true },
+        { id: "recipeName", label: "Recipe Name" },
+        { id: "version", label: "Version" },
+        { id: "associatedBatchSizes", label: "Associated Batch Sizes (e.g. 100kg, 200kg)" },
+        { id: "description", label: "Description" },
+        { id: "isActive", label: "Active", kind: "checkbox" },
+      ];
+    }
+
+    if (section === "recipe-management") {
+      return [
+        { id: "productId", label: "Product ID", disabled: true },
+        { id: "recipeId", label: "Recipe ID", disabled: true },
+        { id: "batchSize", label: "Batch Size", disabled: true },
+        { id: "equipmentId", label: "Equipment ID", disabled: true },
+        { id: "parameterCode", label: "Parameter Code", disabled: true },
+        { id: "targetSetpoint", label: "Target Setpoint", kind: "number" },
+        { id: "lowLimit", label: "Low Limit", kind: "number" },
+        { id: "highLimit", label: "High Limit", kind: "number" },
+        { id: "isActive", label: "Active", kind: "checkbox" },
+      ];
+    }
+
     return [
       {
         id: "tenantId",
@@ -404,6 +489,8 @@ export default function IiotMasterEditDialog({
     criticalParameters,
     equipments,
     plantId,
+    products,
+    recipeMasters,
     roomId,
     section,
     tenantId,
@@ -571,6 +658,26 @@ export default function IiotMasterEditDialog({
                     : undefined,
               };
             })()
+        : section === "recipe-master"
+          ? {
+              ...payload,
+              associatedBatchSizes:
+                typeof payload.associatedBatchSizes === "string"
+                  ? payload.associatedBatchSizes
+                      .split(",")
+                      .map((s) => s.trim())
+                      .filter(Boolean)
+                  : Array.isArray(payload.associatedBatchSizes)
+                    ? payload.associatedBatchSizes
+                    : [],
+            }
+        : section === "recipe-management"
+          ? {
+              ...payload,
+              targetSetpoint: Number(payload.targetSetpoint),
+              lowLimit: Number(payload.lowLimit),
+              highLimit: Number(payload.highLimit),
+            }
         : payload;
     const schema =
       section === "equipments"
@@ -579,7 +686,11 @@ export default function IiotMasterEditDialog({
           ? updateCriticalParameterSchema
           : section === "critical-parameter-limits"
             ? updateCriticalParameterLimitSchema
-            : updateProductMasterSchema;
+            : section === "recipe-master"
+              ? updateRecipeMasterSchema
+              : section === "recipe-management"
+                ? updateRecipeManagementSchema
+                : updateProductMasterSchema;
 
     const parsed = schema.safeParse(normalizedPayload);
     if (!parsed.success) {
@@ -599,7 +710,9 @@ export default function IiotMasterEditDialog({
         | UpdateIiotAssetValues
         | UpdateCriticalParameterValues
         | UpdateCriticalParameterLimitValues
-        | UpdateProductMasterValues,
+        | UpdateProductMasterValues
+        | UpdateRecipeMasterValues
+        | UpdateRecipeManagementValues,
     );
   };
 

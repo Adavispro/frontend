@@ -11,6 +11,8 @@ const allowedRoots = new Set([
   "critical-parameters",
   "critical-parameter-limits",
   "product-master",
+  "recipe-master",
+  "recipe-management",
 ]);
 
 const errorResponse = (status: number, message: string, errorCode: string) =>

@@ -29,6 +29,7 @@ import {
   Pulse,
   Scales,
   ShieldCheck,
+  Sliders,
   SquaresFour,
   UploadSimple,
   User,
@@ -104,6 +105,12 @@ const iiotNavigationItems: NavigationItem[] = [
     href: ROUTES.iiotApprovedBatches,
     isActive: (pathname) => pathname === ROUTES.iiotApprovedBatches,
   },
+  {
+    label: "Recipe Management",
+    icon: Sliders,
+    href: ROUTES.iiotRecipeManagement,
+    isActive: (pathname) => pathname === ROUTES.iiotRecipeManagement,
+  },
 ];
 
 const sidebarItemsByModuleId: Record<string, NavigationItem[]> = {
@@ -174,7 +181,7 @@ const sidebarItemsByModuleId: Record<string, NavigationItem[]> = {
         pathname.startsWith(`${ROUTES.masterAssignments}/`),
     },
     {
-      label: "IIoT Master",
+      label: "Master",
       icon: Cpu,
       href: ROUTES.masterIiotEquipments,
       isActive: (pathname) =>

@@ -22,6 +22,8 @@ const allowedRoots = new Set([
   "batch-reports",
   "topology",
   "live",
+  "recipe-master",
+  "recipe-management",
 ]);
 
 const errorResponse = (status: number, message: string, errorCode: string) =>

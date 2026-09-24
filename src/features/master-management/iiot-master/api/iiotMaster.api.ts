@@ -5,21 +5,29 @@ import {
   criticalParameterSchema,
   iiotAssetSchema,
   productMasterSchema,
+  recipeManagementSchema,
+  recipeMasterSchema,
 } from "../schemas";
 import type {
   CreateCriticalParameterLimitValues,
   CreateCriticalParameterValues,
   CreateIiotAssetValues,
   CreateProductMasterValues,
+  CreateRecipeManagementValues,
+  CreateRecipeMasterValues,
   CriticalParameter,
   CriticalParameterLimit,
   IiotAsset,
   IiotMasterSection,
   ProductMaster,
+  RecipeManagement,
+  RecipeMaster,
   UpdateCriticalParameterLimitValues,
   UpdateCriticalParameterValues,
   UpdateIiotAssetValues,
   UpdateProductMasterValues,
+  UpdateRecipeManagementValues,
+  UpdateRecipeMasterValues,
 } from "./types";
 
 const root = "/api/master-management/iiot";
@@ -41,6 +49,9 @@ const unwrapCollectionPayload = (value: unknown): unknown[] => {
     record.equipmentMasters,
     record.criticalParameters,
     record.productMasters,
+    record.recipeMasters,
+    record.recipes,
+    record.recipeManagements,
   ];
   const list = candidates.find(Array.isArray);
   return Array.isArray(list) ? list : [];
@@ -131,6 +142,37 @@ const normalizeProductMaster = (value: unknown) => {
     ...row,
     productId: textId(row.productId, textId(row.productCode)),
     productCode: textId(row.productCode, textId(row.productId)),
+    tenantId: textId(row.tenantId),
+    plantId: textId(row.plantId),
+  };
+};
+
+const normalizeRecipeMaster = (value: unknown) => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  const row = value as Record<string, unknown>;
+  return {
+    ...row,
+    recipeId: textId(row.recipeId, textId(row.recipeCode)),
+    recipeCode: textId(row.recipeCode, textId(row.recipeId)),
+    productId: textId(row.productId, textId(row.productCode)),
+    tenantId: textId(row.tenantId),
+    plantId: textId(row.plantId),
+  };
+};
+
+const normalizeRecipeManagement = (value: unknown) => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  const row = value as Record<string, unknown>;
+  return {
+    ...row,
+    recipeManagementId: textId(row.recipeManagementId, textId(row.id)),
+    recipeId: textId(row.recipeId),
+    productId: textId(row.productId),
+    equipmentId: textId(row.equipmentId),
+    parameterCode: textId(row.parameterCode),
+    targetSetpoint: toNumber(row.targetSetpoint) ?? 0,
+    lowLimit: toNumber(row.lowLimit) ?? 0,
+    highLimit: toNumber(row.highLimit) ?? 0,
     tenantId: textId(row.tenantId),
     plantId: textId(row.plantId),
   };
@@ -457,6 +499,239 @@ export async function updateProductMaster(
   );
 }
 
+export async function getRecipeMasters(signal?: AbortSignal) {
+  const result = await apiClient<BackendApiResponse<unknown>>(
+    `${root}/recipe-master`,
+    { signal },
+  );
+  return parseListLenient(
+    dataOrThrow(result, "Unable to load recipe masters."),
+    normalizeRecipeMaster,
+    recipeMasterSchema,
+  );
+}
+
+export async function getRecipeMaster(recipeId: string, signal?: AbortSignal) {
+  const result = await apiClient<BackendApiResponse<unknown>>(
+    `${root}/recipe-master/${encodeURIComponent(recipeId)}`,
+    { signal },
+  );
+  return recipeMasterSchema.parse(
+    dataOrThrow(result, "Unable to load recipe master record."),
+  );
+}
+
+export async function createRecipeMaster(request: CreateRecipeMasterValues) {
+  const result = await apiClient<
+    BackendApiResponse<unknown>,
+    CreateRecipeMasterValues
+  >(`${root}/recipe-master`, {
+    method: "POST",
+    body: request,
+  });
+  return recipeMasterSchema.parse(
+    dataOrThrow(result, "Unable to create recipe master record."),
+  );
+}
+
+export async function updateRecipeMaster(
+  recipeId: string,
+  request: UpdateRecipeMasterValues,
+) {
+  const result = await apiClient<
+    BackendApiResponse<unknown>,
+    UpdateRecipeMasterValues
+  >(`${root}/recipe-master/${encodeURIComponent(recipeId)}`, {
+    method: "PUT",
+    body: request,
+  });
+  return recipeMasterSchema.parse(
+    dataOrThrow(result, "Unable to update recipe master record."),
+  );
+}
+
+export async function getRecipeBatchSizes(
+  recipeId: string,
+  signal?: AbortSignal,
+): Promise<string[]> {
+  const result = await apiClient<BackendApiResponse<string[]>>(
+    `${root}/recipe-master/${encodeURIComponent(recipeId)}/batch-sizes`,
+    { signal },
+  );
+  return dataOrThrow(result, "Unable to load recipe batch sizes.") ?? [];
+}
+
+export async function addRecipeBatchSize(
+  recipeId: string,
+  batchSize: string,
+  signal?: AbortSignal,
+): Promise<RecipeMaster> {
+  const result = await apiClient<BackendApiResponse<unknown>, { batchSize: string }>(
+    `${root}/recipe-master/${encodeURIComponent(recipeId)}/batch-sizes`,
+    {
+      method: "POST",
+      body: { batchSize },
+      signal,
+    },
+  );
+  return recipeMasterSchema.parse(
+    dataOrThrow(result, "Unable to add batch size association."),
+  );
+}
+
+export async function removeRecipeBatchSize(
+  recipeId: string,
+  batchSize: string,
+  signal?: AbortSignal,
+): Promise<RecipeMaster> {
+  const params = new URLSearchParams({ batchSize });
+  const result = await apiClient<BackendApiResponse<unknown>>(
+    `${root}/recipe-master/${encodeURIComponent(recipeId)}/batch-sizes?${params.toString()}`,
+    {
+      method: "DELETE",
+      signal,
+    },
+  );
+  return recipeMasterSchema.parse(
+    dataOrThrow(result, "Unable to remove batch size association."),
+  );
+}
+
+export async function getRecipeManagements(
+  query?: { recipeId?: string; productId?: string; equipmentId?: string },
+  signal?: AbortSignal,
+) {
+  const params = new URLSearchParams();
+  if (query?.recipeId) params.set("recipeId", query.recipeId);
+  if (query?.productId) params.set("productId", query.productId);
+  if (query?.equipmentId) params.set("equipmentId", query.equipmentId);
+  const qs = params.toString() ? `?${params.toString()}` : "";
+
+  const result = await apiClient<BackendApiResponse<unknown>>(
+    `${root}/recipe-management${qs}`,
+    { signal },
+  );
+  return parseListLenient(
+    dataOrThrow(result, "Unable to load recipe management records."),
+    normalizeRecipeManagement,
+    recipeManagementSchema,
+  );
+}
+
+export async function getRecipeManagement(id: string, signal?: AbortSignal) {
+  const result = await apiClient<BackendApiResponse<unknown>>(
+    `${root}/recipe-management/${encodeURIComponent(id)}`,
+    { signal },
+  );
+  return recipeManagementSchema.parse(
+    dataOrThrow(result, "Unable to load recipe management record."),
+  );
+}
+
+export async function createRecipeManagement(
+  request: CreateRecipeManagementValues,
+) {
+  const result = await apiClient<
+    BackendApiResponse<unknown>,
+    CreateRecipeManagementValues
+  >(`${root}/recipe-management`, {
+    method: "POST",
+    body: request,
+  });
+  return recipeManagementSchema.parse(
+    dataOrThrow(result, "Unable to create recipe management record."),
+  );
+}
+
+export async function updateRecipeManagement(
+  id: string,
+  request: UpdateRecipeManagementValues,
+) {
+  const result = await apiClient<
+    BackendApiResponse<unknown>,
+    UpdateRecipeManagementValues
+  >(`${root}/recipe-management/${encodeURIComponent(id)}`, {
+    method: "PUT",
+    body: request,
+  });
+  return recipeManagementSchema.parse(
+    dataOrThrow(result, "Unable to update recipe management record."),
+  );
+}
+
+export async function saveRecipeManagementBatch(
+  payload: {
+    productId: string;
+    recipeId: string;
+    batchSize: string;
+    equipmentId: string;
+    parameters: Array<{
+      parameterCode: string;
+      parameterName?: string;
+      unitOfMeasure?: string;
+      targetSetpoint?: number;
+      lowLimit?: number;
+      highLimit?: number;
+    }>;
+    tenantId?: string;
+    plantId?: string;
+  },
+  signal?: AbortSignal,
+): Promise<RecipeManagement[]> {
+  const result = await apiClient<BackendApiResponse<unknown>, typeof payload>(
+    `${root}/recipe-management/batch`,
+    {
+      method: "POST",
+      body: payload,
+      signal,
+    },
+  );
+  return parseListLenient(
+    dataOrThrow(result, "Unable to save recipe management configurations."),
+    normalizeRecipeManagement,
+    recipeManagementSchema,
+  );
+}
+
+export async function uploadRecipeToHmi(payload: {
+  tenantId?: string;
+  plantId?: string;
+  recipeId: string;
+  batchSize?: string;
+  equipmentId?: string;
+}) {
+  const result = await apiClient<BackendApiResponse<unknown>, typeof payload>(
+    `${root}/upload-to-hmi`,
+    {
+      method: "POST",
+      body: payload,
+    },
+  );
+  return dataOrThrow(result, "Unable to upload recipe to HMI.");
+}
+
+export async function getEffectiveLimits(params: {
+  tenantId?: string;
+  plantId?: string;
+  productId?: string;
+  recipeId?: string;
+  batchSize?: string;
+  equipmentId?: string;
+}) {
+  const searchParams = new URLSearchParams();
+  if (params.tenantId) searchParams.set("tenantId", params.tenantId);
+  if (params.plantId) searchParams.set("plantId", params.plantId);
+  if (params.productId) searchParams.set("productId", params.productId);
+  if (params.recipeId) searchParams.set("recipeId", params.recipeId);
+  if (params.batchSize) searchParams.set("batchSize", params.batchSize);
+  if (params.equipmentId) searchParams.set("equipmentId", params.equipmentId);
+
+  const result = await apiClient<BackendApiResponse<unknown>>(
+    `${root}/effective-limits?${searchParams.toString()}`,
+  );
+  return dataOrThrow(result, "Unable to load effective limits.");
+}
+
 const sectionConfig = {
   equipments: {
     endpoint: "equipment-master",
@@ -478,6 +753,16 @@ const sectionConfig = {
     idField: "productId",
     schema: productMasterSchema,
   },
+  "recipe-master": {
+    endpoint: "recipe-master",
+    idField: "recipeId",
+    schema: recipeMasterSchema,
+  },
+  "recipe-management": {
+    endpoint: "recipe-management",
+    idField: "recipeManagementId",
+    schema: recipeManagementSchema,
+  },
 } as const;
 
 type MutableSection = keyof typeof sectionConfig;
@@ -485,7 +770,9 @@ type MutableRecord =
   | IiotAsset
   | CriticalParameter
   | CriticalParameterLimit
-  | ProductMaster;
+  | ProductMaster
+  | RecipeMaster
+  | RecipeManagement;
 
 export async function setIiotMasterRecordActive(
   section: MutableSection,

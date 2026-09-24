@@ -37,6 +37,12 @@ export const ROUTES = {
   masterIiotProductMaster: "/master-management/iiot-master/product-master",
   masterCreateIiotProductMaster:
     "/master-management/iiot-master/product-master/create",
+  masterIiotRecipeMaster: "/master-management/iiot-master/recipe-master",
+  masterCreateIiotRecipeMaster:
+    "/master-management/iiot-master/recipe-master/create",
+  masterIiotRecipeManagement: "/master-management/iiot-master/recipe-management",
+  masterCreateIiotRecipeManagement:
+    "/master-management/iiot-master/recipe-management/create",
   masterLicenses: "/master-management/licenses",
   masterLicenseHistory: "/master-management/licenses/history",
   masterAuditLogs: "/master-management/audit-logs",
@@ -54,6 +60,7 @@ export const ROUTES = {
   iiotApprovedBatches: "/iiot/approved-batches",
   iiotBatchDetails: "/iiot/batch-details",
   iiotBatchInfo: "/iiot/batch-info",
+  iiotRecipeManagement: "/iiot/recipe-management",
   projectEngine: "/project-engine",
   manufacturingElogbook: "/manufacturing/elogbook",
   manufacturingEbmr: "/manufacturing/ebmr",

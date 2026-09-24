@@ -14,6 +14,7 @@ import MonitoringConsoleScreen from "@/features/iiot/monitor-console/screens/Mon
 import MyActionsScreen from "@/features/iiot/my-actions/screens/MyActionsScreen";
 import PendingReportsScreen from "@/features/iiot/pending-reports/screens/PendingReportsScreen";
 import DeferredBatchesScreen from "@/features/iiot/deferred-batches/screens/DeferredBatchesScreen";
+import L2RecipeManagementScreen from "@/features/iiot/recipe-management/screens/L2RecipeManagementScreen";
 import AuditLogsScreen from "@/features/master-management/audit-logs/screens/AuditLogsScreen";
 import BulkUploadScreen from "@/features/master-management/bulk-upload/screens/BulkUploadScreen";
 import WorkflowMdmScreen from "@/features/master-management/workflow-mdm/screens/WorkflowMdmScreen";
@@ -56,6 +57,7 @@ import {
   getUserStatusTitle,
   isAnalyticsPath,
   isApprovedBatchesPath,
+  isIiotRecipeManagementPath,
   isBatchDetailsPath,
   getBatchDetailsId,
   isBatchInfoPath,
@@ -319,6 +321,12 @@ export async function generateMetadata({
     };
   }
 
+  if (isIiotRecipeManagementPath(modulePath)) {
+    return {
+      title: "Recipe Management | ADAVIS",
+    };
+  }
+
   if (isBatchDetailsPath(modulePath)) {
     return {
       title: "Batch Details | ADAVIS",
@@ -536,6 +544,10 @@ export default async function ModuleRoutePage({
 
   if (isApprovedBatchesPath(modulePath)) {
     return <ApprovedBatchesScreen />;
+  }
+
+  if (isIiotRecipeManagementPath(modulePath)) {
+    return <L2RecipeManagementScreen />;
   }
 
   if (isBatchDetailsPath(modulePath)) {

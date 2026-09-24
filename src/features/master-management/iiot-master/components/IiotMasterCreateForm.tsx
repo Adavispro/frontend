@@ -15,6 +15,8 @@ import {
   createCriticalParameterLimit,
   createIiotAsset,
   createProductMaster,
+  createRecipeManagement,
+  createRecipeMaster,
   type IiotMasterSection,
 } from "../api";
 import { useIiotMasterData } from "../hooks/useIiotMasterData";
@@ -23,6 +25,8 @@ import {
   createCriticalParameterSchema,
   createIiotAssetSchema,
   createProductMasterSchema,
+  createRecipeManagementSchema,
+  createRecipeMasterSchema,
 } from "../schemas";
 
 type FieldKind = "text" | "number" | "select" | "checkbox";
@@ -57,6 +61,8 @@ const sectionReturnRoutes: Record<IiotMasterSection, string> = {
   "critical-parameters": ROUTES.masterIiotCriticalParameters,
   "critical-parameter-limits": ROUTES.masterIiotCriticalParameterLimits,
   "product-master": ROUTES.masterIiotProductMaster,
+  "recipe-master": ROUTES.masterIiotRecipeMaster,
+  "recipe-management": ROUTES.masterIiotRecipeManagement,
 };
 
 const sectionLabels: Record<IiotMasterSection, string> = {
@@ -64,6 +70,8 @@ const sectionLabels: Record<IiotMasterSection, string> = {
   "critical-parameters": "Critical Parameter",
   "critical-parameter-limits": "Critical Parameter Limit",
   "product-master": "Product Master",
+  "recipe-master": "Recipe Master",
+  "recipe-management": "Recipe Parameter Limit",
 };
 
 const emptyValues = (section: IiotMasterSection): Values => {
@@ -107,6 +115,36 @@ const emptyValues = (section: IiotMasterSection): Values => {
       booleanValue: "",
       enumValue: "",
       stringValue: "",
+      isActive: true,
+    };
+  }
+
+  if (section === "recipe-master") {
+    return {
+      tenantId: "",
+      plantId: "",
+      productId: "",
+      recipeCode: "",
+      recipeName: "",
+      version: "1.0",
+      associatedBatchSizes: "",
+      description: "",
+      isActive: true,
+    };
+  }
+
+  if (section === "recipe-management") {
+    return {
+      tenantId: "",
+      plantId: "",
+      productId: "",
+      recipeId: "",
+      batchSize: "",
+      equipmentId: "",
+      parameterCode: "",
+      targetSetpoint: "",
+      lowLimit: "",
+      highLimit: "",
       isActive: true,
     };
   }
@@ -285,6 +323,131 @@ export default function IiotMasterCreateForm({
       return baseFields;
     }
 
+    if (section === "recipe-master") {
+      const productOptions = [
+        emptyOption("Select Product"),
+        ...records["product-master"]
+          .filter(
+            (p) =>
+              p.isActive &&
+              (!tenantId || p.tenantId === tenantId) &&
+              (!plantId || p.plantId === plantId),
+          )
+          .map((p) =>
+            option(
+              p.productId,
+              `${p.productName} (${p.productCode || p.productId})`,
+            ),
+          ),
+      ];
+      return [
+        { id: "tenantId", label: "Tenant", kind: "select", options: tenantOptions },
+        { id: "plantId", label: "Plant", kind: "select", options: plantOptions },
+        { id: "productId", label: "Product", kind: "select", options: productOptions },
+        { id: "recipeCode", label: "Recipe Code", placeholder: "Enter recipe code (e.g. RCP-001)" },
+        { id: "recipeName", label: "Recipe Name", placeholder: "Enter recipe name" },
+        { id: "version", label: "Version", placeholder: "1.0" },
+        { id: "associatedBatchSizes", label: "Associated Batch Sizes", placeholder: "100kg, 200kg, 500kg" },
+        { id: "description", label: "Description", placeholder: "Enter recipe description" },
+      ];
+    }
+
+    if (section === "recipe-management") {
+      const productOptions = [
+        emptyOption("Select Product"),
+        ...records["product-master"]
+          .filter(
+            (p) =>
+              p.isActive &&
+              (!tenantId || p.tenantId === tenantId) &&
+              (!plantId || p.plantId === plantId),
+          )
+          .map((p) =>
+            option(
+              p.productId,
+              `${p.productName} (${p.productCode || p.productId})`,
+            ),
+          ),
+      ];
+
+      const selectedProductId = String(values.productId ?? "");
+      const recipeOptions = [
+        emptyOption("Select Recipe"),
+        ...records["recipe-master"]
+          .filter(
+            (r) =>
+              r.isActive &&
+              (!selectedProductId || r.productId === selectedProductId),
+          )
+          .map((r) =>
+            option(
+              r.recipeId,
+              `${r.recipeName} (${r.recipeCode || r.recipeId})`,
+            ),
+          ),
+      ];
+
+      const selectedRecipe = records["recipe-master"].find(
+        (r) => r.recipeId === String(values.recipeId ?? ""),
+      );
+      const batchSizeList: string[] = selectedRecipe
+        ? Array.isArray(selectedRecipe.associatedBatchSizes)
+          ? selectedRecipe.associatedBatchSizes
+          : typeof selectedRecipe.associatedBatchSizes === "string"
+            ? (selectedRecipe.associatedBatchSizes as string)
+                .split(",")
+                .map((s) => s.trim())
+                .filter(Boolean)
+            : []
+        : [];
+      const batchSizeOptions = [
+        emptyOption("Select Batch Size"),
+        ...batchSizeList.map((size) => option(size, size)),
+      ];
+
+      const selectedEquipmentId = String(values.equipmentId ?? "");
+      const equipmentOptions = [
+        emptyOption("Select Equipment"),
+        ...records.equipments
+          .filter((e) => e.isActive && (!tenantId || e.tenantId === tenantId))
+          .map((e) =>
+            option(
+              e.equipmentId,
+              `${e.equipmentName} (${e.equipmentCode || e.equipmentId})`,
+            ),
+          ),
+      ];
+
+      const parameterOptions = [
+        emptyOption("Select Critical Parameter"),
+        ...records["critical-parameters"]
+          .filter(
+            (cp) =>
+              cp.isActive &&
+              (!selectedEquipmentId || cp.equipmentId === selectedEquipmentId),
+          )
+          .map((cp) =>
+            option(
+              cp.parameterCode,
+              `${cp.parameterName} (${cp.parameterCode})`,
+            ),
+          ),
+      ];
+
+      return [
+        { id: "tenantId", label: "Tenant", kind: "select", options: tenantOptions },
+        { id: "plantId", label: "Plant", kind: "select", options: plantOptions },
+        { id: "productId", label: "Product", kind: "select", options: productOptions },
+        { id: "recipeId", label: "Recipe", kind: "select", options: recipeOptions },
+        { id: "batchSize", label: "Batch Size", kind: "select", options: batchSizeOptions },
+        { id: "equipmentId", label: "Equipment", kind: "select", options: equipmentOptions },
+        { id: "parameterCode", label: "Parameter", kind: "select", options: parameterOptions },
+        { id: "targetSetpoint", label: "Target Setpoint", kind: "number", placeholder: "100" },
+        { id: "lowLimit", label: "Low Limit", kind: "number", placeholder: "90" },
+        { id: "highLimit", label: "High Limit", kind: "number", placeholder: "110" },
+      ];
+    }
+
     return [
       { id: "tenantId", label: "Tenant", kind: "select", options: tenantOptions },
       { id: "plantId", label: "Plant", kind: "select", options: plantOptions },
@@ -301,6 +464,9 @@ export default function IiotMasterCreateForm({
     tenants,
     topology,
     values.areaId,
+    values.equipmentId,
+    values.productId,
+    values.recipeId,
   ]);
 
   const change = (field: string, value: string | boolean) => {
@@ -354,6 +520,26 @@ export default function IiotMasterCreateForm({
           booleanValue: "",
           enumValue: "",
           stringValue: "",
+        });
+      }
+      if (field === "productId" && section === "recipe-management") {
+        Object.assign(next, {
+          recipeId: "",
+          batchSize: "",
+        });
+      }
+      if (field === "recipeId" && section === "recipe-management") {
+        const recipe = records["recipe-master"].find((r) => r.recipeId === value);
+        Object.assign(next, {
+          productId: recipe?.productId ?? next.productId,
+          tenantId: recipe?.tenantId ?? next.tenantId,
+          plantId: recipe?.plantId ?? next.plantId,
+          batchSize: "",
+        });
+      }
+      if (field === "equipmentId" && section === "recipe-management") {
+        Object.assign(next, {
+          parameterCode: "",
         });
       }
       return next;
@@ -455,6 +641,86 @@ export default function IiotMasterCreateForm({
           return;
         }
         await createCriticalParameterLimit(parsed.data);
+      } else if (section === "recipe-master") {
+        const selectedProduct = records["product-master"].find(
+          (p) => p.productId === String(payload.productId ?? ""),
+        );
+        const batchSizes =
+          typeof payload.associatedBatchSizes === "string"
+            ? payload.associatedBatchSizes
+                .split(",")
+                .map((s) => s.trim())
+                .filter(Boolean)
+            : Array.isArray(payload.associatedBatchSizes)
+              ? payload.associatedBatchSizes
+              : [];
+        const recipePayload = {
+          ...payload,
+          recipeId: String(payload.recipeCode || ""),
+          productCode: selectedProduct?.productCode || String(payload.productId || ""),
+          productName: selectedProduct?.productName || "",
+          associatedBatchSizes: batchSizes,
+          version: String(payload.version || "1.0"),
+          isActive: true,
+        };
+        const parsed = createRecipeMasterSchema.safeParse(recipePayload);
+        if (!parsed.success) {
+          setErrors(
+            Object.fromEntries(
+              parsed.error.issues.map((issue) => [
+                String(issue.path[0]),
+                issue.message,
+              ]),
+            ),
+          );
+          setIsSubmitting(false);
+          return;
+        }
+        await createRecipeMaster(parsed.data);
+      } else if (section === "recipe-management") {
+        const selectedProduct = records["product-master"].find(
+          (p) => p.productId === String(payload.productId ?? ""),
+        );
+        const selectedRecipe = records["recipe-master"].find(
+          (r) => r.recipeId === String(payload.recipeId ?? ""),
+        );
+        const selectedEquipment = records.equipments.find(
+          (e) => e.equipmentId === String(payload.equipmentId ?? ""),
+        );
+        const selectedParameter = records["critical-parameters"].find(
+          (cp) =>
+            cp.equipmentId === String(payload.equipmentId ?? "") &&
+            cp.parameterCode === String(payload.parameterCode ?? ""),
+        );
+        const rmPayload = {
+          ...payload,
+          productCode: selectedProduct?.productCode || String(payload.productId || ""),
+          productName: selectedProduct?.productName || "",
+          recipeCode: selectedRecipe?.recipeCode || String(payload.recipeId || ""),
+          recipeName: selectedRecipe?.recipeName || "",
+          equipmentName: selectedEquipment?.equipmentName || "",
+          parameterName: selectedParameter?.parameterName || "",
+          targetSetpoint: Number(payload.targetSetpoint),
+          lowLimit: Number(payload.lowLimit),
+          highLimit: Number(payload.highLimit),
+          tenantId: String(payload.tenantId || selectedRecipe?.tenantId || selectedEquipment?.tenantId || ""),
+          plantId: String(payload.plantId || selectedRecipe?.plantId || selectedEquipment?.plantId || ""),
+          isActive: true,
+        };
+        const parsed = createRecipeManagementSchema.safeParse(rmPayload);
+        if (!parsed.success) {
+          setErrors(
+            Object.fromEntries(
+              parsed.error.issues.map((issue) => [
+                String(issue.path[0]),
+                issue.message,
+              ]),
+            ),
+          );
+          setIsSubmitting(false);
+          return;
+        }
+        await createRecipeManagement(parsed.data);
       } else {
         const productPayload = {
           ...payload,

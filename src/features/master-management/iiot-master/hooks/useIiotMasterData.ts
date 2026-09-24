@@ -6,12 +6,16 @@ import {
   getCriticalParameters,
   getIiotAssets,
   getProductMasters,
+  getRecipeManagements,
+  getRecipeMasters,
   isMutableIiotMasterSection,
   setIiotMasterRecordActive,
   updateCriticalParameter,
   updateCriticalParameterLimit,
   updateIiotAsset,
   updateProductMaster,
+  updateRecipeManagement,
+  updateRecipeMaster,
 } from "../api";
 import type {
   CriticalParameter,
@@ -20,10 +24,14 @@ import type {
   IiotMasterRecord,
   IiotMasterSection,
   ProductMaster,
+  RecipeManagement,
+  RecipeMaster,
   UpdateCriticalParameterLimitValues,
   UpdateCriticalParameterValues,
   UpdateIiotAssetValues,
   UpdateProductMasterValues,
+  UpdateRecipeManagementValues,
+  UpdateRecipeMasterValues,
 } from "../api";
 
 interface IiotMasterState {
@@ -31,25 +39,33 @@ interface IiotMasterState {
   "critical-parameters": CriticalParameter[];
   "critical-parameter-limits": CriticalParameterLimit[];
   "product-master": ProductMaster[];
+  "recipe-master": RecipeMaster[];
+  "recipe-management": RecipeManagement[];
 }
 
 type MutableIiotMasterRecord =
   | IiotAsset
   | CriticalParameter
   | CriticalParameterLimit
-  | ProductMaster;
+  | ProductMaster
+  | RecipeMaster
+  | RecipeManagement;
 
 type IiotMasterUpdateValues =
   | UpdateIiotAssetValues
   | UpdateCriticalParameterValues
   | UpdateCriticalParameterLimitValues
-  | UpdateProductMasterValues;
+  | UpdateProductMasterValues
+  | UpdateRecipeMasterValues
+  | UpdateRecipeManagementValues;
 
 const initialState: IiotMasterState = {
   equipments: [],
   "critical-parameters": [],
   "critical-parameter-limits": [],
   "product-master": [],
+  "recipe-master": [],
+  "recipe-management": [],
 };
 
 export function useIiotMasterData() {
@@ -65,6 +81,8 @@ export function useIiotMasterData() {
         getCriticalParameters(signal),
         getCriticalParameterLimits(signal),
         getProductMasters(signal),
+        getRecipeMasters(signal),
+        getRecipeManagements(undefined, signal),
       ]);
 
       const nextState: IiotMasterState = {
@@ -76,6 +94,10 @@ export function useIiotMasterData() {
           results[2].status === "fulfilled" ? results[2].value : [],
         "product-master":
           results[3].status === "fulfilled" ? results[3].value : [],
+        "recipe-master":
+          results[4].status === "fulfilled" ? results[4].value : [],
+        "recipe-management":
+          results[5].status === "fulfilled" ? results[5].value : [],
       };
 
       setRecords(nextState);
@@ -85,11 +107,13 @@ export function useIiotMasterData() {
         results[1].status === "rejected" ? "critical parameters" : null,
         results[2].status === "rejected" ? "parameter limits" : null,
         results[3].status === "rejected" ? "product master" : null,
+        results[4].status === "rejected" ? "recipe master" : null,
+        results[5].status === "rejected" ? "recipe management" : null,
       ].filter(Boolean);
 
       if (failedSections.length > 0) {
         setErrorMessage(
-          `Some IIOT master sections failed to load: ${failedSections.join(", ")}.`,
+          `Some master sections failed to load: ${failedSections.join(", ")}.`,
         );
       } else {
         setErrorMessage("");
@@ -99,7 +123,7 @@ export function useIiotMasterData() {
         setErrorMessage(
           error instanceof Error
             ? error.message
-            : "Unable to load IIOT master data.",
+            : "Unable to load master data.",
         );
       }
     } finally {
@@ -123,6 +147,8 @@ export function useIiotMasterData() {
         "critical-parameters": "parameterId",
         "critical-parameter-limits": "parameterLimitId",
         "product-master": "productId",
+        "recipe-master": "recipeId",
+        "recipe-management": "recipeManagementId",
       } as const;
       const idField = idFields[section];
       const updatedId = String(updated[idField as keyof IiotMasterRecord]);
@@ -255,7 +281,23 @@ export function useIiotMasterData() {
       return updated;
     }
 
-    throw new Error("This IIOT master record cannot be updated.");
+    if (section === "recipe-master" && "recipeId" in record) {
+      const updated = await updateRecipeMaster(
+        String(record.recipeId),
+        values as UpdateRecipeMasterValues,
+      );
+      return updated;
+    }
+
+    if (section === "recipe-management" && "recipeManagementId" in record) {
+      const updated = await updateRecipeManagement(
+        String(record.recipeManagementId),
+        values as UpdateRecipeManagementValues,
+      );
+      return updated;
+    }
+
+    throw new Error("This master record cannot be updated.");
   };
 
   return {
@@ -265,6 +307,7 @@ export function useIiotMasterData() {
     isLoading,
     records,
     reload,
+    replaceRecord,
     updateRecord,
   };
 }

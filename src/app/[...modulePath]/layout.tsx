@@ -172,7 +172,7 @@ export default async function ModuleRouteLayout({
           : isCreateIiotMasterPath(modulePath)
             ? [
                 {
-                  label: "IIoT Master",
+                  label: "Master",
                   href: getCreateIiotMasterSection(modulePath)
                     ? getIiotMasterRoute(getCreateIiotMasterSection(modulePath)!)
                     : ROUTES.masterIiotEquipments,

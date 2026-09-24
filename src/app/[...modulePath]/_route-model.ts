@@ -25,6 +25,8 @@ export const iiotMasterSections: IiotMasterSection[] = [
   "critical-parameters",
   "critical-parameter-limits",
   "product-master",
+  "recipe-master",
+  "recipe-management",
 ];
 
 export function findModule(modulePath: ModulePath) {
@@ -90,6 +92,10 @@ export function isMyActionsPath(modulePath: ModulePath) {
 
 export function isApprovedBatchesPath(modulePath: ModulePath) {
   return `/${modulePath.join("/")}` === ROUTES.iiotApprovedBatches;
+}
+
+export function isIiotRecipeManagementPath(modulePath: ModulePath) {
+  return `/${modulePath.join("/")}` === ROUTES.iiotRecipeManagement;
 }
 
 export function isBatchDetailsPath(modulePath: ModulePath) {
@@ -282,7 +288,10 @@ export function getIiotMasterTitle(section: IiotMasterSection) {
   if (section === "critical-parameter-limits") {
     return "Critical Parameter Limits";
   }
-  return "Product Master";
+  if (section === "product-master") return "Product Master";
+  if (section === "recipe-master") return "Recipe Master";
+  if (section === "recipe-management") return "Recipe Management";
+  return "Master";
 }
 
 export function getCreateIiotMasterTitle(section: IiotMasterSection) {
@@ -291,7 +300,10 @@ export function getCreateIiotMasterTitle(section: IiotMasterSection) {
   if (section === "critical-parameter-limits") {
     return "Create Critical Parameter Limit";
   }
-  return "Create Product Master";
+  if (section === "product-master") return "Create Product Master";
+  if (section === "recipe-master") return "Create Recipe Master";
+  if (section === "recipe-management") return "Create Recipe Parameter Limit";
+  return "Create";
 }
 
 export function getIiotMasterRoute(section: IiotMasterSection) {
@@ -303,6 +315,12 @@ export function getIiotMasterRoute(section: IiotMasterSection) {
   }
   if (section === "product-master") {
     return ROUTES.masterIiotProductMaster;
+  }
+  if (section === "recipe-master") {
+    return ROUTES.masterIiotRecipeMaster;
+  }
+  if (section === "recipe-management") {
+    return ROUTES.masterIiotRecipeManagement;
   }
   return ROUTES.masterIiotEquipments;
 }
@@ -382,7 +400,8 @@ export function isIiotChildRoute(modulePath: ModulePath) {
     isMyActionsPath(modulePath) ||
     isApprovedBatchesPath(modulePath) ||
     isBatchDetailsPath(modulePath) ||
-    isBatchInfoPath(modulePath)
+    isBatchInfoPath(modulePath) ||
+    isIiotRecipeManagementPath(modulePath)
   );
 }
 
@@ -436,6 +455,7 @@ export function getModulePageTitle(
   if (isDeferredBatchesPath(modulePath)) return "Deferred Batches";
   if (isMyActionsPath(modulePath)) return "My Actions";
   if (isApprovedBatchesPath(modulePath)) return "Approved Batches";
+  if (isIiotRecipeManagementPath(modulePath)) return "Recipe Management";
   if (isBatchDetailsPath(modulePath)) return "Batch Details";
   if (isBatchInfoPath(modulePath)) return "Batch Info";
   if (isEditProfilePath(modulePath)) return "Edit Profile";

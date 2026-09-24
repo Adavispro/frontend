@@ -12,7 +12,7 @@ const ENTITY_OPTIONS = [
   { id: "USER", label: "User Accounts", description: "User profiles, emails, designations, and initial credentials" },
   { id: "USER_GROUP", label: "User Groups", description: "Permission and authorization user groups" },
   { id: "USER_GROUP_ASSIGNMENT", label: "User Group Assignments", description: "Mapping users to operational groups" },
-  { id: "IIOT_MASTER", label: "IIoT Equipment Master", description: "Manufacturing lines, equipment codes, and types" },
+  { id: "IIOT_MASTER", label: "Equipment Master", description: "Manufacturing lines, equipment codes, and types" },
 ];
 
 export default function BulkUploadScreen() {

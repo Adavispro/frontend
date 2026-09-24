@@ -243,3 +243,174 @@ export const updateProductMasterSchema = z.object({
   plantId: requiredText("Plant"),
   isActive: z.boolean().default(true),
 });
+
+export const recipeMasterSchema = z
+  .object({
+    _id: optionalRefString,
+    recipeId: refString,
+    recipeCode: refString,
+    recipeName: z.string().default(""),
+    productId: refString,
+    productCode: refString,
+    productName: z.string().default(""),
+    description: z.string().optional().default(""),
+    version: z.string().default("1.0"),
+    associatedBatchSizes: z.array(z.string()).default([]),
+    tenantId: refString,
+    plantId: refString,
+    isActive: optionalBoolean.default(true),
+    createdAt: optionalTimestamp,
+    updatedAt: optionalTimestamp,
+  })
+  .passthrough();
+
+export const recipeMastersSchema = z.array(recipeMasterSchema);
+
+export const createRecipeMasterSchema = z.object({
+  recipeId: z.string().trim().optional(),
+  recipeCode: requiredText("Recipe code"),
+  recipeName: requiredText("Recipe name"),
+  productId: requiredText("Product"),
+  productCode: z.string().trim().optional(),
+  productName: z.string().trim().optional(),
+  description: z.string().trim().optional(),
+  version: z.string().trim().default("1.0"),
+  associatedBatchSizes: z.union([z.array(z.string()), z.string()]).optional(),
+  tenantId: requiredText("Tenant"),
+  plantId: requiredText("Plant"),
+  isActive: z.boolean().default(true),
+});
+
+export const updateRecipeMasterSchema = z.object({
+  recipeCode: requiredText("Recipe code"),
+  recipeName: requiredText("Recipe name"),
+  productId: requiredText("Product"),
+  productCode: z.string().trim().optional(),
+  productName: z.string().trim().optional(),
+  description: z.string().trim().optional(),
+  version: z.string().trim().default("1.0"),
+  associatedBatchSizes: z.union([z.array(z.string()), z.string()]).optional(),
+  tenantId: requiredText("Tenant"),
+  plantId: requiredText("Plant"),
+  isActive: z.boolean().default(true),
+});
+
+export const recipeManagementSchema = z
+  .object({
+    _id: optionalRefString,
+    recipeManagementId: refString,
+    productId: refString,
+    productCode: refString,
+    productName: z.string().default(""),
+    recipeId: refString,
+    recipeCode: refString,
+    recipeName: z.string().default(""),
+    batchSize: refString,
+    equipmentId: refString,
+    equipmentCode: refString,
+    equipmentName: z.string().default(""),
+    parameterCode: refString,
+    parameterName: z.string().default(""),
+    unitOfMeasure: z.string().default(""),
+    uom: z.string().optional().default(""),
+    targetSetpoint: optionalNumber,
+    lowLimit: optionalNumber,
+    highLimit: optionalNumber,
+    tenantId: refString,
+    plantId: refString,
+    isActive: optionalBoolean.default(true),
+    createdAt: optionalTimestamp,
+    updatedAt: optionalTimestamp,
+  })
+  .passthrough();
+
+export const recipeManagementsSchema = z.array(recipeManagementSchema);
+
+export const createRecipeManagementSchema = z
+  .object({
+    recipeManagementId: z.string().trim().optional(),
+    productId: requiredText("Product"),
+    recipeId: requiredText("Recipe"),
+    batchSize: requiredText("Batch Size"),
+    equipmentId: requiredText("Equipment"),
+    parameterCode: requiredText("Parameter"),
+    parameterName: z.string().trim().optional(),
+    unitOfMeasure: z.string().trim().optional(),
+    targetSetpoint: optionalNumber,
+    lowLimit: optionalNumber,
+    highLimit: optionalNumber,
+    tenantId: requiredText("Tenant"),
+    plantId: requiredText("Plant"),
+    isActive: z.boolean().default(true),
+  })
+  .refine(
+    (data) => {
+      if (data.lowLimit !== undefined && data.highLimit !== undefined) {
+        return data.lowLimit <= data.highLimit;
+      }
+      return true;
+    },
+    { message: "Low limit cannot exceed high limit.", path: ["lowLimit"] }
+  )
+  .refine(
+    (data) => {
+      if (data.targetSetpoint !== undefined && data.lowLimit !== undefined) {
+        return data.targetSetpoint >= data.lowLimit;
+      }
+      return true;
+    },
+    { message: "Target setpoint cannot be less than low limit.", path: ["targetSetpoint"] }
+  )
+  .refine(
+    (data) => {
+      if (data.targetSetpoint !== undefined && data.highLimit !== undefined) {
+        return data.targetSetpoint <= data.highLimit;
+      }
+      return true;
+    },
+    { message: "Target setpoint cannot exceed high limit.", path: ["targetSetpoint"] }
+  );
+
+export const updateRecipeManagementSchema = z
+  .object({
+    productId: requiredText("Product"),
+    recipeId: requiredText("Recipe"),
+    batchSize: requiredText("Batch Size"),
+    equipmentId: requiredText("Equipment"),
+    parameterCode: requiredText("Parameter"),
+    parameterName: z.string().trim().optional(),
+    unitOfMeasure: z.string().trim().optional(),
+    targetSetpoint: optionalNumber,
+    lowLimit: optionalNumber,
+    highLimit: optionalNumber,
+    tenantId: requiredText("Tenant"),
+    plantId: requiredText("Plant"),
+    isActive: z.boolean().default(true),
+  })
+  .refine(
+    (data) => {
+      if (data.lowLimit !== undefined && data.highLimit !== undefined) {
+        return data.lowLimit <= data.highLimit;
+      }
+      return true;
+    },
+    { message: "Low limit cannot exceed high limit.", path: ["lowLimit"] }
+  )
+  .refine(
+    (data) => {
+      if (data.targetSetpoint !== undefined && data.lowLimit !== undefined) {
+        return data.targetSetpoint >= data.lowLimit;
+      }
+      return true;
+    },
+    { message: "Target setpoint cannot be less than low limit.", path: ["targetSetpoint"] }
+  )
+  .refine(
+    (data) => {
+      if (data.targetSetpoint !== undefined && data.highLimit !== undefined) {
+        return data.targetSetpoint <= data.highLimit;
+      }
+      return true;
+    },
+    { message: "Target setpoint cannot exceed high limit.", path: ["targetSetpoint"] }
+  );
