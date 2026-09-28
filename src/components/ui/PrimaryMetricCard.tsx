@@ -9,6 +9,8 @@ export interface PrimaryMetricCardProps {
   note?: string;
   href?: string;
   ariaLabel?: string;
+  className?: string;
+  indicator?: React.ReactNode;
 }
 
 export default function PrimaryMetricCard({
@@ -18,10 +20,15 @@ export default function PrimaryMetricCard({
   note,
   href,
   ariaLabel,
+  className,
+  indicator,
 }: PrimaryMetricCardProps) {
   const content = (
     <>
-      <p className="type-dashboard-card-title !text-white">{label}</p>
+      <div className="flex items-center justify-between gap-1">
+        <p className="type-dashboard-card-title !text-white">{label}</p>
+        {indicator}
+      </div>
       <strong
         className={`type-dashboard-metric block ${note ? "mt-3" : "mt-4"}`}
       >
@@ -38,16 +45,17 @@ export default function PrimaryMetricCard({
       />
     </>
   );
-  const className =
-    "relative min-h-[86px] overflow-hidden rounded-lg bg-primary p-3 text-white shadow-[0_14px_28px_rgba(6,79,165,0.28)] transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2";
+  const defaultClassName =
+    "relative min-h-[86px] overflow-hidden rounded-lg bg-primary p-3 text-white shadow-[0_14px_28px_rgba(6,79,165,0.28)] transition-all hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2";
+  const finalClassName = className ? `${defaultClassName} ${className}` : defaultClassName;
 
   if (href) {
     return (
-      <Link href={href} aria-label={ariaLabel ?? label} className={className}>
+      <Link href={href} aria-label={ariaLabel ?? label} className={finalClassName}>
         {content}
       </Link>
     );
   }
 
-  return <article className={className}>{content}</article>;
+  return <article className={finalClassName}>{content}</article>;
 }

@@ -61,6 +61,8 @@ export const ROUTES = {
   iiotBatchDetails: "/iiot/batch-details",
   iiotBatchInfo: "/iiot/batch-info",
   iiotRecipeManagement: "/iiot/recipe-management",
+  iiotCppTrends: "/iiot/cpp-trends",
+  iiotOee: "/iiot/oee",
   projectEngine: "/project-engine",
   manufacturingElogbook: "/manufacturing/elogbook",
   manufacturingEbmr: "/manufacturing/ebmr",

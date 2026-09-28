@@ -35,9 +35,27 @@ const equipmentColumns: DataTableColumn<EquipmentRow>[] = [
   {
     key: "status",
     header: "Status",
-    render: (row) => (
-      <StatusPill label={row.status} className={statusClasses[row.status]} />
-    ),
+    render: (row) => {
+      const isAttention = row.status === "Communication Error";
+      return (
+        <div className="inline-flex items-center gap-1.5">
+          {isAttention && (
+            <span className="relative flex h-2 w-2" title="Attention Required - Abnormal Condition">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+            </span>
+          )}
+          <StatusPill
+            label={row.status}
+            className={`${statusClasses[row.status]} ${
+              isAttention
+                ? "ring-1 ring-red-400/80 shadow-[0_0_8px_rgba(239,68,68,0.25)] animate-pulse font-bold"
+                : ""
+            }`}
+          />
+        </div>
+      );
+    },
   },
   {
     key: "lastBatchNo",

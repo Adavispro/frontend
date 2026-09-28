@@ -111,6 +111,22 @@ const iiotNavigationItems: NavigationItem[] = [
     href: ROUTES.iiotRecipeManagement,
     isActive: (pathname) => pathname === ROUTES.iiotRecipeManagement,
   },
+  {
+    label: "CPP Trends",
+    icon: ChartLineUp,
+    href: ROUTES.iiotCppTrends,
+    isActive: (pathname) => pathname === ROUTES.iiotCppTrends,
+  },
+  {
+    label: "OEE",
+    icon: ChartBar,
+    href: ROUTES.iiotOee,
+    isActive: (pathname) =>
+      pathname === ROUTES.iiotOee ||
+      pathname === ROUTES.iiotAnalytics ||
+      pathname.startsWith(`${ROUTES.iiotOee}/`) ||
+      pathname.startsWith(`${ROUTES.iiotAnalytics}/`),
+  },
 ];
 
 const sidebarItemsByModuleId: Record<string, NavigationItem[]> = {

@@ -835,7 +835,7 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
   const isTabAllowed = useCallback(
     (tabId: TabType): boolean => {
       if (isApprovedBatch) return true;
-      if (tabId === "PARAMETER_SETTINGS") return true;
+      if (tabId === "PARAMETER_SETTINGS" || tabId === "TRENDS") return true;
       const targetIndex = TAB_SEQUENCE.findIndex((t) => t.id === tabId);
       if (targetIndex < 0) return false;
 

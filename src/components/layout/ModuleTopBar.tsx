@@ -33,7 +33,9 @@ export default function ModuleTopBar({
   const pathname = usePathname();
   const router = useRouter();
   const isSelectedMachineRoute =
-    pathname === ROUTES.iiotMonitoring || pathname === ROUTES.iiotAnalytics;
+    pathname === ROUTES.iiotMonitoring ||
+    pathname === ROUTES.iiotAnalytics ||
+    pathname === ROUTES.iiotOee;
   const isDashboard =
     pathname === ROUTES.masterManagement ||
     pathname === "/master-management" ||
@@ -64,7 +66,7 @@ export default function ModuleTopBar({
     const rootBreadcrumb =
       pathname === ROUTES.iiotMonitoring
         ? { label: "Analytics", href: `${ROUTES.iiotMonitoring}?view=select` }
-        : { label: "OEE", href: `${ROUTES.iiotAnalytics}?view=select` };
+        : { label: "OEE", href: `${ROUTES.iiotOee}?view=select` };
 
     return [
       rootBreadcrumb,
@@ -84,8 +86,13 @@ export default function ModuleTopBar({
       return;
     }
 
-    if (pathname === ROUTES.iiotAnalytics) {
-      router.push(ROUTES.iiotMonitoring);
+    if (pathname === ROUTES.iiotAnalytics || pathname === ROUTES.iiotOee) {
+      router.push(ROUTES.iiotEquipmentOverview);
+      return;
+    }
+
+    if (pathname === ROUTES.iiotCppTrends) {
+      router.push(ROUTES.iiotEquipmentOverview);
       return;
     }
 

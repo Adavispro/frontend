@@ -98,6 +98,17 @@ export function isIiotRecipeManagementPath(modulePath: ModulePath) {
   return `/${modulePath.join("/")}` === ROUTES.iiotRecipeManagement;
 }
 
+export function isCppTrendsPath(modulePath: ModulePath) {
+  const norm = modulePath[0] === "modules" ? modulePath.slice(1) : modulePath;
+  return `/${norm.join("/")}` === ROUTES.iiotCppTrends;
+}
+
+export function isOeePath(modulePath: ModulePath) {
+  const norm = modulePath[0] === "modules" ? modulePath.slice(1) : modulePath;
+  const path = `/${norm.join("/")}`;
+  return path === ROUTES.iiotOee || path === ROUTES.iiotAnalytics;
+}
+
 export function isBatchDetailsPath(modulePath: ModulePath) {
   const norm = modulePath[0] === "modules" ? modulePath.slice(1) : modulePath;
   return (
@@ -395,6 +406,8 @@ export function isIiotChildRoute(modulePath: ModulePath) {
     isManufacturingOverviewPath(modulePath) ||
     isMonitoringConsolePath(modulePath) ||
     isAnalyticsPath(modulePath) ||
+    isOeePath(modulePath) ||
+    isCppTrendsPath(modulePath) ||
     isPendingReportsPath(modulePath) ||
     isDeferredBatchesPath(modulePath) ||
     isMyActionsPath(modulePath) ||
@@ -450,14 +463,15 @@ export function getModulePageTitle(
   if (isMonitoringConsolePath(modulePath)) return "Analytics";
   if (isEquipmentOverviewPath(modulePath)) return "Equipment Overview";
   if (isManufacturingOverviewPath(modulePath)) return "Equipment Overview";
-  if (isAnalyticsPath(modulePath)) return "OEE";
+  if (isOeePath(modulePath) || isAnalyticsPath(modulePath)) return "OEE";
+  if (isCppTrendsPath(modulePath)) return "CPP Trends";
   if (isPendingReportsPath(modulePath)) return "Pending Batches";
   if (isDeferredBatchesPath(modulePath)) return "Deferred Batches";
   if (isMyActionsPath(modulePath)) return "My Actions";
   if (isApprovedBatchesPath(modulePath)) return "Approved Batches";
   if (isIiotRecipeManagementPath(modulePath)) return "Recipe Management";
   if (isBatchDetailsPath(modulePath)) return "Batch Details";
-  if (isBatchInfoPath(modulePath)) return "Batch Info";
+  if (isBatchInfoPath(modulePath)) return "Batch Details";
   if (isEditProfilePath(modulePath)) return "Edit Profile";
   if (isUpdatePasswordPath(modulePath)) return "Update Password";
   if (isUserManagementPath(modulePath)) return "System Admin Dashboard";

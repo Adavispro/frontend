@@ -68,7 +68,7 @@ export default async function ModuleRouteLayout({
               {
                 label: getBatchInfoId(modulePath)
                   ? `Batch ${getBatchInfoId(modulePath)}`
-                  : "Batch Info",
+                  : "Batch Details",
                 active: true,
               },
             ]

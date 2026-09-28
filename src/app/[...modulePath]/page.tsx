@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { ROUTES } from "@/config/routes";
 import MasterManagementGuard from "@/components/guards/MasterManagementGuard";
 import AnalyticsOeeScreen from "@/features/iiot/analytics/screens/AnalyticsOeeScreen";
+import OeeScreen from "@/features/iiot/analytics/screens/OeeScreen";
+import CppTrendsScreen from "@/features/iiot/cpp-trends/screens/CppTrendsScreen";
 import ApprovedBatchesScreen from "@/features/iiot/approved-batches/screens/ApprovedBatchesScreen";
 import BatchDetailScreen from "@/features/iiot/batch-details/screens/BatchDetailScreen";
 import BatchInfoScreen from "@/features/iiot/batch-info/screens/BatchInfoScreen";
@@ -56,6 +58,8 @@ import {
   getUserStatusFilter,
   getUserStatusTitle,
   isAnalyticsPath,
+  isOeePath,
+  isCppTrendsPath,
   isApprovedBatchesPath,
   isIiotRecipeManagementPath,
   isBatchDetailsPath,
@@ -131,6 +135,12 @@ export function generateStaticParams() {
     },
     {
       modulePath: ROUTES.iiotAnalytics.slice(1).split("/"),
+    },
+    {
+      modulePath: ROUTES.iiotOee.slice(1).split("/"),
+    },
+    {
+      modulePath: ROUTES.iiotCppTrends.slice(1).split("/"),
     },
     {
       modulePath: ROUTES.iiotPendingReports.slice(1).split("/"),
@@ -291,9 +301,15 @@ export async function generateMetadata({
     };
   }
 
-  if (isAnalyticsPath(modulePath)) {
+  if (isOeePath(modulePath) || isAnalyticsPath(modulePath)) {
     return {
       title: "OEE | ADAVIS",
+    };
+  }
+
+  if (isCppTrendsPath(modulePath)) {
+    return {
+      title: "CPP Trends | ADAVIS",
     };
   }
 
@@ -526,8 +542,12 @@ export default async function ModuleRoutePage({
     return <EquipmentOverviewScreen />;
   }
 
-  if (isAnalyticsPath(modulePath)) {
-    return <AnalyticsOeeScreen />;
+  if (isOeePath(modulePath) || isAnalyticsPath(modulePath)) {
+    return <OeeScreen />;
+  }
+
+  if (isCppTrendsPath(modulePath)) {
+    return <CppTrendsScreen />;
   }
 
   if (isPendingReportsPath(modulePath)) {

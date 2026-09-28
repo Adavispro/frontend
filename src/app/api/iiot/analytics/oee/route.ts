@@ -164,6 +164,8 @@ const eventCategory = (record: AlarmEventRecord) => {
   return "Others";
 };
 
+import { RECIPE_IDEAL_BATCH_TIMES_HOURS, getShiftForDate } from "@/features/iiot/analytics/utils/oee-engine";
+
 type ComputedBatch = {
   batch: BatchSummary;
   runtimeHours: number;
@@ -173,26 +175,30 @@ type ComputedBatch = {
   oee: number;
 };
 
-const computeBatch = (batch: BatchSummary): ComputedBatch => {
+const computeBatch = (batch: BatchSummary, allocatedDowntimeHours: number): ComputedBatch => {
   const start = parseDate(batch.batchStartAt);
   const end = parseDate(batch.batchEndAt) ?? new Date();
   const runtimeHours =
     start === null ? 0 : clamp((end.getTime() - start.getTime()) / 3_600_000, 0, 24 * 30);
 
-  const cpp = toNumber(batch.cppRecordCount);
-  const alarms = toNumber(batch.alarmCount);
-  const events = toNumber(batch.eventCount);
+  const eqId = text(batch.equipmentId).toUpperCase();
+  const idealHours = RECIPE_IDEAL_BATCH_TIMES_HOURS[eqId] ?? (runtimeHours > 0 ? runtimeHours * 0.95 : 1);
 
-  const downtimeHours = alarms * 0.08 + events * 0.04;
+  // Availability = Operating Time / (Operating Time + Downtime) * 100
   const availability = runtimeHours > 0
-    ? clamp((runtimeHours / (runtimeHours + downtimeHours)) * 100, 0, 100)
+    ? clamp((runtimeHours / (runtimeHours + Math.max(0, allocatedDowntimeHours))) * 100, 0, 100)
     : 0;
+
+  // Performance = Ideal Batch Time / Actual Batch Time * 100
   const performance = runtimeHours > 0
-    ? clamp(((cpp / runtimeHours) / TARGET_CPP_PER_HOUR) * 100, 0, 100)
-    : 0;
-  const quality = cpp > 0
-    ? clamp(((Math.max(cpp - (alarms * 2 + events), 0)) / cpp) * 100, 0, 100)
-    : 0;
+    ? clamp((idealHours / runtimeHours) * 100, 0, 100)
+    : 100;
+
+  // Quality = Good Released / Completed at batch level
+  const statusUpper = text(batch.status).toUpperCase();
+  const isRejected = statusUpper.includes("REJECT") || statusUpper.includes("FAIL");
+  const quality = isRejected ? 0 : 100;
+
   const oee = (availability * performance * quality) / 10_000;
 
   return {
@@ -205,13 +211,10 @@ const computeBatch = (batch: BatchSummary): ComputedBatch => {
   };
 };
 
-const inferShiftLabel = (value: unknown) => {
+const inferShiftLabel = (value: unknown): "Shift 1" | "Shift 2" | "Shift 3" => {
   const date = parseDate(value);
   if (!date) return "Shift 1";
-  const hour = date.getHours();
-  if (hour >= 6 && hour < 14) return "Shift 1";
-  if (hour >= 14 && hour < 22) return "Shift 2";
-  return "Shift 3";
+  return getShiftForDate(date);
 };
 
 const errorResponse = (status: number, message: string, errorCode: string) =>
@@ -296,7 +299,9 @@ export async function GET(request: Request) {
       return reference >= range.start && reference <= range.end;
     });
 
-    const computed = filteredBatches.map(computeBatch);
+    const totalDowntimeFromEvents = filteredEvents.reduce((sum, rec) => sum + (eventDurationMinutes(rec) / 60), 0);
+    const downtimePerBatch = filteredBatches.length > 0 ? totalDowntimeFromEvents / filteredBatches.length : 0;
+    const computed = filteredBatches.map((b) => computeBatch(b, downtimePerBatch));
     const weight = computed.reduce((sum, item) => sum + Math.max(item.runtimeHours, 1), 0);
     const weightedAverage = (selector: (item: ComputedBatch) => number) =>
       weight === 0
@@ -308,7 +313,13 @@ export async function GET(request: Request) {
 
     const availability = weightedAverage((item) => item.availability);
     const performance = weightedAverage((item) => item.performance);
-    const quality = weightedAverage((item) => item.quality);
+    const goodBatchesCount = filteredBatches.filter((b) => {
+      const s = text(b.status).toUpperCase();
+      return !s.includes("REJECT") && !s.includes("FAIL");
+    }).length;
+    const quality = filteredBatches.length > 0
+      ? Number(((goodBatchesCount / filteredBatches.length) * 100).toFixed(1))
+      : 100;
     const overallOee = (availability * performance * quality) / 10_000;
 
     const trendPoints = computed.map((item) => ({

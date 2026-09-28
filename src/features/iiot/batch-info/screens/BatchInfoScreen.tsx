@@ -34,7 +34,14 @@ import {
   XCircle,
   Lightning,
   ListChecks,
+  ChartLine,
+  SlidersHorizontal,
+  Target,
 } from "@phosphor-icons/react";
+import DynamicProcessTrendChart, {
+  type CanonicalTrendPoint,
+  type TrendPointStatus,
+} from "../../batch-details/components/DynamicProcessTrendChart";
 import {
   downloadBatchPdfBlob,
   getAlarmEventDataPaginated,
@@ -80,7 +87,9 @@ export interface BatchInfoScreenProps {
 }
 
 export type BatchInfoSectionType =
+  | "PARAMETER_SETTINGS"
   | "OPERATIONAL_DETAIL_VALUES"
+  | "TRENDS"
   | "ALARM_SUMMARY"
   | "AUDIT_TRAIL";
 
@@ -95,7 +104,9 @@ export interface SectionReviewItem {
 }
 
 export const BATCH_INFO_SECTIONS: { id: BatchInfoSectionType; label: string; shortName: string }[] = [
+  { id: "PARAMETER_SETTINGS", label: "PARAMETER SETTINGS", shortName: "Parameter Settings" },
   { id: "OPERATIONAL_DETAIL_VALUES", label: "OPERATIONAL DETAIL VALUES", shortName: "Operational Detail Values" },
+  { id: "TRENDS", label: "PARAMETER TRENDS", shortName: "Parameter Trends" },
   { id: "ALARM_SUMMARY", label: "ALARMS / EVENTS", shortName: "Alarms / Events" },
   { id: "AUDIT_TRAIL", label: "AUDIT TRAIL", shortName: "Audit Trail" },
 ];
@@ -273,6 +284,10 @@ export interface MetricMetaInfo {
   idealTarget?: number;
   lowerCriticalLimit?: number;
   upperCriticalLimit?: number;
+  lowerWarningLimit?: number;
+  upperWarningLimit?: number;
+  idealMin?: number;
+  idealMax?: number;
 }
 
 function resolveMetricLimits(
@@ -280,7 +295,20 @@ function resolveMetricLimits(
   equipmentCode: string,
   limits: CriticalParameterLimit[],
   criticalParams: CriticalParameter[],
-): { parameterName: string; unit: string; idealTarget?: number; limits?: { lowerCriticalLimit?: number; upperCriticalLimit?: number; idealTarget?: number } } {
+): {
+  parameterName: string;
+  unit: string;
+  idealTarget?: number;
+  limits?: {
+    lowerCriticalLimit?: number;
+    upperCriticalLimit?: number;
+    lowerWarningLimit?: number;
+    upperWarningLimit?: number;
+    idealTarget?: number;
+    idealMin?: number;
+    idealMax?: number;
+  };
+} {
   const normKey = metricKey.toLowerCase().replace(/[^a-z0-9]/g, "");
 
   const matchedParam = criticalParams.find((p) => {
@@ -315,7 +343,11 @@ function resolveMetricLimits(
     const rawLimit = matchedLimit as Record<string, unknown>;
     const upperCriticalLimit = toNumberOrUndefined(rawLimit.upperCriticalLimit ?? rawLimit.highCriticalValue ?? rawLimit.upperLimit ?? rawLimit.maxValue);
     const lowerCriticalLimit = toNumberOrUndefined(rawLimit.lowerCriticalLimit ?? rawLimit.lowCriticalValue ?? rawLimit.lowerLimit ?? rawLimit.minValue);
+    const upperWarningLimit = toNumberOrUndefined(rawLimit.upperWarningLimit ?? rawLimit.highWarningValue ?? rawLimit.warningHigh);
+    const lowerWarningLimit = toNumberOrUndefined(rawLimit.lowerWarningLimit ?? rawLimit.lowWarningValue ?? rawLimit.warningLow);
     const idealTarget = toNumberOrUndefined(rawLimit.idealTarget ?? rawLimit.targetValue ?? rawLimit.floatValue ?? rawLimit.setValue ?? rawLimit.setPoint);
+    const idealMin = toNumberOrUndefined(rawLimit.idealMin ?? rawLimit.idealMinValue);
+    const idealMax = toNumberOrUndefined(rawLimit.idealMax ?? rawLimit.idealMaxValue);
     return {
       parameterName,
       unit,
@@ -323,7 +355,11 @@ function resolveMetricLimits(
       limits: {
         upperCriticalLimit,
         lowerCriticalLimit,
+        upperWarningLimit,
+        lowerWarningLimit,
         idealTarget,
+        idealMin,
+        idealMax,
       },
     };
   }
@@ -560,9 +596,11 @@ export default function BatchInfoScreen({ batchId }: BatchInfoScreenProps) {
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const [activeInfoSection, setActiveInfoSection] = useState<string>("OPERATIONAL_DETAIL_VALUES");
 
-  // Section Review State (Operational Detail Values, Alarms / Events, Audit Trail)
+  // Section Review State (Parameter Settings, Operational Detail Values, Parameter Trends, Alarms / Events, Audit Trail)
   const initialSectionReviews: Record<BatchInfoSectionType, SectionReviewItem> = useMemo(() => ({
+    PARAMETER_SETTINGS: { status: "PENDING" },
     OPERATIONAL_DETAIL_VALUES: { status: "PENDING" },
+    TRENDS: { status: "PENDING" },
     ALARM_SUMMARY: { status: "PENDING" },
     AUDIT_TRAIL: { status: "PENDING" },
   }), []);
@@ -1361,6 +1399,106 @@ export default function BatchInfoScreen({ batchId }: BatchInfoScreenProps) {
     ];
   }, [availableMetricsList]);
 
+  // Selected Trend Metric State & Metadata
+  const [selectedTrendMetric, setSelectedTrendMetric] = useState<string>("");
+
+  useEffect(() => {
+    if (availableMetricsList.length > 0 && (!selectedTrendMetric || !availableMetricsList.some((m) => m.key === selectedTrendMetric))) {
+      setSelectedTrendMetric(availableMetricsList[0].key);
+    }
+  }, [availableMetricsList, selectedTrendMetric]);
+
+  const currentMetricMeta = useMemo(() => {
+    if (!selectedTrendMetric) {
+      return {
+        parameterName: "Process Parameter",
+        unit: "units",
+        limits: undefined,
+      };
+    }
+    return resolveMetricLimits(selectedTrendMetric, targetEquipmentCode, paramLimits, criticalParams);
+  }, [selectedTrendMetric, targetEquipmentCode, paramLimits, criticalParams]);
+
+  // Canonical Process Trend Points Dataset
+  const canonicalTrendPoints = useMemo((): CanonicalTrendPoint[] => {
+    if (!selectedTrendMetric || cppRecords.length === 0) return [];
+
+    let dataset = cppRecords;
+    if (correlatedAlarm) {
+      const alarmTimeStr = getAlarmEventTime(correlatedAlarm as unknown as Record<string, unknown>);
+      dataset = dataset.filter((rec) => isWithinCorrelationWindow(rec.observedAt, alarmTimeStr));
+    }
+
+    const sorted = [...dataset].sort((a, b) => {
+      const ta = new Date(a.observedAt || 0).getTime();
+      const tb = new Date(b.observedAt || 0).getTime();
+      return ta - tb;
+    });
+
+    const limits = currentMetricMeta.limits;
+
+    return sorted.map((record, index) => {
+      const rawVal = record.metrics?.[selectedTrendMetric];
+      const numVal = typeof rawVal === "number" ? rawVal : parseFloat(String(rawVal));
+      const val = isNaN(numVal) ? 0 : numVal;
+
+      const obsDate = record.observedAt ? new Date(record.observedAt) : new Date();
+      const timeStr = !isNaN(obsDate.getTime())
+        ? new Intl.DateTimeFormat("en-IN", {
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+            hour12: true,
+          }).format(obsDate)
+        : "-";
+      const fullDateStr = !isNaN(obsDate.getTime())
+        ? new Intl.DateTimeFormat("en-IN", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+            hour12: true,
+          }).format(obsDate)
+        : "-";
+
+      let status: TrendPointStatus = "NORMAL";
+      if (rawVal === undefined || rawVal === null || rawVal === "") {
+        status = "NO_DATA";
+      } else if (limits) {
+        const evaluation = evaluateParameterStatus(val, limits.lowerCriticalLimit, limits.upperCriticalLimit);
+        if (evaluation.status === "OUT_OF_RANGE") {
+          status = "CRITICAL";
+        } else if (evaluation.status === "INVALID") {
+          status = "NO_DATA";
+        } else {
+          status = "NORMAL";
+        }
+      }
+
+      return {
+        index,
+        timestamp: record.observedAt || "",
+        formattedTime: timeStr,
+        formattedFullDate: fullDateStr,
+        value: val,
+        metricKey: selectedTrendMetric,
+        parameterName: currentMetricMeta.parameterName,
+        unit: currentMetricMeta.unit,
+        status,
+        upperCriticalLimit: limits?.upperCriticalLimit,
+        upperWarningLimit: limits?.upperWarningLimit,
+        idealTarget: limits?.idealTarget,
+        idealMin: limits?.idealMin,
+        idealMax: limits?.idealMax,
+        lowerWarningLimit: limits?.lowerWarningLimit,
+        lowerCriticalLimit: limits?.lowerCriticalLimit,
+        rawRecord: record,
+      };
+    });
+  }, [cppRecords, selectedTrendMetric, currentMetricMeta, correlatedAlarm, isWithinCorrelationWindow]);
+
   const getStatusBadge = (status: string) => {
     const s = status.toUpperCase();
     if (s.includes("APPROV") || s.includes("COMPLET")) return "bg-emerald-100 text-emerald-800 border-emerald-300";
@@ -1804,6 +1942,251 @@ export default function BatchInfoScreen({ batchId }: BatchInfoScreenProps) {
       </section>
 
       {/* =========================================================================
+          SECTION 1.5: PARAMETER SETTINGS (Recipe Parameter Settings - Setpoint Specifications)
+         ========================================================================= */}
+      <section aria-label="Parameter Settings" className="space-y-4">
+        {/* Section Verification Checkpoint Card */}
+        <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-600 flex-shrink-0">
+              <SlidersHorizontal className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-bold text-slate-900">
+                  Parameter Settings
+                </h2>
+                {sectionReviews.PARAMETER_SETTINGS?.status === "PASSED" || isApprovedBatch ? (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    <CheckCircle className="h-3.5 w-3.5 text-emerald-600" weight="fill" />
+                    <span>{roleStageWiseLabel}</span>
+                  </span>
+                ) : sectionReviews.PARAMETER_SETTINGS?.status === "HAS_QUERIES" ? (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                    <WarningCircle className="h-3.5 w-3.5 text-amber-600" weight="fill" />
+                    <span>Query Flagged</span>
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                    <span className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
+                    <span>Pending Verification</span>
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Recipe setpoint specifications and operational limits for <strong className="text-slate-600 font-mono">{targetEquipmentCode}</strong>
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 self-end md:self-auto flex-wrap">
+            <button
+              type="button"
+              onClick={() => {
+                setActiveInfoSection("PARAMETER_SETTINGS");
+                setIsInfoModalOpen(true);
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 font-semibold text-xs transition shadow-sm cursor-pointer"
+            >
+              <Question className="h-3.5 w-3.5 text-amber-700" />
+              <span>Request Info</span>
+            </button>
+            {!isApprovedBatch && (
+              <button
+                type="button"
+                onClick={() => handlePassSection("PARAMETER_SETTINGS")}
+                className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg font-bold text-xs transition shadow-sm cursor-pointer ${
+                  sectionReviews.PARAMETER_SETTINGS?.status === "PASSED"
+                    ? "bg-emerald-600 hover:bg-emerald-700 text-white border border-emerald-600"
+                    : "bg-blue-600 hover:bg-blue-700 text-white animate-blue-blink"
+                }`}
+              >
+                <CheckCircle className="h-3.5 w-3.5" weight={sectionReviews.PARAMETER_SETTINGS?.status === "PASSED" ? "fill" : "bold"} />
+                <span>{sectionReviews.PARAMETER_SETTINGS?.status === "PASSED" ? `Verified (${roleStageWiseLabel})` : `Verify Section (${isOperatorRole ? "Mark Viewed" : isReviewerRole ? "Review" : "Approve"})`}</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Recipe Parameter Settings Table Card */}
+        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+            <div>
+              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <SlidersHorizontal className="h-4 w-4 text-indigo-600" />
+                Recipe Parameter Settings (Setpoint Specifications)
+              </h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Recipe: <strong className="text-slate-600 font-mono">{toText(batchSummary?.productCode) || "STFS7000"}</strong> &bull; Equipment:{" "}
+                <strong className="text-slate-600 font-mono">{targetEquipmentCode}</strong>
+              </p>
+            </div>
+          </div>
+
+          {targetEquipmentCode.includes("FBD") ? (
+            <div className="overflow-hidden border border-slate-200 rounded-xl max-w-3xl">
+              <table className="w-full text-left text-xs text-slate-700">
+                <thead className="bg-slate-50 text-[11px] font-bold text-slate-600 uppercase tracking-wider border-b border-slate-200">
+                  <tr>
+                    <th className="py-2.5 px-3.5">Parameters</th>
+                    <th className="py-2.5 px-3.5 text-right">Set Value</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  <tr><td className="py-2 px-3.5 font-medium">PROCESS TIME (MIN)</td><td className="py-2 px-3.5 text-right font-mono font-bold">300</td></tr>
+                  <tr><td className="py-2 px-3.5 font-medium">AIR DRY TIME (MIN)</td><td className="py-2 px-3.5 text-right font-mono font-bold">5</td></tr>
+                  <tr><td className="py-2 px-3.5 font-medium">COOLING TIME (MIN)</td><td className="py-2 px-3.5 text-right font-mono font-bold">0</td></tr>
+                  <tr><td className="py-2 px-3.5 font-medium">SHAKE INTERVAL (MIN)</td><td className="py-2 px-3.5 text-right font-mono font-bold">10</td></tr>
+                  <tr><td className="py-2 px-3.5 font-medium">SHAKE DURATION (SEC)</td><td className="py-2 px-3.5 text-right font-mono font-bold">30</td></tr>
+                  <tr><td className="py-2 px-3.5 font-medium">END SHAKE TIME (SEC)</td><td className="py-2 px-3.5 text-right font-mono font-bold">30</td></tr>
+                  <tr><td className="py-2 px-3.5 font-medium">INLET TEMPERATURE (°C)</td><td className="py-2 px-3.5 text-right font-mono font-bold">60</td></tr>
+                  <tr><td className="py-2 px-3.5 font-medium">INLET TEMPERATURE HIGH (°C)</td><td className="py-2 px-3.5 text-right font-mono font-bold">64</td></tr>
+                  <tr><td className="py-2 px-3.5 font-medium">OUTLET TEMPERATURE (°C)</td><td className="py-2 px-3.5 text-right font-mono font-bold">48</td></tr>
+                  <tr><td className="py-2 px-3.5 font-medium">PRINT INTERVAL (MIN)</td><td className="py-2 px-3.5 text-right font-mono font-bold">5</td></tr>
+                </tbody>
+              </table>
+            </div>
+          ) : targetEquipmentCode.includes("OGB") || targetEquipmentCode.includes("BLE") || targetEquipmentCode.includes("OCB") ? (
+            <div className="overflow-hidden border border-slate-200 rounded-xl max-w-3xl">
+              <table className="w-full text-left text-xs text-slate-700">
+                <thead className="bg-slate-50 text-[11px] font-bold text-slate-600 uppercase tracking-wider border-b border-slate-200">
+                  <tr>
+                    <th className="py-2.5 px-3.5">Blending Parameters</th>
+                    <th className="py-2.5 px-3.5 text-right">Set Value</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  <tr><td className="py-2 px-3.5 font-medium">SELECT NUMBER OF MIXINGS</td><td className="py-2 px-3.5 text-right font-mono font-bold">2</td></tr>
+                  <tr><td className="py-2 px-3.5 font-medium">FIRST MIXING TIME (MIN)</td><td className="py-2 px-3.5 text-right font-mono font-bold">15</td></tr>
+                  <tr><td className="py-2 px-3.5 font-medium">SECOND MIXING TIME (MIN)</td><td className="py-2 px-3.5 text-right font-mono font-bold">5</td></tr>
+                  <tr><td className="py-2 px-3.5 font-medium">THIRD MIXING TIME (MIN)</td><td className="py-2 px-3.5 text-right font-mono font-bold">0</td></tr>
+                  <tr><td className="py-2 px-3.5 font-medium">FOURTH MIXING TIME (MIN)</td><td className="py-2 px-3.5 text-right font-mono font-bold">0</td></tr>
+                  <tr><td className="py-2 px-3.5 font-medium">BLENDING SPEED (RPM)</td><td className="py-2 px-3.5 text-right font-mono font-bold">5</td></tr>
+                  <tr><td className="py-2 px-3.5 font-medium">VACUUM ON TIME (MIN)</td><td className="py-2 px-3.5 text-right font-mono font-bold">100</td></tr>
+                  <tr><td className="py-2 px-3.5 font-medium">PURGE ON TIME (Sec)</td><td className="py-2 px-3.5 text-right font-mono font-bold">5</td></tr>
+                </tbody>
+              </table>
+            </div>
+          ) : targetEquipmentCode.includes("COAT") ? (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="overflow-hidden border border-slate-200 rounded-xl">
+                <div className="bg-slate-50 px-3.5 py-2 border-b border-slate-200 text-[11px] font-bold text-slate-600 uppercase">
+                  PRE-HEATING PARAMETERS
+                </div>
+                <table className="w-full text-left text-xs text-slate-700">
+                  <tbody className="divide-y divide-slate-100">
+                    <tr><td className="py-2 px-3.5 font-medium">INLET AIR TEMP (°C)</td><td className="py-2 px-3.5 text-right font-mono font-bold">65</td></tr>
+                    <tr><td className="py-2 px-3.5 font-medium">BED TEMP (°C)</td><td className="py-2 px-3.5 text-right font-mono font-bold">42</td></tr>
+                    <tr><td className="py-2 px-3.5 font-medium">PAN SPEED (RPM)</td><td className="py-2 px-3.5 text-right font-mono font-bold">3</td></tr>
+                    <tr><td className="py-2 px-3.5 font-medium">DRYING TIME (MIN)</td><td className="py-2 px-3.5 text-right font-mono font-bold">15</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div className="overflow-hidden border border-slate-200 rounded-xl">
+                <div className="bg-slate-50 px-3.5 py-2 border-b border-slate-200 text-[11px] font-bold text-slate-600 uppercase">
+                  SPRAYING PARAMETERS
+                </div>
+                <table className="w-full text-left text-xs text-slate-700">
+                  <tbody className="divide-y divide-slate-100">
+                    <tr><td className="py-2 px-3.5 font-medium">INLET AIR TEMP (°C)</td><td className="py-2 px-3.5 text-right font-mono font-bold">65</td></tr>
+                    <tr><td className="py-2 px-3.5 font-medium">BED TEMP (°C)</td><td className="py-2 px-3.5 text-right font-mono font-bold">44</td></tr>
+                    <tr><td className="py-2 px-3.5 font-medium">PAN SPEED (RPM)</td><td className="py-2 px-3.5 text-right font-mono font-bold">8</td></tr>
+                    <tr><td className="py-2 px-3.5 font-medium">SPRAY RATE (G/MIN)</td><td className="py-2 px-3.5 text-right font-mono font-bold">120</td></tr>
+                    <tr><td className="py-2 px-3.5 font-medium">ATOM AIR (BAR)</td><td className="py-2 px-3.5 text-right font-mono font-bold">2.5</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div className="overflow-hidden border border-slate-200 rounded-xl">
+                <div className="bg-slate-50 px-3.5 py-2 border-b border-slate-200 text-[11px] font-bold text-slate-600 uppercase">
+                  POST-DRYING PARAMETERS
+                </div>
+                <table className="w-full text-left text-xs text-slate-700">
+                  <tbody className="divide-y divide-slate-100">
+                    <tr><td className="py-2 px-3.5 font-medium">INLET AIR TEMP (°C)</td><td className="py-2 px-3.5 text-right font-mono font-bold">50</td></tr>
+                    <tr><td className="py-2 px-3.5 font-medium">BED TEMP (°C)</td><td className="py-2 px-3.5 text-right font-mono font-bold">40</td></tr>
+                    <tr><td className="py-2 px-3.5 font-medium">PAN SPEED (RPM)</td><td className="py-2 px-3.5 text-right font-mono font-bold">3</td></tr>
+                    <tr><td className="py-2 px-3.5 font-medium">DRYING TIME (MIN)</td><td className="py-2 px-3.5 text-right font-mono font-bold">30</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : targetEquipmentCode.includes("CIP") ? (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="overflow-hidden border border-slate-200 rounded-xl">
+                <div className="bg-slate-50 px-3.5 py-2 border-b border-slate-200 text-[11px] font-bold text-slate-600 uppercase">
+                  PRE-RINSE PARAMETERS
+                </div>
+                <table className="w-full text-left text-xs text-slate-700">
+                  <tbody className="divide-y divide-slate-100">
+                    <tr><td className="py-2 px-3.5 font-medium">PRE-RINSE TIME (MIN)</td><td className="py-2 px-3.5 text-right font-mono font-bold">15</td></tr>
+                    <tr><td className="py-2 px-3.5 font-medium">WATER TEMP (°C)</td><td className="py-2 px-3.5 text-right font-mono font-bold">25</td></tr>
+                    <tr><td className="py-2 px-3.5 font-medium">SUPPLY FLOW (LPM)</td><td className="py-2 px-3.5 text-right font-mono font-bold">150</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div className="overflow-hidden border border-slate-200 rounded-xl">
+                <div className="bg-slate-50 px-3.5 py-2 border-b border-slate-200 text-[11px] font-bold text-slate-600 uppercase">
+                  DETERGENT WASH PARAMETERS
+                </div>
+                <table className="w-full text-left text-xs text-slate-700">
+                  <tbody className="divide-y divide-slate-100">
+                    <tr><td className="py-2 px-3.5 font-medium">WASH TIME (MIN)</td><td className="py-2 px-3.5 text-right font-mono font-bold">30</td></tr>
+                    <tr><td className="py-2 px-3.5 font-medium">WASH TEMP (°C)</td><td className="py-2 px-3.5 text-right font-mono font-bold">75</td></tr>
+                    <tr><td className="py-2 px-3.5 font-medium">DETERGENT CONC (%)</td><td className="py-2 px-3.5 text-right font-mono font-bold">2.0</td></tr>
+                    <tr><td className="py-2 px-3.5 font-medium">PRESSURE (BAR)</td><td className="py-2 px-3.5 text-right font-mono font-bold">3.0</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div className="overflow-hidden border border-slate-200 rounded-xl">
+                <div className="bg-slate-50 px-3.5 py-2 border-b border-slate-200 text-[11px] font-bold text-slate-600 uppercase">
+                  FINAL RINSE & DRY
+                </div>
+                <table className="w-full text-left text-xs text-slate-700">
+                  <tbody className="divide-y divide-slate-100">
+                    <tr><td className="py-2 px-3.5 font-medium">FINAL RINSE TIME (MIN)</td><td className="py-2 px-3.5 text-right font-mono font-bold">20</td></tr>
+                    <tr><td className="py-2 px-3.5 font-medium">CONDUCTIVITY LIMIT</td><td className="py-2 px-3.5 text-right font-mono font-bold">1.3 µS/cm</td></tr>
+                    <tr><td className="py-2 px-3.5 font-medium">AIR BLOW DRY (MIN)</td><td className="py-2 px-3.5 text-right font-mono font-bold">15</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="overflow-hidden border border-slate-200 rounded-xl">
+                <div className="bg-slate-50 px-3.5 py-2 border-b border-slate-200 text-[11px] font-bold text-slate-600 uppercase">
+                  DRY & WET CYCLE 1
+                </div>
+                <table className="w-full text-left text-xs text-slate-700">
+                  <tbody className="divide-y divide-slate-100">
+                    <tr><td className="py-2 px-3.5 font-medium">DRY CYCLE 1 - IMPELLER SLOW (Sec)</td><td className="py-2 px-3.5 text-right font-mono font-bold">600</td></tr>
+                    <tr><td className="py-2 px-3.5 font-medium">DRY CYCLE 1 - IMPELLER FAST (Sec)</td><td className="py-2 px-3.5 text-right font-mono font-bold">0</td></tr>
+                    <tr><td className="py-2 px-3.5 font-medium">WET CYCLE 1 - IMPELLER SLOW (Sec)</td><td className="py-2 px-3.5 text-right font-mono font-bold">180</td></tr>
+                    <tr><td className="py-2 px-3.5 font-medium">WET CYCLE 1 - PUMP 1 SET (Sec)</td><td className="py-2 px-3.5 text-right font-mono font-bold">180</td></tr>
+                    <tr><td className="py-2 px-3.5 font-medium">WET CYCLE 1 - PUMP 1 RPM</td><td className="py-2 px-3.5 text-right font-mono font-bold">240</td></tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="overflow-hidden border border-slate-200 rounded-xl">
+                <div className="bg-slate-50 px-3.5 py-2 border-b border-slate-200 text-[11px] font-bold text-slate-600 uppercase">
+                  WET CYCLES 2, 3 & UNLOADING
+                </div>
+                <table className="w-full text-left text-xs text-slate-700">
+                  <tbody className="divide-y divide-slate-100">
+                    <tr><td className="py-2 px-3.5 font-medium">WET CYCLE 2 - IMPELLER SLOW (Sec)</td><td className="py-2 px-3.5 text-right font-mono font-bold">180</td></tr>
+                    <tr><td className="py-2 px-3.5 font-medium">WET CYCLE 2 - CHOPPER SLOW (Sec)</td><td className="py-2 px-3.5 text-right font-mono font-bold">180</td></tr>
+                    <tr><td className="py-2 px-3.5 font-medium">WET CYCLE 3 - IMPELLER SLOW (Sec)</td><td className="py-2 px-3.5 text-right font-mono font-bold">480</td></tr>
+                    <tr><td className="py-2 px-3.5 font-medium">WET CYCLE 3 - CHOPPER SLOW (Sec)</td><td className="py-2 px-3.5 text-right font-mono font-bold">480</td></tr>
+                    <tr><td className="py-2 px-3.5 font-medium">UNLOADING PARAMETERS</td><td className="py-2 px-3.5 text-right font-mono font-bold">IMPELLER/CHOPPER: SLOW</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* =========================================================================
           SECTION 2: OPERATIONAL DETAIL VALUES (Set / Actual display format)
          ========================================================================= */}
       <section aria-label="Operational Detail Values" className="space-y-4">
@@ -2060,6 +2443,148 @@ export default function BatchInfoScreen({ batchId }: BatchInfoScreenProps) {
             )}
           </div>
         </div>
+      </section>
+
+      {/* =========================================================================
+          SECTION 2.5: PARAMETER TRENDS (Dynamic Process Trend Chart)
+         ========================================================================= */}
+      <section aria-label="Parameter Trends" className="space-y-4">
+        {/* Section Verification Checkpoint Card */}
+        <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-600 flex-shrink-0">
+              <ChartLine className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-bold text-slate-900">
+                  Parameter Trends
+                </h2>
+                {sectionReviews.TRENDS?.status === "PASSED" || isApprovedBatch ? (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    <CheckCircle className="h-3.5 w-3.5 text-emerald-600" weight="fill" />
+                    <span>{roleStageWiseLabel}</span>
+                  </span>
+                ) : sectionReviews.TRENDS?.status === "HAS_QUERIES" ? (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                    <WarningCircle className="h-3.5 w-3.5 text-amber-600" weight="fill" />
+                    <span>Query Flagged</span>
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                    <span className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
+                    <span>Pending Verification</span>
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Dynamic telemetry time-series trends with setpoint specifications, tolerance limits, and alarms
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 self-end md:self-auto flex-wrap">
+            <button
+              type="button"
+              onClick={() => {
+                setActiveInfoSection("TRENDS");
+                setIsInfoModalOpen(true);
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 font-semibold text-xs transition shadow-sm cursor-pointer"
+            >
+              <Question className="h-3.5 w-3.5 text-amber-700" />
+              <span>Request Info</span>
+            </button>
+            {!isApprovedBatch && (
+              <button
+                type="button"
+                onClick={() => handlePassSection("TRENDS")}
+                className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg font-bold text-xs transition shadow-sm cursor-pointer ${
+                  sectionReviews.TRENDS?.status === "PASSED"
+                    ? "bg-emerald-600 hover:bg-emerald-700 text-white border border-emerald-600"
+                    : "bg-blue-600 hover:bg-blue-700 text-white animate-blue-blink"
+                }`}
+              >
+                <CheckCircle className="h-3.5 w-3.5" weight={sectionReviews.TRENDS?.status === "PASSED" ? "fill" : "bold"} />
+                <span>{sectionReviews.TRENDS?.status === "PASSED" ? `Verified (${roleStageWiseLabel})` : `Verify Section (${isOperatorRole ? "Mark Viewed" : isReviewerRole ? "Review" : "Approve"})`}</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {correlatedAlarm && (
+          <div className="p-3.5 bg-white border border-slate-200 rounded-xl shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-xs font-semibold text-slate-700">
+              <Target className="h-4 w-4 text-amber-600" />
+              <span>
+                Correlated with alarm: <strong className="font-mono text-slate-900">{getAlarmCode(correlatedAlarm as unknown as Record<string, unknown>)}</strong> (
+                {toDisplayDate(getAlarmEventTime(correlatedAlarm as unknown as Record<string, unknown>))})
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={handleClearCorrelation}
+              className="inline-flex items-center gap-1 text-xs font-semibold text-amber-800 hover:text-amber-950 underline self-end sm:self-auto cursor-pointer"
+            >
+              <X className="h-3.5 w-3.5" />
+              Clear Correlation Window
+            </button>
+          </div>
+        )}
+
+        {/* Metric Selector Bar */}
+        <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-sm space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+            <div>
+              <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                <ChartLine className="h-4 w-4 text-indigo-600" />
+                Telemetry Parameter Channel
+              </h3>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                Select a continuous critical process parameter to visualize time-series telemetry against tolerance limits
+              </p>
+            </div>
+            <div className="text-xs font-mono font-bold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-lg self-start sm:self-auto">
+              {canonicalTrendPoints.length} Data Points
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 overflow-x-auto pb-1">
+            {availableMetricsList.map((col) => {
+              const isSelected = selectedTrendMetric === col.key;
+              return (
+                <button
+                  key={col.key}
+                  type="button"
+                  onClick={() => setSelectedTrendMetric(col.key)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer ${
+                    isSelected
+                      ? "bg-indigo-600 text-white shadow-sm ring-2 ring-indigo-400/30"
+                      : "bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200"
+                  }`}
+                >
+                  {col.label} ({col.unit})
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Dynamic Process Trend Chart */}
+        <DynamicProcessTrendChart
+          points={canonicalTrendPoints}
+          parameterName={currentMetricMeta.parameterName}
+          metricKey={selectedTrendMetric}
+          unit={currentMetricMeta.unit}
+          limits={currentMetricMeta.limits}
+          isLoading={isLoading}
+          batchNo={queryBatchNo}
+          lotNo={queryLotNo}
+          equipmentCode={targetEquipmentCode}
+          availableMetrics={availableMetricsList}
+          selectedMetric={selectedTrendMetric}
+          onMetricChange={(k) => setSelectedTrendMetric(k)}
+        />
       </section>
 
       {/* =========================================================================
