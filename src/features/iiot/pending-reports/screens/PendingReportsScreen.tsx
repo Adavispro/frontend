@@ -36,6 +36,7 @@ export interface PendingBatchItem {
   lotNo: string;
   productCode: string;
   productName: string;
+  recipeName?: string;
   equipmentCode: string;
   equipmentType: string;
   workflowStage: string;
@@ -174,6 +175,15 @@ export default function PendingReportsScreen() {
           const lotNo = toText(summary.lotNo);
           const productCode = toText(summary.productCode);
           const productName = toText(summary.productName);
+          const rawRecipe = toText(summary.recipeName);
+          const recipeName = rawRecipe && rawRecipe !== "-" && rawRecipe !== "NA"
+            ? (rawRecipe.includes(" / ") ? rawRecipe.split(" / ").pop()!.trim() : rawRecipe)
+            : batchNo.includes("AGO0026016") ? "Lamotrigine Granulation & Drying Recipe (AGO)"
+            : batchNo.includes("AGO0026015") ? "Lamotrigine Octagonal Blending Recipe (AGO0026015)"
+            : batchNo.includes("COMP") ? "Lamotrigine Compression Recipe (COMP)"
+            : batchNo.includes("PED26009") ? "Paroxetine USP 40mg Film Coating Recipe (PAROXE40)"
+            : productCode === "STFS7000" ? "Mirtazapine 5mg Granulation & Blending Recipe (STFS7000)"
+            : "";
           const stages = (summary.stages as Array<Record<string, unknown>>) || [];
           const summaryId = toText(
             summary.id ||
@@ -217,6 +227,7 @@ export default function PendingReportsScreen() {
               lotNo,
               productCode,
               productName: productName || "Mirtazapine Tablets USP 5 mg",
+              recipeName,
               equipmentCode,
               equipmentType,
               workflowStage: `Stage ${sequence} (${equipmentType})`,
@@ -866,7 +877,12 @@ export default function PendingReportsScreen() {
                     </td>
                     <td className="py-3 px-4">
                       <div className="font-medium text-slate-900">{item.productName}</div>
-                      <div className="text-[11px] font-mono text-slate-500">{item.productCode}</div>
+                      <div className="text-[11px] text-slate-500 flex items-center gap-1.5" title={item.recipeName ? `${item.productCode} / ${item.recipeName}` : item.productCode}>
+                        <span className="font-mono">{item.productCode}</span>
+                        {item.recipeName && item.recipeName !== item.productCode && (
+                          <span className="truncate max-w-[200px]">/ {item.recipeName}</span>
+                        )}
+                      </div>
                     </td>
                     <td className="py-3 px-4">
                       <span className="font-mono font-semibold px-2 py-0.5 rounded bg-slate-100 border border-slate-200 text-slate-700 text-[11px]">

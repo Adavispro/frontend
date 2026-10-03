@@ -1,0 +1,3 @@
+tenantCode,tenantName,status,contactEmail,contactPhone,region,domain
+TNT-GLOBAL-01,Adavis Life Sciences US,ACTIVE,admin.us@adavis.com,+1-555-0192,North America,us.adavis.local
+TNT-GLOBAL-02,Adavis Healthcare EU,ACTIVE,compliance.eu@adavis.eu,+49-30-901820,Europe,eu.adavis.local

@@ -1,0 +1,4 @@
+roleCode,roleName,description,isActive
+ROLE-TEST-VALID-01,Valid Role Row 1,This valid row must NOT be imported because Row 2 is invalid,true
+,Invalid Row Blank Code,Missing mandatory roleCode - causes total file rejection,true
+ROLE-TEST-VALID-02,Valid Role Row 3,This valid row must NOT be imported because Row 2 is invalid,true

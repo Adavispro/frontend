@@ -1,0 +1,5 @@
+roleCode,roleName,description,isActive
+ROLE-QA-ANALYST,Senior QA Analyst,Authorizes batch records and review approvals,true
+ROLE-PROD-OPERATOR,Production Line Operator,Executes line runs and critical parameter logs,true
+ROLE-MAINT-ENG,Maintenance Lead Engineer,Handles equipment calibration and diagnostics,true
+ROLE-PLANT-HEAD,Plant Director,Full site governance and release authorization,true

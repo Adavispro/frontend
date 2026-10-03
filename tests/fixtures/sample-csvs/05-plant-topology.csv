@@ -1,0 +1,3 @@
+plantCode,plantName,type,isActive,blockCode,blockName,areaCode,areaName,roomCode,roomName
+PLNT-SITE-01,Adavis Pharma Unit 1,PHARMA,true,BLK-A,Formulation Block,AREA-OSD,Solid Oral Area,RM-101,Granulation Suite 1
+PLNT-SITE-02,Adavis Biologics Unit 2,BIOPHARMA,true,BLK-B,Fermentation Block,AREA-USP,Upstream Area,RM-201,Bioreactor Cleanroom

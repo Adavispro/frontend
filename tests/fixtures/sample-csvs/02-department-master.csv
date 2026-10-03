@@ -1,0 +1,5 @@
+departmentCode,departmentName,description,plantCode,parentDepartmentCode,isActive
+DEP-QA,Quality Assurance,Analytical and compliance assurance,PLNT-0001,,true
+DEP-QC,Quality Control,In-process testing and wet lab,PLNT-0001,,true
+DEP-PROD,Solid Dosage Manufacturing,Primary oral solid dosage production,PLNT-0001,,true
+DEP-ENG,Facility & Maintenance,Utilities and automation maintenance,PLNT-0001,,true

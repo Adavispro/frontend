@@ -1,0 +1,3 @@
+departmentCode,departmentName,description,plantCode,parentDepartmentCode,isActive
+DEP-DUP-ENTRY,First Department Instance,Primary department definition,PLNT-0001,,true
+DEP-DUP-ENTRY,Second Duplicate Instance,Duplicate department code in same file - causes rejection,PLNT-0001,,true

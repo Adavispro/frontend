@@ -60,10 +60,12 @@ import DynamicProcessTrendChart, {
   type TrendLimitConfig,
   type TrendPointStatus,
 } from "../components/DynamicProcessTrendChart";
-import { RMG_ALARM_SUMMARY_MOCK, RMG_AUDIT_TRAIL_MOCK } from "../data/rmgMockData";
-import { FBD_ALARM_SUMMARY_MOCK, FBD_AUDIT_TRAIL_MOCK } from "../data/fbdMockData";
-import { BLE_AUDIT_TRAIL_MOCK } from "../data/bleMockData";
-import { COAT_ALARM_SUMMARY_MOCK, COAT_AUDIT_TRAIL_MOCK } from "../data/coatMockData";
+import { RMG_ALARM_SUMMARY_MOCK, RMG_AUDIT_TRAIL_MOCK, RMG_USER_SESSIONS_MOCK } from "../data/rmgMockData";
+import { FBD_ALARM_SUMMARY_MOCK, FBD_AUDIT_TRAIL_MOCK, FBD_USER_SESSIONS_MOCK } from "../data/fbdMockData";
+import { BLE_ALARM_SUMMARY_MOCK, BLE_AUDIT_TRAIL_MOCK, BLE_USER_SESSIONS_MOCK } from "../data/bleMockData";
+import { COMP_ALARM_SUMMARY_MOCK, COMP_AUDIT_TRAIL_MOCK, COMP_USER_SESSIONS_MOCK } from "../data/compMockData";
+import { COAT_ALARM_SUMMARY_MOCK, COAT_AUDIT_TRAIL_MOCK, COAT_USER_SESSIONS_MOCK } from "../data/coatMockData";
+import { isRmgCode, isFbdCode, isBleCode, isCoatCode, isCompCode, getEquipmentMasterInfo } from "../utils/equipmentResolver";
 import Pagination from "@/components/ui/Pagination";
 import { WorkflowActionModal } from "../../components/WorkflowActionModal";
 import {
@@ -161,6 +163,49 @@ export function getTabQueryParam(tab: TabType): string {
 
 const toText = (value: unknown): string =>
   typeof value === "string" ? value.trim() : value == null ? "" : String(value).trim();
+
+const getBatchRecipeName = (
+  summary: BatchSummary | null | undefined,
+  equipmentCode?: string | null
+): string => {
+  const raw = toText(summary?.recipeName);
+  if (raw && raw !== "-" && raw !== "NA") {
+    if (raw.includes(" / ")) {
+      const parts = raw.split(" / ");
+      return parts[parts.length - 1].trim();
+    }
+    return raw;
+  }
+  const bNo = toText(summary?.batchNo).toUpperCase();
+  const eq = toText(equipmentCode).toUpperCase();
+  const pCode = toText(summary?.productCode).toUpperCase();
+
+  if (bNo.includes("AGO0026016") || bNo.includes("AG00026016")) {
+    return "Lamotrigine Granulation & Drying Recipe (AGO)";
+  }
+  if (bNo.includes("AGO0026015") || bNo.includes("AG00026015") || eq.includes("MB005") || eq.includes("BLE") || eq.includes("OGB")) {
+    return "Lamotrigine Octagonal Blending Recipe (AGO0026015)";
+  }
+  if (bNo.includes("COMP") || eq.includes("MB040")) {
+    return "Lamotrigine Compression Recipe (COMP)";
+  }
+  if (bNo.includes("PED26009") || eq.includes("MB041") || eq.includes("COAT") || pCode === "STPA1D00") {
+    return "Paroxetine USP 40mg Film Coating Recipe (PAROXE40)";
+  }
+  if (bNo.includes("NL0026008") || pCode === "STFS7000") {
+    return "Mirtazapine 5mg Granulation & Blending Recipe (STFS7000)";
+  }
+  if (pCode === "STAPU1000") {
+    return "Allopurinol 100mg Direct Compression Recipe (STAPU1000)";
+  }
+  if (pCode === "STLEV5000") {
+    return "Levetiracetam 500mg Coating Recipe (STLEV5000)";
+  }
+  if (pCode === "STGW2000") {
+    return "Lamotrigine Granulation & Drying Recipe (AGO)";
+  }
+  return "";
+};
 
 // Alarm and SCADA timestamp resolution helper
 export function parseFlexibleTimestamp(val: unknown): number | null {
@@ -660,40 +705,17 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
   const [isClaiming, setIsClaiming] = useState(false);
 
   const targetEquipmentCode =
-    selectedEquipmentCode || queryEquipmentCode || batchSummary?.equipmentId || "G5RMG";
+    selectedEquipmentCode || queryEquipmentCode || batchSummary?.equipmentId || "MB003";
 
-  const isRmg = useMemo(() => {
-    const code = (targetEquipmentCode || "").toUpperCase();
-    return code.includes("RMG") || code === "G5RMG" || code === "RMGC0219";
-  }, [targetEquipmentCode]);
-
-  const isFbd = useMemo(() => {
-    const code = (targetEquipmentCode || "").toUpperCase();
-    return code.includes("FBD") || code === "G5FBD" || code === "FBDC0220";
-  }, [targetEquipmentCode]);
-
-  const isBle = useMemo(() => {
-    const code = (targetEquipmentCode || "").toUpperCase();
-    return (
-      code.includes("BLE") ||
-      code.includes("OGB") ||
-      code.includes("OCB") ||
-      code === "G5BLE" ||
-      code === "OCBC0222"
-    );
-  }, [targetEquipmentCode]);
-
-  const isCoat = useMemo(() => {
-    const code = (targetEquipmentCode || "").toUpperCase();
-    return (
-      code.includes("COAT") ||
-      code.includes("COTC") ||
-      code === "G5COT" ||
-      code === "G5COAT" ||
-      code === "COATC0223" ||
-      code === "COTC0226"
-    );
-  }, [targetEquipmentCode]);
+  const isRmg = useMemo(() => isRmgCode(targetEquipmentCode), [targetEquipmentCode]);
+  const isFbd = useMemo(() => isFbdCode(targetEquipmentCode), [targetEquipmentCode]);
+  const isBle = useMemo(() => isBleCode(targetEquipmentCode), [targetEquipmentCode]);
+  const isCoat = useMemo(() => isCoatCode(targetEquipmentCode), [targetEquipmentCode]);
+  const isComp = useMemo(() => isCompCode(targetEquipmentCode), [targetEquipmentCode]);
+  const eqMasterInfo = useMemo(() => getEquipmentMasterInfo(targetEquipmentCode), [targetEquipmentCode]);
+  const resolvedRecipeName = useMemo(() => {
+    return getBatchRecipeName(batchSummary, targetEquipmentCode);
+  }, [batchSummary, targetEquipmentCode]);
 
   const activeStatus = toText(
     (batchSummary?.stages &&
@@ -996,14 +1018,33 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
         ...(queryLotNo ? { lotNo: queryLotNo } : {}),
       });
 
+      const eqFilter = (selectedEquipmentCode || queryEquipmentCode || "").trim().toUpperCase();
+      const lotFilter = queryLotNo.trim().toUpperCase();
       const currentSummary =
-        summaries.find(
-          (s) => s.batchNo === queryBatchNo && (!queryLotNo || s.lotNo === queryLotNo),
-        ) || summaries[0] || null;
+        summaries.find((s) => {
+          const batchMatch = s.batchNo?.trim().toUpperCase() === queryBatchNo.trim().toUpperCase();
+          const lotMatch = !lotFilter || s.lotNo?.trim().toUpperCase() === lotFilter;
+          const eqMatch = !eqFilter ||
+            s.stages?.some((st: Record<string, unknown>) =>
+              toText(st.equipmentCode).toUpperCase() === eqFilter ||
+              toText(st.equipmentId).toUpperCase() === eqFilter
+            ) ||
+            toText(s.equipmentId).toUpperCase() === eqFilter;
+          return batchMatch && lotMatch && eqMatch;
+        }) ||
+        summaries.find((s) => {
+          const batchMatch = s.batchNo?.trim().toUpperCase() === queryBatchNo.trim().toUpperCase();
+          const lotMatch = !lotFilter || s.lotNo?.trim().toUpperCase() === lotFilter;
+          return batchMatch && lotMatch;
+        }) ||
+        summaries.find((s) => s.batchNo === queryBatchNo) ||
+        summaries[0] || null;
       setBatchSummary(currentSummary);
 
       const targetEquipment =
-        selectedEquipmentCode || queryEquipmentCode || currentSummary?.equipmentId || "G5RMG";
+        selectedEquipmentCode || queryEquipmentCode ||
+        currentSummary?.stages?.find((st: Record<string, unknown>) => toText(st.equipmentCode || st.equipmentId).trim() !== "")?.equipmentCode as string ||
+        currentSummary?.equipmentId || "MB003";
 
       // 2. Fetch CPP parameters (supports up to 50,000 time series telemetry records)
       try {
@@ -1041,27 +1082,20 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
 
       // 4. Fetch Alarm events for equipment
       try {
-        const isRmgTarget =
-          targetEquipment.toUpperCase().includes("RMG") ||
-          targetEquipment === "G5RMG" ||
-          targetEquipment === "RMGC0219";
-        const isFbdTarget =
-          targetEquipment.toUpperCase().includes("FBD") ||
-          targetEquipment === "G5FBD" ||
-          targetEquipment === "FBDC0220";
-
-        const isCoatTarget =
-          targetEquipment.toUpperCase().includes("COAT") ||
-          targetEquipment.toUpperCase().includes("COTC") ||
-          targetEquipment === "G5COT" ||
-          targetEquipment === "G5COAT" ||
-          targetEquipment === "COATC0223" ||
-          targetEquipment === "COTC0226";
+        const isRmgTarget = isRmgCode(targetEquipment);
+        const isFbdTarget = isFbdCode(targetEquipment);
+        const isBleTarget = isBleCode(targetEquipment);
+        const isCompTarget = isCompCode(targetEquipment);
+        const isCoatTarget = isCoatCode(targetEquipment);
 
         if (isRmgTarget) {
           setAlarmRecords(RMG_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[]);
         } else if (isFbdTarget) {
           setAlarmRecords(FBD_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[]);
+        } else if (isBleTarget) {
+          setAlarmRecords(BLE_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[]);
+        } else if (isCompTarget) {
+          setAlarmRecords(COMP_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[]);
         } else if (isCoatTarget) {
           setAlarmRecords(COAT_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[]);
         } else {
@@ -1073,25 +1107,19 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
         }
       } catch (err) {
         console.error("Failed to load Alarm events", err);
-        const isRmgTarget =
-          targetEquipment.toUpperCase().includes("RMG") ||
-          targetEquipment === "G5RMG" ||
-          targetEquipment === "RMGC0219";
-        const isFbdTarget =
-          targetEquipment.toUpperCase().includes("FBD") ||
-          targetEquipment === "G5FBD" ||
-          targetEquipment === "FBDC0220";
-        const isCoatTarget =
-          targetEquipment.toUpperCase().includes("COAT") ||
-          targetEquipment.toUpperCase().includes("COTC") ||
-          targetEquipment === "G5COT" ||
-          targetEquipment === "G5COAT" ||
-          targetEquipment === "COATC0223" ||
-          targetEquipment === "COTC0226";
+        const isRmgTarget = isRmgCode(targetEquipment);
+        const isFbdTarget = isFbdCode(targetEquipment);
+        const isBleTarget = isBleCode(targetEquipment);
+        const isCompTarget = isCompCode(targetEquipment);
+        const isCoatTarget = isCoatCode(targetEquipment);
         if (isRmgTarget) {
           setAlarmRecords(RMG_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[]);
         } else if (isFbdTarget) {
           setAlarmRecords(FBD_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[]);
+        } else if (isBleTarget) {
+          setAlarmRecords(BLE_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[]);
+        } else if (isCompTarget) {
+          setAlarmRecords(COMP_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[]);
         } else if (isCoatTarget) {
           setAlarmRecords(COAT_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[]);
         }
@@ -1103,33 +1131,19 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
           eventCategory: "EVENT",
           limit: 5000,
         });
-        const isRmgTarget =
-          targetEquipment.toUpperCase().includes("RMG") ||
-          targetEquipment === "G5RMG" ||
-          targetEquipment === "RMGC0219";
-        const isFbdTarget =
-          targetEquipment.toUpperCase().includes("FBD") ||
-          targetEquipment === "G5FBD" ||
-          targetEquipment === "FBDC0220";
-        const isBleTarget =
-          targetEquipment.toUpperCase().includes("BLE") ||
-          targetEquipment.toUpperCase().includes("OGB") ||
-          targetEquipment.toUpperCase().includes("OCB") ||
-          targetEquipment === "G5BLE" ||
-          targetEquipment === "OCBC0222";
-        const isCoatTarget =
-          targetEquipment.toUpperCase().includes("COAT") ||
-          targetEquipment.toUpperCase().includes("COTC") ||
-          targetEquipment === "G5COT" ||
-          targetEquipment === "G5COAT" ||
-          targetEquipment === "COATC0223" ||
-          targetEquipment === "COTC0226";
+        const isRmgTarget = isRmgCode(targetEquipment);
+        const isFbdTarget = isFbdCode(targetEquipment);
+        const isBleTarget = isBleCode(targetEquipment);
+        const isCompTarget = isCompCode(targetEquipment);
+        const isCoatTarget = isCoatCode(targetEquipment);
         if (isRmgTarget) {
           setEventDataRecords(RMG_AUDIT_TRAIL_MOCK as unknown as Record<string, unknown>[]);
         } else if (isFbdTarget) {
           setEventDataRecords(FBD_AUDIT_TRAIL_MOCK as unknown as Record<string, unknown>[]);
         } else if (isBleTarget) {
           setEventDataRecords(BLE_AUDIT_TRAIL_MOCK as unknown as Record<string, unknown>[]);
+        } else if (isCompTarget) {
+          setEventDataRecords(COMP_AUDIT_TRAIL_MOCK as unknown as Record<string, unknown>[]);
         } else if (isCoatTarget) {
           setEventDataRecords(COAT_AUDIT_TRAIL_MOCK as unknown as Record<string, unknown>[]);
         } else {
@@ -1137,33 +1151,19 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
         }
       } catch (err) {
         console.error("Failed to load Equipment Event Data", err);
-        const isRmgTarget =
-          targetEquipment.toUpperCase().includes("RMG") ||
-          targetEquipment === "G5RMG" ||
-          targetEquipment === "RMGC0219";
-        const isFbdTarget =
-          targetEquipment.toUpperCase().includes("FBD") ||
-          targetEquipment === "G5FBD" ||
-          targetEquipment === "FBDC0220";
-        const isBleTarget =
-          targetEquipment.toUpperCase().includes("BLE") ||
-          targetEquipment.toUpperCase().includes("OGB") ||
-          targetEquipment.toUpperCase().includes("OCB") ||
-          targetEquipment === "G5BLE" ||
-          targetEquipment === "OCBC0222";
-        const isCoatTarget =
-          targetEquipment.toUpperCase().includes("COAT") ||
-          targetEquipment.toUpperCase().includes("COTC") ||
-          targetEquipment === "G5COT" ||
-          targetEquipment === "G5COAT" ||
-          targetEquipment === "COATC0223" ||
-          targetEquipment === "COTC0226";
+        const isRmgTarget = isRmgCode(targetEquipment);
+        const isFbdTarget = isFbdCode(targetEquipment);
+        const isBleTarget = isBleCode(targetEquipment);
+        const isCompTarget = isCompCode(targetEquipment);
+        const isCoatTarget = isCoatCode(targetEquipment);
         if (isRmgTarget) {
           setEventDataRecords(RMG_AUDIT_TRAIL_MOCK as unknown as Record<string, unknown>[]);
         } else if (isFbdTarget) {
           setEventDataRecords(FBD_AUDIT_TRAIL_MOCK as unknown as Record<string, unknown>[]);
         } else if (isBleTarget) {
           setEventDataRecords(BLE_AUDIT_TRAIL_MOCK as unknown as Record<string, unknown>[]);
+        } else if (isCompTarget) {
+          setEventDataRecords(COMP_AUDIT_TRAIL_MOCK as unknown as Record<string, unknown>[]);
         } else if (isCoatTarget) {
           setEventDataRecords(COAT_AUDIT_TRAIL_MOCK as unknown as Record<string, unknown>[]);
         }
@@ -1802,6 +1802,10 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
       ? (RMG_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[])
       : isFbd
       ? (FBD_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[])
+      : isBle
+      ? (BLE_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[])
+      : isComp
+      ? (COMP_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[])
       : isCoat
       ? (COAT_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[])
       : alarmRecords;
@@ -1850,7 +1854,7 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
     });
 
     return list;
-  }, [alarmRecords, alarmFilter, alarmSearch, correlatedAlarm, isWithinCorrelationWindow, isRmg, isFbd, isCoat]);
+  }, [alarmRecords, alarmFilter, alarmSearch, correlatedAlarm, isWithinCorrelationWindow, isRmg, isFbd, isBle, isComp, isCoat]);
 
   // Paginated Alarms
   const totalAlarms = filteredAlarms.length;
@@ -1917,6 +1921,14 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
       }));
     } else if (isBle) {
       list = (BLE_AUDIT_TRAIL_MOCK as unknown as WorkflowAuditEvent[]).map((m) => ({
+        ...m,
+        tenantId: "TNT-0001",
+        batchNo: queryBatchNo || m.batchNo,
+        lotNo: queryLotNo || m.lotNo,
+        equipmentCode: targetEquipmentCode || m.equipmentCode,
+      }));
+    } else if (isComp) {
+      list = (COMP_AUDIT_TRAIL_MOCK as unknown as WorkflowAuditEvent[]).map((m) => ({
         ...m,
         tenantId: "TNT-0001",
         batchNo: queryBatchNo || m.batchNo,
@@ -2001,7 +2013,7 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
       const comments = toText(raw.comments || a.comments).toUpperCase();
       return !act.includes("PRINT") && !desc.includes("PRINT") && !reason.includes("PRINT") && !comments.includes("PRINT");
     });
-  }, [isFbd, isRmg, isBle, isCoat, auditEvents, eventDataRecords, actionHistory, queryBatchNo, queryLotNo, targetEquipmentCode]);
+  }, [isFbd, isRmg, isBle, isComp, isCoat, auditEvents, eventDataRecords, actionHistory, queryBatchNo, queryLotNo, targetEquipmentCode]);
 
   // Filtered Audit Events strictly based on Batch Number and Lot Number
   const filteredAuditEvents = useMemo(() => {
@@ -2515,9 +2527,18 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
               </span>
             </div>
             <div className="p-2.5 bg-slate-50/80 rounded-xl border border-slate-200/80">
-              <span className="text-[10px] uppercase font-bold text-slate-400 block">Product Code / Recipe</span>
-              <span className="font-bold font-mono text-slate-900 mt-0.5 block">
-                {toText(batchSummary?.productCode) || "STFS7000"}
+              <span className="text-[10px] uppercase font-bold text-slate-400 block">Product Code</span>
+              <span className="font-bold font-mono text-slate-900 mt-0.5 block truncate" title={toText(batchSummary?.productCode) || "STGW2000"}>
+                {toText(batchSummary?.productCode) || "STGW2000"}
+              </span>
+            </div>
+            <div className="p-2.5 bg-slate-50/80 rounded-xl border border-slate-200/80">
+              <span className="text-[10px] uppercase font-bold text-slate-400 block">Recipe Name</span>
+              <span
+                className="font-bold text-slate-900 mt-0.5 block truncate"
+                title={resolvedRecipeName || "Lamotrigine Granulation & Drying Recipe (AGO)"}
+              >
+                {resolvedRecipeName || "Lamotrigine Granulation & Drying Recipe (AGO)"}
               </span>
             </div>
             <div className="p-2.5 bg-slate-50/80 rounded-xl border border-slate-200/80">
@@ -2715,7 +2736,7 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
                   Recipe Parameter Settings (Setpoint Specifications)
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Recipe: <strong className="text-slate-600 font-mono">{toText(batchSummary?.productCode) || "STFS7000"}</strong> &bull; Equipment:{" "}
+                  Recipe: <strong className="text-slate-600">{resolvedRecipeName || toText(batchSummary?.productCode) || "STGW2000"}</strong> &bull; Equipment:{" "}
                   <strong className="text-slate-600 font-mono">{targetEquipmentCode}</strong>
                 </p>
               </div>
@@ -3598,37 +3619,17 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {(() => {
-                    const eq = targetEquipmentCode.toUpperCase();
-                    let sessions = [
-                      { u: "91525 (PB3 RMGC0219 Supervisor)", dt: "09/02/2026 16:04:17", act: "Login", isLog: true },
-                      { u: "91525 (PB3 RMGC0219 Operator)", dt: "09/02/2026 16:05:30", act: "Login", isLog: true },
-                      { u: "91525 (PB3 RMGC0219 Operator)", dt: "09/02/2026 19:04:00", act: "Logout Successfully", isLog: false },
-                      { u: "91525 (PB3 RMGC0219 Supervisor)", dt: "09/02/2026 19:05:40", act: "Logout Successfully", isLog: false },
-                    ];
-                    if (eq.includes("FBD")) {
-                      sessions = [
-                        { u: "91525 (PB3 FBDC0220 Supervisor)", dt: "09/02/2026 18:44:47", act: "Logout Successfully", isLog: false },
-                        { u: "91525 (PB3 FBDC0220 Operator)", dt: "09/02/2026 18:45:50", act: "Login", isLog: true },
-                        { u: "91525 (PB3 FBDC0220 Operator)", dt: "09/02/2026 22:01:42", act: "Logout Successfully", isLog: false },
-                        { u: "91525 (PB3 FBDC0220 Operator)", dt: "09/02/2026 22:02:01", act: "Login", isLog: true },
-                        { u: "91525 (PB3 FBDC0220 Operator)", dt: "09/02/2026 23:45:11", act: "Logout Successfully", isLog: false },
-                        { u: "91525 (PB3 FBDC0220 Supervisor)", dt: "09/02/2026 23:46:40", act: "Login", isLog: true },
-                      ];
-                    } else if (eq.includes("OGB") || eq.includes("BLE") || eq.includes("OCB")) {
-                      sessions = [
-                        { u: "91525 (PB3 OCBC0222 Supervisor)", dt: "11/02/2026 09:05:19", act: "Logout Successfully", isLog: false },
-                        { u: "91525 (PB3 OCBC0222 Operator)", dt: "11/02/2026 09:05:40", act: "Login", isLog: true },
-                        { u: "91525 (PB3 OCBC0222 Operator)", dt: "11/02/2026 11:02:10", act: "Logout Successfully", isLog: false },
-                        { u: "91525 (PB3 OCBC0222 Supervisor)", dt: "11/02/2026 11:02:31", act: "Login", isLog: true },
-                      ];
-                    } else if (eq.includes("COAT")) {
-                      sessions = [
-                        { u: "91525 (PB3 COATC0223 Supervisor)", dt: "12/02/2026 08:30:00", act: "Login", isLog: true },
-                        { u: "91525 (PB3 COATC0223 Operator)", dt: "12/02/2026 08:31:15", act: "Login", isLog: true },
-                        { u: "91525 (PB3 COATC0223 Operator)", dt: "12/02/2026 12:40:00", act: "Logout Successfully", isLog: false },
-                        { u: "91525 (PB3 COATC0223 Supervisor)", dt: "12/02/2026 12:45:30", act: "Logout Successfully", isLog: false },
-                      ];
-                    }
+                    const sessions = isRmg
+                      ? RMG_USER_SESSIONS_MOCK
+                      : isFbd
+                      ? FBD_USER_SESSIONS_MOCK
+                      : isBle
+                      ? BLE_USER_SESSIONS_MOCK
+                      : isComp
+                      ? COMP_USER_SESSIONS_MOCK
+                      : isCoat
+                      ? COAT_USER_SESSIONS_MOCK
+                      : RMG_USER_SESSIONS_MOCK;
                     return sessions.map((s, idx) => (
                       <tr key={idx}>
                         <td className="py-2 px-3.5 font-bold text-slate-800">{s.u}</td>

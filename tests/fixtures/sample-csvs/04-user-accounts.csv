@@ -1,0 +1,4 @@
+username,email,firstName,lastName,departmentCode,designation,initialPassword,title,userType,empId,isActive
+rachel.adams,rachel.adams@adavis.local,Rachel,Adams,DEP-QA,QA Specialist,Adavis@123,Dr,OPERATIONAL,EMP-10491,true
+marcus.vance,marcus.vance@adavis.local,Marcus,Vance,DEP-PROD,Shift Lead,Adavis@123,Mr,OPERATIONAL,EMP-10492,true
+elena.rostova,elena.rostova@adavis.local,Elena,Rostova,DEP-ENG,Controls Engineer,Adavis@123,Ms,OPERATIONAL,EMP-10493,true

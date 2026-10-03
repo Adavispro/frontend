@@ -34,6 +34,8 @@ export const batchSummarySchema = z
     batchNo: z.string().optional().nullable(),
     lotNo: z.string().optional().nullable(),
     productName: z.string().optional().nullable(),
+    recipeName: z.string().optional().nullable(),
+    recipeCode: z.string().optional().nullable(),
     plantId: z.string().optional().nullable(),
     areaId: z.string().optional().nullable(),
     batchStatus: z.string().optional().nullable(),

@@ -1,0 +1,3 @@
+roleCode,roleName,description,isActive
+ROLE-UNI-01,Régulateur Spécial - கட்டமைப்பு,"Validates French accents (é, è, ç), quotes ('Adavis'), and Tamil (தர உத்தரவாதம்)",true
+ROLE-UNI-02,Microbiology Lead & QC,"Validates ampersand, slashes, and hyphenated characters",true

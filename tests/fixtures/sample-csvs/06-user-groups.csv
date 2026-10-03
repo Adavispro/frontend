@@ -1,0 +1,4 @@
+groupCode,groupName,description,isActive
+QA_REVIEWERS,QA Reviewers Group,Quality assurance batch reviewers and auditors,true
+PROD_OPERATORS,Production Operators Group,Floor operators executing batch lines,true
+MAINT_ENGINEERS,Maintenance Engineers Group,Engineers authorized for calibration,true

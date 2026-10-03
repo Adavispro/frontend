@@ -32,6 +32,7 @@ export class ApiError extends Error {
     this.name = "ApiError";
     this.status = error.status;
     this.details = error.details;
+    Object.setPrototypeOf(this, ApiError.prototype);
   }
 }
 
@@ -138,12 +139,13 @@ export const apiClient = async <TResponse, TBody = unknown>(
     const data = await parseResponse<TResponse>(response);
 
     if (!response.ok) {
+      const message =
+        typeof data === "object" && data && "message" in data && data.message
+          ? String(data.message)
+          : `Request to ${scopedPath} failed with status ${response.status}.`;
       throw new ApiError({
         status: response.status,
-        message:
-          typeof data === "object" && data && "message" in data
-            ? String(data.message)
-            : "Request failed.",
+        message,
         details: data,
       });
     }

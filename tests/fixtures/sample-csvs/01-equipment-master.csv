@@ -1,0 +1,5 @@
+equipmentCode,equipmentName,equipmentType,lineId,roomCode,status,isActive
+EQ-PROD-001,High-Shear Granulator 01,GRANULATOR,LINE-01,ROOM-101,ACTIVE,true
+EQ-PROD-002,Fluid Bed Dryer 02,DRYER,LINE-01,ROOM-102,ACTIVE,true
+EQ-PROD-003,Rotary Tablet Press 03,TABLET_PRESS,LINE-02,ROOM-201,MAINTENANCE,true
+EQ-PROD-004,Automatic Blister Packaging Machine,PACKAGING,LINE-03,ROOM-301,ACTIVE,true

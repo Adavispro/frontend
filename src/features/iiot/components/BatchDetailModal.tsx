@@ -306,10 +306,39 @@ export default function BatchDetailModal({
       >
         <div className="grid gap-6">
           {/* Header Summary Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5 bg-slate-50/80 p-4 rounded-lg border border-slate-200/80 text-xs">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3.5 bg-slate-50/80 p-4 rounded-lg border border-slate-200/80 text-xs">
             <div>
               <span className="text-slate-500 block text-[11px]">Product Code</span>
               <span className="font-semibold text-slate-800">{toText(batchSummary.productCode) || "-"}</span>
+            </div>
+            <div>
+              <span className="text-slate-500 block text-[11px]">Recipe Name</span>
+              <span
+                className="font-semibold text-slate-800 truncate block"
+                title={
+                  toText(batchSummary.recipeName) ||
+                  (toText(batchSummary.batchNo).includes("AGO0026016")
+                    ? "Lamotrigine Granulation & Drying Recipe (AGO)"
+                    : toText(batchSummary.batchNo).includes("AGO0026015")
+                    ? "Lamotrigine Octagonal Blending Recipe (AGO0026015)"
+                    : toText(batchSummary.batchNo).includes("COMP")
+                    ? "Lamotrigine Compression Recipe (COMP)"
+                    : toText(batchSummary.batchNo).includes("PED26009")
+                    ? "Paroxetine USP 40mg Film Coating Recipe (PAROXE40)"
+                    : "-")
+                }
+              >
+                {toText(batchSummary.recipeName) ||
+                  (toText(batchSummary.batchNo).includes("AGO0026016")
+                    ? "Lamotrigine Granulation & Drying Recipe (AGO)"
+                    : toText(batchSummary.batchNo).includes("AGO0026015")
+                    ? "Lamotrigine Octagonal Blending Recipe (AGO0026015)"
+                    : toText(batchSummary.batchNo).includes("COMP")
+                    ? "Lamotrigine Compression Recipe (COMP)"
+                    : toText(batchSummary.batchNo).includes("PED26009")
+                    ? "Paroxetine USP 40mg Film Coating Recipe (PAROXE40)"
+                    : "-")}
+              </span>
             </div>
             <div>
               <span className="text-slate-500 block text-[11px]">Product Name</span>

@@ -1,0 +1,4 @@
+username,groupCode,assignedBy,reason,isActive
+operator_new_01,PROD_OPERATORS,super_admin,Initial role assignment for production,true
+qa_analyst_01,QA_REVIEWERS,super_admin,Assigned QA batch review clearance,true
+maint_lead_01,MAINT_ENGINEERS,super_admin,Assigned maintenance clearance,true
