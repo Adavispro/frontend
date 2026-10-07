@@ -29,8 +29,12 @@ import type {
   BatchSummary,
   CppRecord,
 } from "@/features/iiot/equipment/schemas/reports.schema";
+import { resolveEquipmentInfo } from "@/features/iiot/utils/equipment-resolver";
 import { RMG_ALARM_SUMMARY_MOCK } from "../batch-details/data/rmgMockData";
 import { FBD_ALARM_SUMMARY_MOCK } from "../batch-details/data/fbdMockData";
+import { BLE_ALARM_SUMMARY_MOCK } from "../batch-details/data/bleMockData";
+import { COMP_ALARM_SUMMARY_MOCK } from "../batch-details/data/compMockData";
+import { COAT_ALARM_SUMMARY_MOCK } from "../batch-details/data/coatMockData";
 
 export interface BatchDetailModalProps {
   isOpen: boolean;
@@ -170,12 +174,17 @@ export default function BatchDetailModal({
         ]);
 
         if (auditRes.status === "fulfilled") setAuditEvents(auditRes.value);
-        const isRmg = (equipmentCode || "").toUpperCase().includes("RMG") || equipmentCode === "G5RMG" || equipmentCode === "RMGC0219";
-        const isFbd = (equipmentCode || "").toUpperCase().includes("FBD") || equipmentCode === "G5FBD" || equipmentCode === "FBDC0220";
-        if (isRmg) {
+        const eqInfo = resolveEquipmentInfo(equipmentCode);
+        if (eqInfo.type === "RMG") {
           setAlarms(RMG_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[]);
-        } else if (isFbd) {
+        } else if (eqInfo.type === "FBD") {
           setAlarms(FBD_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[]);
+        } else if (eqInfo.type === "BLE") {
+          setAlarms(BLE_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[]);
+        } else if (eqInfo.type === "COMP") {
+          setAlarms(COMP_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[]);
+        } else if (eqInfo.type === "COAT") {
+          setAlarms(COAT_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[]);
         } else if (alarmsRes.status === "fulfilled") {
           setAlarms(alarmsRes.value);
         }

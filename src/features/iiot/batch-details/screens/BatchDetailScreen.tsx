@@ -64,6 +64,8 @@ import { RMG_ALARM_SUMMARY_MOCK, RMG_AUDIT_TRAIL_MOCK } from "../data/rmgMockDat
 import { FBD_ALARM_SUMMARY_MOCK, FBD_AUDIT_TRAIL_MOCK } from "../data/fbdMockData";
 import { BLE_AUDIT_TRAIL_MOCK } from "../data/bleMockData";
 import { COAT_ALARM_SUMMARY_MOCK, COAT_AUDIT_TRAIL_MOCK } from "../data/coatMockData";
+import { COMP_ALARM_SUMMARY_MOCK, COMP_AUDIT_TRAIL_MOCK } from "../data/compMockData";
+import { resolveEquipmentInfo, type EquipmentMeta } from "@/features/iiot/utils/equipment-resolver";
 import Pagination from "@/components/ui/Pagination";
 import { WorkflowActionModal } from "../../components/WorkflowActionModal";
 import {
@@ -660,40 +662,17 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
   const [isClaiming, setIsClaiming] = useState(false);
 
   const targetEquipmentCode =
-    selectedEquipmentCode || queryEquipmentCode || batchSummary?.equipmentId || "G5RMG";
+    selectedEquipmentCode || queryEquipmentCode || batchSummary?.equipmentId || "MB003";
 
-  const isRmg = useMemo(() => {
-    const code = (targetEquipmentCode || "").toUpperCase();
-    return code.includes("RMG") || code === "G5RMG" || code === "RMGC0219";
+  const eqMeta: EquipmentMeta = useMemo(() => {
+    return resolveEquipmentInfo(targetEquipmentCode);
   }, [targetEquipmentCode]);
 
-  const isFbd = useMemo(() => {
-    const code = (targetEquipmentCode || "").toUpperCase();
-    return code.includes("FBD") || code === "G5FBD" || code === "FBDC0220";
-  }, [targetEquipmentCode]);
-
-  const isBle = useMemo(() => {
-    const code = (targetEquipmentCode || "").toUpperCase();
-    return (
-      code.includes("BLE") ||
-      code.includes("OGB") ||
-      code.includes("OCB") ||
-      code === "G5BLE" ||
-      code === "OCBC0222"
-    );
-  }, [targetEquipmentCode]);
-
-  const isCoat = useMemo(() => {
-    const code = (targetEquipmentCode || "").toUpperCase();
-    return (
-      code.includes("COAT") ||
-      code.includes("COTC") ||
-      code === "G5COT" ||
-      code === "G5COAT" ||
-      code === "COATC0223" ||
-      code === "COTC0226"
-    );
-  }, [targetEquipmentCode]);
+  const isRmg = eqMeta.type === "RMG";
+  const isFbd = eqMeta.type === "FBD";
+  const isBle = eqMeta.type === "BLE";
+  const isComp = eqMeta.type === "COMP";
+  const isCoat = eqMeta.type === "COAT";
 
   const activeStatus = toText(
     (batchSummary?.stages &&
@@ -1037,64 +1016,31 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
         }
       } catch (err) {
         console.error("Failed to load parameter limits metadata", err);
-      }
-
-      // 4. Fetch Alarm events for equipment
+      }      // 4a. Fetch Alarm events for equipment
       try {
-        const isRmgTarget =
-          targetEquipment.toUpperCase().includes("RMG") ||
-          targetEquipment === "G5RMG" ||
-          targetEquipment === "RMGC0219";
-        const isFbdTarget =
-          targetEquipment.toUpperCase().includes("FBD") ||
-          targetEquipment === "G5FBD" ||
-          targetEquipment === "FBDC0220";
+        const alarms = await getAlarmEventDataPaginated(targetEquipment, {
+          eventCategory: "ALARM",
+          limit: 5000,
+        }).catch(() => []);
 
-        const isCoatTarget =
-          targetEquipment.toUpperCase().includes("COAT") ||
-          targetEquipment.toUpperCase().includes("COTC") ||
-          targetEquipment === "G5COT" ||
-          targetEquipment === "G5COAT" ||
-          targetEquipment === "COATC0223" ||
-          targetEquipment === "COTC0226";
-
-        if (isRmgTarget) {
-          setAlarmRecords(RMG_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[]);
-        } else if (isFbdTarget) {
-          setAlarmRecords(FBD_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[]);
-        } else if (isCoatTarget) {
-          setAlarmRecords(COAT_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[]);
-        } else {
-          const alarms = await getAlarmEventDataPaginated(targetEquipment, {
-            eventCategory: "ALARM",
-            limit: 5000,
-          });
+        if (alarms && alarms.length > 0) {
           setAlarmRecords(alarms as unknown as AlarmEventRecord[]);
+        } else {
+          const eqInfo = resolveEquipmentInfo(targetEquipment);
+          if (eqInfo.type === "RMG") {
+            setAlarmRecords(RMG_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[]);
+          } else if (eqInfo.type === "FBD") {
+            setAlarmRecords(FBD_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[]);
+          } else if (eqInfo.type === "COMP") {
+            setAlarmRecords(COMP_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[]);
+          } else if (eqInfo.type === "COAT") {
+            setAlarmRecords(COAT_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[]);
+          } else {
+            setAlarmRecords([]);
+          }
         }
       } catch (err) {
         console.error("Failed to load Alarm events", err);
-        const isRmgTarget =
-          targetEquipment.toUpperCase().includes("RMG") ||
-          targetEquipment === "G5RMG" ||
-          targetEquipment === "RMGC0219";
-        const isFbdTarget =
-          targetEquipment.toUpperCase().includes("FBD") ||
-          targetEquipment === "G5FBD" ||
-          targetEquipment === "FBDC0220";
-        const isCoatTarget =
-          targetEquipment.toUpperCase().includes("COAT") ||
-          targetEquipment.toUpperCase().includes("COTC") ||
-          targetEquipment === "G5COT" ||
-          targetEquipment === "G5COAT" ||
-          targetEquipment === "COATC0223" ||
-          targetEquipment === "COTC0226";
-        if (isRmgTarget) {
-          setAlarmRecords(RMG_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[]);
-        } else if (isFbdTarget) {
-          setAlarmRecords(FBD_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[]);
-        } else if (isCoatTarget) {
-          setAlarmRecords(COAT_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[]);
-        }
       }
 
       // 4b. Fetch Equipment Event Data (PLC Audit Events)
@@ -1102,71 +1048,28 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
         const events = await getAlarmEventDataPaginated(targetEquipment, {
           eventCategory: "EVENT",
           limit: 5000,
-        });
-        const isRmgTarget =
-          targetEquipment.toUpperCase().includes("RMG") ||
-          targetEquipment === "G5RMG" ||
-          targetEquipment === "RMGC0219";
-        const isFbdTarget =
-          targetEquipment.toUpperCase().includes("FBD") ||
-          targetEquipment === "G5FBD" ||
-          targetEquipment === "FBDC0220";
-        const isBleTarget =
-          targetEquipment.toUpperCase().includes("BLE") ||
-          targetEquipment.toUpperCase().includes("OGB") ||
-          targetEquipment.toUpperCase().includes("OCB") ||
-          targetEquipment === "G5BLE" ||
-          targetEquipment === "OCBC0222";
-        const isCoatTarget =
-          targetEquipment.toUpperCase().includes("COAT") ||
-          targetEquipment.toUpperCase().includes("COTC") ||
-          targetEquipment === "G5COT" ||
-          targetEquipment === "G5COAT" ||
-          targetEquipment === "COATC0223" ||
-          targetEquipment === "COTC0226";
-        if (isRmgTarget) {
-          setEventDataRecords(RMG_AUDIT_TRAIL_MOCK as unknown as Record<string, unknown>[]);
-        } else if (isFbdTarget) {
-          setEventDataRecords(FBD_AUDIT_TRAIL_MOCK as unknown as Record<string, unknown>[]);
-        } else if (isBleTarget) {
-          setEventDataRecords(BLE_AUDIT_TRAIL_MOCK as unknown as Record<string, unknown>[]);
-        } else if (isCoatTarget) {
-          setEventDataRecords(COAT_AUDIT_TRAIL_MOCK as unknown as Record<string, unknown>[]);
-        } else {
+        }).catch(() => []);
+
+        if (events && events.length > 0) {
           setEventDataRecords(events as unknown as Record<string, unknown>[]);
+        } else {
+          const eqInfo = resolveEquipmentInfo(targetEquipment);
+          if (eqInfo.type === "RMG") {
+            setEventDataRecords(RMG_AUDIT_TRAIL_MOCK as unknown as Record<string, unknown>[]);
+          } else if (eqInfo.type === "FBD") {
+            setEventDataRecords(FBD_AUDIT_TRAIL_MOCK as unknown as Record<string, unknown>[]);
+          } else if (eqInfo.type === "BLE") {
+            setEventDataRecords(BLE_AUDIT_TRAIL_MOCK as unknown as Record<string, unknown>[]);
+          } else if (eqInfo.type === "COMP") {
+            setEventDataRecords(COMP_AUDIT_TRAIL_MOCK as unknown as Record<string, unknown>[]);
+          } else if (eqInfo.type === "COAT") {
+            setEventDataRecords(COAT_AUDIT_TRAIL_MOCK as unknown as Record<string, unknown>[]);
+          } else {
+            setEventDataRecords([]);
+          }
         }
       } catch (err) {
         console.error("Failed to load Equipment Event Data", err);
-        const isRmgTarget =
-          targetEquipment.toUpperCase().includes("RMG") ||
-          targetEquipment === "G5RMG" ||
-          targetEquipment === "RMGC0219";
-        const isFbdTarget =
-          targetEquipment.toUpperCase().includes("FBD") ||
-          targetEquipment === "G5FBD" ||
-          targetEquipment === "FBDC0220";
-        const isBleTarget =
-          targetEquipment.toUpperCase().includes("BLE") ||
-          targetEquipment.toUpperCase().includes("OGB") ||
-          targetEquipment.toUpperCase().includes("OCB") ||
-          targetEquipment === "G5BLE" ||
-          targetEquipment === "OCBC0222";
-        const isCoatTarget =
-          targetEquipment.toUpperCase().includes("COAT") ||
-          targetEquipment.toUpperCase().includes("COTC") ||
-          targetEquipment === "G5COT" ||
-          targetEquipment === "G5COAT" ||
-          targetEquipment === "COATC0223" ||
-          targetEquipment === "COTC0226";
-        if (isRmgTarget) {
-          setEventDataRecords(RMG_AUDIT_TRAIL_MOCK as unknown as Record<string, unknown>[]);
-        } else if (isFbdTarget) {
-          setEventDataRecords(FBD_AUDIT_TRAIL_MOCK as unknown as Record<string, unknown>[]);
-        } else if (isBleTarget) {
-          setEventDataRecords(BLE_AUDIT_TRAIL_MOCK as unknown as Record<string, unknown>[]);
-        } else if (isCoatTarget) {
-          setEventDataRecords(COAT_AUDIT_TRAIL_MOCK as unknown as Record<string, unknown>[]);
-        }
       }
 
       // 5. Fetch complete Audit Trail based on batchNo and lotNo
@@ -1601,7 +1504,7 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
     if (!queryBatchNo) return;
     setIsExporting(true);
     try {
-      await downloadBatchPdfBlob(queryBatchNo, queryLotNo, queryEquipmentCode);
+      await downloadBatchPdfBlob(queryBatchNo, queryLotNo, queryEquipmentCode || targetEquipmentCode);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to download batch dossier PDF.";
       setActionErrorMsg(msg);
@@ -1670,14 +1573,61 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
 
   const currentStage = useMemo(() => {
     const rawStages = (batchSummary?.stages as Array<Record<string, unknown>>) || [];
-    const eqCode = (targetEquipmentCode || "G5RMG").toUpperCase();
+    const eqCode = (targetEquipmentCode || "MB003").toUpperCase();
+    const info = resolveEquipmentInfo(eqCode);
     return (
-      rawStages.find((s) => toText(s.equipmentCode || s.equipmentId).toUpperCase() === eqCode) ||
-      rawStages.find((s) => toText(s.equipmentType).toUpperCase() === eqCode.slice(-3)) ||
+      rawStages.find((s) => {
+        const c = toText(s.equipmentCode || s.equipmentId).toUpperCase();
+        return c === eqCode || c === info.code.toUpperCase() || c === info.type;
+      }) ||
+      rawStages.find((s) => toText(s.equipmentType).toUpperCase() === info.type) ||
+      rawStages.find((s) => toText(s.equipmentCode || s.equipmentId).toUpperCase() === eqCode.slice(-3)) ||
       rawStages[0] ||
       null
     );
   }, [batchSummary, targetEquipmentCode]);
+
+  const stageStartTime = useMemo(() => {
+    if (currentStage?.stageStartAt) return toDisplayDate(currentStage.stageStartAt);
+    if (currentStage?.startTime) return toDisplayDate(currentStage.startTime);
+    if (eqMeta.type === "FBD") return "09/02/2026 18:44:45";
+    if (eqMeta.type === "BLE") return "11/02/2026 09:04:55";
+    if (eqMeta.type === "COMP") return "11/02/2026 14:15:00";
+    if (eqMeta.type === "COAT") return "12/02/2026 08:30:00";
+    return toDisplayDate(batchSummary?.batchStartAt) || "09/02/2026 16:04:17";
+  }, [currentStage, eqMeta.type, batchSummary?.batchStartAt]);
+
+  const stageEndTime = useMemo(() => {
+    if (currentStage?.stageEndAt) return toDisplayDate(currentStage.stageEndAt);
+    if (currentStage?.endTime) return toDisplayDate(currentStage.endTime);
+    if (eqMeta.type === "FBD") return "09/02/2026 23:47:01";
+    if (eqMeta.type === "BLE") return "11/02/2026 11:02:36";
+    if (eqMeta.type === "COMP") return "11/02/2026 18:45:20";
+    if (eqMeta.type === "COAT") return "12/02/2026 12:45:30";
+    return toDisplayDate(batchSummary?.batchEndAt) || "09/02/2026 19:05:40";
+  }, [currentStage, eqMeta.type, batchSummary?.batchEndAt]);
+
+  const stageDuration = useMemo(() => {
+    if (currentStage?.duration) return String(currentStage.duration);
+    if (currentStage?.stageStartAt && currentStage?.stageEndAt) {
+      const diffMs = Math.max(
+        0,
+        new Date(String(currentStage.stageEndAt)).getTime() -
+          new Date(String(currentStage.stageStartAt)).getTime()
+      );
+      if (!isNaN(diffMs) && diffMs > 0) {
+        const hours = Math.floor(diffMs / 3600000);
+        const minutes = Math.floor((diffMs % 3600000) / 60000);
+        const seconds = Math.floor((diffMs % 60000) / 1000);
+        return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+      }
+    }
+    if (eqMeta.type === "FBD") return "05:02:16";
+    if (eqMeta.type === "BLE") return "01:57:41";
+    if (eqMeta.type === "COMP") return "04:30:20";
+    if (eqMeta.type === "COAT") return "04:15:30";
+    return "03:01:23";
+  }, [currentStage, eqMeta.type]);
 
   const resolvedOperator = useMemo(() => {
     const rawOperator = toText(
@@ -1689,9 +1639,10 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
     );
 
     if (!rawOperator || rawOperator === "Operator User 01") {
-      const eqCode = (targetEquipmentCode || "").toUpperCase();
-      if (eqCode.endsWith("FBD")) return "Production Operator 2";
-      if (eqCode.endsWith("OGB")) return "Production Operator 3";
+      if (eqMeta.type === "FBD") return "Production Operator 2";
+      if (eqMeta.type === "BLE") return "Production Operator 3";
+      if (eqMeta.type === "COMP") return "Production Operator 4";
+      if (eqMeta.type === "COAT") return "Production Operator 5";
       return "Production Operator 1";
     }
 
@@ -1702,7 +1653,7 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
     if (rawOperator === "QA_APPROVER_1") return "QA Approver 1";
 
     return rawOperator.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-  }, [currentStage, batchSummary, cppRecords, targetEquipmentCode]);
+  }, [currentStage, batchSummary, cppRecords, eqMeta.type]);
 
   // Evaluates whether an event/alarm timestamp occurred within this batch's execution timeframe
   const isWithinBatchTimeRange = useCallback(
@@ -2048,18 +1999,22 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
     let keys = Object.keys(cppRecords[0].metrics);
 
     // Apply strict equipment-level metric inclusions
-    const eqCode = (targetEquipmentCode || "").toUpperCase();
-    if (eqCode.includes("FBD")) {
+    if (eqMeta.type === "FBD") {
       keys = keys.filter((k) => {
         const nk = k.toLowerCase().replace(/[^a-z0-9]/g, "");
-        return nk.includes("inlet") || nk.includes("outlet");
+        return nk.includes("inlet") || nk.includes("outlet") || nk.includes("air") || nk.includes("temp");
       });
-    } else if (eqCode.includes("BLE") || eqCode.includes("OGB") || eqCode.includes("OCB")) {
+    } else if (eqMeta.type === "BLE") {
       keys = keys.filter((k) => {
         const nk = k.toLowerCase().replace(/[^a-z0-9]/g, "");
-        return (nk.includes("speed") || nk.includes("rpm")) && !nk.includes("current") && !nk.includes("amps");
+        return (nk.includes("speed") || nk.includes("rpm") || nk.includes("time") || nk.includes("vacuum") || nk.includes("pressure"));
       });
-    } else if (eqCode.includes("COAT")) {
+    } else if (eqMeta.type === "COMP") {
+      keys = keys.filter((k) => {
+        const nk = k.toLowerCase().replace(/[^a-z0-9]/g, "");
+        return nk.includes("force") || nk.includes("speed") || nk.includes("turret") || nk.includes("feeder") || nk.includes("weight") || nk.includes("thick") || nk.includes("hard");
+      });
+    } else if (eqMeta.type === "COAT") {
       keys = ["Inlet_Air_Temp", "Bed_Temp", "Pan_Speed", "Spray_Rate", "Atom_Air_Press"];
     } else {
       // RMG 6 standard columns
@@ -2079,9 +2034,61 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
         key,
         label: meta.parameterName,
         unit: meta.unit,
+        idealTarget: meta.limits?.idealTarget,
       };
     });
-  }, [cppRecords, targetEquipmentCode, paramLimits, criticalParams]);
+  }, [cppRecords, targetEquipmentCode, paramLimits, criticalParams, eqMeta.type]);
+
+  const activeCols = useMemo(() => {
+    if (availableMetricsList.length > 0) return availableMetricsList;
+    switch (eqMeta.type) {
+      case "FBD":
+        return [
+          { key: "Inlet_Air_Temp", label: "Inlet Air Temperature", unit: "°C", idealTarget: 60 },
+          { key: "Outlet_Air_Temp", label: "Outlet Air Temperature", unit: "°C", idealTarget: 48 },
+          { key: "Bed_Temp", label: "Bed Temperature", unit: "°C", idealTarget: 45 },
+          { key: "Air_Flow", label: "Air Flow Rate", unit: "m³/h", idealTarget: 1200 },
+          { key: "Product_Moisture", label: "Product Moisture", unit: "%", idealTarget: 2.5 },
+          { key: "Process_Time_Min", label: "Process Time", unit: "min", idealTarget: 300 },
+        ];
+      case "BLE":
+        return [
+          { key: "Blender_Speed", label: "Blender Speed", unit: "RPM", idealTarget: 5 },
+          { key: "Blending_Time", label: "Blending Time", unit: "min", idealTarget: 15 },
+          { key: "Vacuum_Pressure", label: "Vacuum Level", unit: "bar", idealTarget: -0.8 },
+          { key: "Motor_Current", label: "Motor Current", unit: "A", idealTarget: 12 },
+          { key: "Purge_Time", label: "Purge Time", unit: "Sec", idealTarget: 5 },
+        ];
+      case "COMP":
+        return [
+          { key: "Turret_Speed", label: "Turret Speed", unit: "RPM", idealTarget: 35 },
+          { key: "Main_Force", label: "Main Compression Force", unit: "kN", idealTarget: 22.5 },
+          { key: "Pre_Force", label: "Pre-Compression Force", unit: "kN", idealTarget: 4.2 },
+          { key: "Feeder_Speed", label: "Feeder Speed", unit: "RPM", idealTarget: 28 },
+          { key: "Tablet_Weight", label: "Tablet Weight", unit: "mg", idealTarget: 250 },
+          { key: "Tablet_Hardness", label: "Hardness", unit: "N", idealTarget: 90 },
+        ];
+      case "COAT":
+        return [
+          { key: "Inlet_Air_Temp", label: "Inlet Air Temperature", unit: "°C", idealTarget: 65 },
+          { key: "Exhaust_Air_Temp", label: "Exhaust Air Temperature", unit: "°C", idealTarget: 45 },
+          { key: "Bed_Temp", label: "Bed Temperature", unit: "°C", idealTarget: 42 },
+          { key: "Pan_Speed", label: "Pan Speed", unit: "RPM", idealTarget: 8 },
+          { key: "Spray_Rate", label: "Spray Rate", unit: "g/min", idealTarget: 120 },
+          { key: "Atom_Air_Press", label: "Atomizing Pressure", unit: "bar", idealTarget: 2.5 },
+        ];
+      case "RMG":
+      default:
+        return [
+          { key: "Ag_Speed", label: "Agitator Speed", unit: "RPM", idealTarget: 100 },
+          { key: "Ag_Amps", label: "Agitator Current", unit: "A", idealTarget: 30 },
+          { key: "Chp_Speed", label: "Granulator Speed", unit: "RPM", idealTarget: 50 },
+          { key: "Chp_Amps", label: "Granulator Current", unit: "A", idealTarget: 6.5 },
+          { key: "Heater_Temp", label: "Granulation Temp", unit: "°C", idealTarget: 65 },
+          { key: "Duration_Sec", label: "Duration", unit: "Sec", idealTarget: 600 },
+        ];
+    }
+  }, [availableMetricsList, eqMeta.type]);
 
   // Current Selected Metric Metadata
   const currentMetricMeta = useMemo(() => {
@@ -2214,13 +2221,7 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
               <span>&bull;</span>
               <span>Equipment Type:</span>
               <strong className="font-mono text-slate-800 font-bold">
-                {targetEquipmentCode.includes("FBD")
-                  ? "FBD"
-                  : targetEquipmentCode.includes("OGB") || targetEquipmentCode.includes("BLE") || targetEquipmentCode.includes("OCB")
-                  ? "BLE"
-                  : targetEquipmentCode.includes("COAT")
-                  ? "COAT"
-                  : "RMG"}
+                {eqMeta.type}
               </strong>
             </p>
           </div>
@@ -2440,48 +2441,28 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
             <div className="p-2.5 bg-slate-50/80 rounded-xl border border-slate-200/80">
               <span className="text-[10px] uppercase font-bold text-slate-400 block">Equipment Name</span>
               <span className="font-bold text-slate-900 mt-0.5 block">
-                {targetEquipmentCode.includes("FBD")
-                  ? "FLUID BED DRIER"
-                  : targetEquipmentCode.includes("OGB") || targetEquipmentCode.includes("BLE") || targetEquipmentCode.includes("OCB")
-                  ? "OCTAGONAL BLENDER"
-                  : targetEquipmentCode.includes("COAT")
-                  ? "AUTO COATER"
-                  : targetEquipmentCode.includes("CIP")
-                  ? "CLEAN IN PLACE SYSTEM"
-                  : "RAPID MIXER GRANULATOR"}
+                {eqMeta.name}
               </span>
             </div>
             <div className="p-2.5 bg-slate-50/80 rounded-xl border border-slate-200/80">
               <span className="text-[10px] uppercase font-bold text-slate-400 block">Equipment ID</span>
               <span className="font-bold font-mono text-slate-900 mt-0.5 block">
-                {targetEquipmentCode.includes("FBD")
-                  ? "FBDC0220"
-                  : targetEquipmentCode.includes("OGB") || targetEquipmentCode.includes("BLE") || targetEquipmentCode.includes("OCB")
-                  ? "OCBC0222"
-                  : targetEquipmentCode.includes("COAT")
-                  ? "COATC0223"
-                  : "RMGC0219"}
+                {eqMeta.code}
               </span>
             </div>
             <div className="p-2.5 bg-slate-50/80 rounded-xl border border-slate-200/80">
               <span className="text-[10px] uppercase font-bold text-slate-400 block">Make</span>
-              <span className="font-bold text-slate-900 mt-0.5 block">SAAN</span>
+              <span className="font-bold text-slate-900 mt-0.5 block">{eqMeta.make}</span>
             </div>
             <div className="p-2.5 bg-slate-50/80 rounded-xl border border-slate-200/80">
               <span className="text-[10px] uppercase font-bold text-slate-400 block">Area</span>
               <span className="font-bold text-slate-900 mt-0.5 block">
-                {targetEquipmentCode.includes("FBD")
-                  ? "GRANULATION"
-                  : targetEquipmentCode.includes("OGB") || targetEquipmentCode.includes("BLE") || targetEquipmentCode.includes("OCB")
-                  ? "BLENDER2"
-                  : targetEquipmentCode.includes("COAT")
-                  ? "COATING"
-                  : "PB3"}
+                {eqMeta.area}
               </span>
             </div>
             <div className="p-2.5 bg-slate-50/80 rounded-xl border border-slate-200/80">
               <span className="text-[10px] uppercase font-bold text-slate-400 block">Block</span>
-              <span className="font-bold text-slate-900 mt-0.5 block">PB3</span>
+              <span className="font-bold text-slate-900 mt-0.5 block">{eqMeta.block}</span>
             </div>
           </div>
         </div>
@@ -2517,7 +2498,7 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
             <div className="p-2.5 bg-slate-50/80 rounded-xl border border-slate-200/80">
               <span className="text-[10px] uppercase font-bold text-slate-400 block">Product Code / Recipe</span>
               <span className="font-bold font-mono text-slate-900 mt-0.5 block">
-                {toText(batchSummary?.productCode) || "STFS7000"}
+                {toText(batchSummary?.productCode) || eqMeta.defaultRecipe}
               </span>
             </div>
             <div className="p-2.5 bg-slate-50/80 rounded-xl border border-slate-200/80">
@@ -2529,37 +2510,19 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
             <div className="p-2.5 bg-slate-50/80 rounded-xl border border-slate-200/80">
               <span className="text-[10px] uppercase font-bold text-slate-400 block">Start Time</span>
               <span className="font-bold font-mono text-slate-700 text-[11px] mt-0.5 block">
-                {targetEquipmentCode.includes("FBD")
-                  ? "09/02/2026 18:44:45"
-                  : targetEquipmentCode.includes("OGB") || targetEquipmentCode.includes("BLE") || targetEquipmentCode.includes("OCB")
-                  ? "11/02/2026 09:04:55"
-                  : targetEquipmentCode.includes("COAT")
-                  ? "12/02/2026 08:30:00"
-                  : "09/02/2026 16:04:17"}
+                {stageStartTime}
               </span>
             </div>
             <div className="p-2.5 bg-slate-50/80 rounded-xl border border-slate-200/80">
               <span className="text-[10px] uppercase font-bold text-slate-400 block">End Time</span>
               <span className="font-bold font-mono text-slate-700 text-[11px] mt-0.5 block">
-                {targetEquipmentCode.includes("FBD")
-                  ? "09/02/2026 23:47:01"
-                  : targetEquipmentCode.includes("OGB") || targetEquipmentCode.includes("BLE") || targetEquipmentCode.includes("OCB")
-                  ? "11/02/2026 11:02:36"
-                  : targetEquipmentCode.includes("COAT")
-                  ? "12/02/2026 12:45:30"
-                  : "09/02/2026 19:05:40"}
+                {stageEndTime}
               </span>
             </div>
             <div className="p-2.5 bg-slate-50/80 rounded-xl border border-slate-200/80">
               <span className="text-[10px] uppercase font-bold text-slate-400 block">Duration In Hours</span>
               <span className="font-bold text-emerald-700 mt-0.5 block">
-                {targetEquipmentCode.includes("FBD")
-                  ? "05:02:16"
-                  : targetEquipmentCode.includes("OGB") || targetEquipmentCode.includes("BLE") || targetEquipmentCode.includes("OCB")
-                  ? "01:57:41"
-                  : targetEquipmentCode.includes("COAT")
-                  ? "04:15:30"
-                  : "03:01:23"}
+                {stageDuration}
               </span>
             </div>
           </div>
@@ -2721,7 +2684,7 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
               </div>
             </div>
 
-            {targetEquipmentCode.includes("FBD") ? (
+            {eqMeta.type === "FBD" ? (
               <div className="overflow-hidden border border-slate-200 rounded-xl max-w-3xl">
                 <table className="w-full text-left text-xs text-slate-700">
                   <thead className="bg-slate-50 text-[11px] font-bold text-slate-600 uppercase tracking-wider border-b border-slate-200">
@@ -2731,20 +2694,20 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    <tr><td className="py-2 px-3.5 font-medium">PROCESS TIME (MIN)</td><td className="py-2 px-3.5 text-right font-mono font-bold">300</td></tr>
+                    <tr><td className="py-2 px-3.5 font-medium">PROCESS TIME (MIN)</td><td className="py-2 px-3.5 text-right font-mono font-bold">500</td></tr>
                     <tr><td className="py-2 px-3.5 font-medium">AIR DRY TIME (MIN)</td><td className="py-2 px-3.5 text-right font-mono font-bold">5</td></tr>
                     <tr><td className="py-2 px-3.5 font-medium">COOLING TIME (MIN)</td><td className="py-2 px-3.5 text-right font-mono font-bold">0</td></tr>
                     <tr><td className="py-2 px-3.5 font-medium">SHAKE INTERVAL (MIN)</td><td className="py-2 px-3.5 text-right font-mono font-bold">10</td></tr>
                     <tr><td className="py-2 px-3.5 font-medium">SHAKE DURATION (SEC)</td><td className="py-2 px-3.5 text-right font-mono font-bold">30</td></tr>
-                    <tr><td className="py-2 px-3.5 font-medium">END SHAKE TIME (SEC)</td><td className="py-2 px-3.5 text-right font-mono font-bold">30</td></tr>
+                    <tr><td className="py-2 px-3.5 font-medium">END SHAKE TIME (SEC)</td><td className="py-2 px-3.5 text-right font-mono font-bold">60</td></tr>
                     <tr><td className="py-2 px-3.5 font-medium">INLET TEMPERATURE (°C)</td><td className="py-2 px-3.5 text-right font-mono font-bold">60</td></tr>
-                    <tr><td className="py-2 px-3.5 font-medium">INLET TEMPERATURE HIGH (°C)</td><td className="py-2 px-3.5 text-right font-mono font-bold">64</td></tr>
-                    <tr><td className="py-2 px-3.5 font-medium">OUTLET TEMPERATURE (°C)</td><td className="py-2 px-3.5 text-right font-mono font-bold">48</td></tr>
+                    <tr><td className="py-2 px-3.5 font-medium">EXHAUST TEMPERATURE (°C)</td><td className="py-2 px-3.5 text-right font-mono font-bold">50</td></tr>
+                    <tr><td className="py-2 px-3.5 font-medium">INLET ALARM TEMPERATURE (°C)</td><td className="py-2 px-3.5 text-right font-mono font-bold">65</td></tr>
                     <tr><td className="py-2 px-3.5 font-medium">PRINT INTERVAL (MIN)</td><td className="py-2 px-3.5 text-right font-mono font-bold">5</td></tr>
                   </tbody>
                 </table>
               </div>
-            ) : targetEquipmentCode.includes("OGB") || targetEquipmentCode.includes("BLE") || targetEquipmentCode.includes("OCB") ? (
+            ) : eqMeta.type === "BLE" ? (
               <div className="overflow-hidden border border-slate-200 rounded-xl max-w-3xl">
                 <table className="w-full text-left text-xs text-slate-700">
                   <thead className="bg-slate-50 text-[11px] font-bold text-slate-600 uppercase tracking-wider border-b border-slate-200">
@@ -2755,60 +2718,99 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     <tr><td className="py-2 px-3.5 font-medium">SELECT NUMBER OF MIXINGS</td><td className="py-2 px-3.5 text-right font-mono font-bold">2</td></tr>
-                    <tr><td className="py-2 px-3.5 font-medium">FIRST MIXING TIME (MIN)</td><td className="py-2 px-3.5 text-right font-mono font-bold">15</td></tr>
+                    <tr><td className="py-2 px-3.5 font-medium">FIRST MIXING TIME (MIN)</td><td className="py-2 px-3.5 text-right font-mono font-bold">10</td></tr>
                     <tr><td className="py-2 px-3.5 font-medium">SECOND MIXING TIME (MIN)</td><td className="py-2 px-3.5 text-right font-mono font-bold">5</td></tr>
                     <tr><td className="py-2 px-3.5 font-medium">THIRD MIXING TIME (MIN)</td><td className="py-2 px-3.5 text-right font-mono font-bold">0</td></tr>
                     <tr><td className="py-2 px-3.5 font-medium">FOURTH MIXING TIME (MIN)</td><td className="py-2 px-3.5 text-right font-mono font-bold">0</td></tr>
-                    <tr><td className="py-2 px-3.5 font-medium">BLENDING SPEED (RPM)</td><td className="py-2 px-3.5 text-right font-mono font-bold">5</td></tr>
-                    <tr><td className="py-2 px-3.5 font-medium">VACUUM ON TIME (MIN)</td><td className="py-2 px-3.5 text-right font-mono font-bold">100</td></tr>
-                    <tr><td className="py-2 px-3.5 font-medium">PURGE ON TIME (Sec)</td><td className="py-2 px-3.5 text-right font-mono font-bold">5</td></tr>
+                    <tr><td className="py-2 px-3.5 font-medium">BLENDING SPEED (RPM)</td><td className="py-2 px-3.5 text-right font-mono font-bold">6</td></tr>
+                    <tr><td className="py-2 px-3.5 font-medium">VACUUM ON TIME (MIN)</td><td className="py-2 px-3.5 text-right font-mono font-bold">1</td></tr>
+                    <tr><td className="py-2 px-3.5 font-medium">PURGE ON TIME (Sec)</td><td className="py-2 px-3.5 text-right font-mono font-bold">0</td></tr>
                   </tbody>
                 </table>
               </div>
-            ) : targetEquipmentCode.includes("COAT") ? (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            ) : eqMeta.type === "COMP" ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="overflow-hidden border border-slate-200 rounded-xl">
                   <div className="bg-slate-50 px-3.5 py-2 border-b border-slate-200 text-[11px] font-bold text-slate-600 uppercase">
-                    PRE-HEATING PARAMETERS
+                    OPERATIONAL SETTINGS (ROTARY PRESS - SEJONG 49D)
                   </div>
                   <table className="w-full text-left text-xs text-slate-700">
                     <tbody className="divide-y divide-slate-100">
-                      <tr><td className="py-2 px-3.5 font-medium">INLET AIR TEMP (°C)</td><td className="py-2 px-3.5 text-right font-mono font-bold">65</td></tr>
-                      <tr><td className="py-2 px-3.5 font-medium">BED TEMP (°C)</td><td className="py-2 px-3.5 text-right font-mono font-bold">42</td></tr>
-                      <tr><td className="py-2 px-3.5 font-medium">PAN SPEED (RPM)</td><td className="py-2 px-3.5 text-right font-mono font-bold">3</td></tr>
-                      <tr><td className="py-2 px-3.5 font-medium">DRYING TIME (MIN)</td><td className="py-2 px-3.5 text-right font-mono font-bold">15</td></tr>
+                      <tr><td className="py-2 px-3.5 font-medium">TURRET / DISK SPEED (RPM)</td><td className="py-2 px-3.5 text-right font-mono font-bold">23.0</td></tr>
+                      <tr><td className="py-2 px-3.5 font-medium">FEEDER SPEED (RPM)</td><td className="py-2 px-3.5 text-right font-mono font-bold">13.0</td></tr>
+                      <tr><td className="py-2 px-3.5 font-medium">PRE-PRESSURE THICKNESS (mm)</td><td className="py-2 px-3.5 text-right font-mono font-bold">5.15</td></tr>
+                      <tr><td className="py-2 px-3.5 font-medium">MAIN PRESSURE THICKNESS (mm)</td><td className="py-2 px-3.5 text-right font-mono font-bold">2.33</td></tr>
+                      <tr><td className="py-2 px-3.5 font-medium">FILLING DEPTH (mm)</td><td className="py-2 px-3.5 text-right font-mono font-bold">6.87</td></tr>
+                      <tr><td className="py-2 px-3.5 font-medium">MAIN COMPRESSION FORCE (kN)</td><td className="py-2 px-3.5 text-right font-mono font-bold">8.55 (Ref: 8.65)</td></tr>
+                      <tr><td className="py-2 px-3.5 font-medium">PRODUCTION CAPACITY (Tabs/hr)</td><td className="py-2 px-3.5 text-right font-mono font-bold">201,480</td></tr>
                     </tbody>
                   </table>
                 </div>
                 <div className="overflow-hidden border border-slate-200 rounded-xl">
                   <div className="bg-slate-50 px-3.5 py-2 border-b border-slate-200 text-[11px] font-bold text-slate-600 uppercase">
-                    SPRAYING PARAMETERS
+                    BATCH COUNTERS & MACHINE STATUS
                   </div>
                   <table className="w-full text-left text-xs text-slate-700">
                     <tbody className="divide-y divide-slate-100">
-                      <tr><td className="py-2 px-3.5 font-medium">INLET AIR TEMP (°C)</td><td className="py-2 px-3.5 text-right font-mono font-bold">65</td></tr>
-                      <tr><td className="py-2 px-3.5 font-medium">BED TEMP (°C)</td><td className="py-2 px-3.5 text-right font-mono font-bold">44</td></tr>
-                      <tr><td className="py-2 px-3.5 font-medium">PAN SPEED (RPM)</td><td className="py-2 px-3.5 text-right font-mono font-bold">8</td></tr>
-                      <tr><td className="py-2 px-3.5 font-medium">SPRAY RATE (G/MIN)</td><td className="py-2 px-3.5 text-right font-mono font-bold">120</td></tr>
-                      <tr><td className="py-2 px-3.5 font-medium">ATOM AIR (BAR)</td><td className="py-2 px-3.5 text-right font-mono font-bold">2.5</td></tr>
-                    </tbody>
-                  </table>
-                </div>
-                <div className="overflow-hidden border border-slate-200 rounded-xl">
-                  <div className="bg-slate-50 px-3.5 py-2 border-b border-slate-200 text-[11px] font-bold text-slate-600 uppercase">
-                    POST-DRYING PARAMETERS
-                  </div>
-                  <table className="w-full text-left text-xs text-slate-700">
-                    <tbody className="divide-y divide-slate-100">
-                      <tr><td className="py-2 px-3.5 font-medium">INLET AIR TEMP (°C)</td><td className="py-2 px-3.5 text-right font-mono font-bold">50</td></tr>
-                      <tr><td className="py-2 px-3.5 font-medium">BED TEMP (°C)</td><td className="py-2 px-3.5 text-right font-mono font-bold">40</td></tr>
-                      <tr><td className="py-2 px-3.5 font-medium">PAN SPEED (RPM)</td><td className="py-2 px-3.5 text-right font-mono font-bold">3</td></tr>
-                      <tr><td className="py-2 px-3.5 font-medium">DRYING TIME (MIN)</td><td className="py-2 px-3.5 text-right font-mono font-bold">30</td></tr>
+                      <tr><td className="py-2 px-3.5 font-medium">TARGET QUANTITY (Tabs)</td><td className="py-2 px-3.5 text-right font-mono font-bold">2,000,000</td></tr>
+                      <tr><td className="py-2 px-3.5 font-medium">TOTAL COUNTER (Tabs)</td><td className="py-2 px-3.5 text-right font-mono font-bold">49,250</td></tr>
+                      <tr><td className="py-2 px-3.5 font-medium">GOOD TABLETS</td><td className="py-2 px-3.5 text-right font-mono font-bold text-emerald-600">30,001 (89.9%)</td></tr>
+                      <tr><td className="py-2 px-3.5 font-medium">HIGH REJECTION (HEP)</td><td className="py-2 px-3.5 text-right font-mono font-bold text-amber-600">3,352 (10.0%)</td></tr>
+                      <tr><td className="py-2 px-3.5 font-medium">LOW REJECTION (LEP)</td><td className="py-2 px-3.5 text-right font-mono font-bold">8 (0.0%)</td></tr>
+                      <tr><td className="py-2 px-3.5 font-medium">AIR PRESSURE (Kpa)</td><td className="py-2 px-3.5 text-right font-mono font-bold">555 (Min: 400)</td></tr>
+                      <tr><td className="py-2 px-3.5 font-medium">HYDRAULIC PRESSURE (Mpa)</td><td className="py-2 px-3.5 text-right font-mono font-bold">7.5 (Max: 15.0)</td></tr>
                     </tbody>
                   </table>
                 </div>
               </div>
-            ) : targetEquipmentCode.includes("CIP") ? (
+            ) : eqMeta.type === "COAT" ? (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="overflow-hidden border border-slate-200 rounded-xl">
+                  <div className="bg-slate-50 px-3.5 py-2 border-b border-slate-200 text-[11px] font-bold text-slate-600 uppercase">
+                    TEMPERATURE & GENERAL SETPOINTS
+                  </div>
+                  <table className="w-full text-left text-xs text-slate-700">
+                    <tbody className="divide-y divide-slate-100">
+                      <tr><td className="py-2 px-3.5 font-medium">INLET AIR TEMP - SP (°C)</td><td className="py-2 px-3.5 text-right font-mono font-bold">60.0</td></tr>
+                      <tr><td className="py-2 px-3.5 font-medium">EXHAUST AIR TEMP - SP (°C)</td><td className="py-2 px-3.5 text-right font-mono font-bold">45.0</td></tr>
+                      <tr><td className="py-2 px-3.5 font-medium">INLET DAMPER OPENING (%)</td><td className="py-2 px-3.5 text-right font-mono font-bold">75.0</td></tr>
+                      <tr><td className="py-2 px-3.5 font-medium">EXHAUST DAMPER OPENING (%)</td><td className="py-2 px-3.5 text-right font-mono font-bold">20.0</td></tr>
+                      <tr><td className="py-2 px-3.5 font-medium">PAN SPEED (RPM)</td><td className="py-2 px-3.5 text-right font-mono font-bold">2.1</td></tr>
+                      <tr><td className="py-2 px-3.5 font-medium">PRINT INTERVAL (MIN)</td><td className="py-2 px-3.5 text-right font-mono font-bold">30</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div className="overflow-hidden border border-slate-200 rounded-xl">
+                  <div className="bg-slate-50 px-3.5 py-2 border-b border-slate-200 text-[11px] font-bold text-slate-600 uppercase">
+                    FILM MODE - PRE JOG & DOSING
+                  </div>
+                  <table className="w-full text-left text-xs text-slate-700">
+                    <tbody className="divide-y divide-slate-100">
+                      <tr><td className="py-2 px-3.5 font-medium">PRE JOG PAN ON / OFF (Sec)</td><td className="py-2 px-3.5 text-right font-mono font-bold">6 / 30</td></tr>
+                      <tr><td className="py-2 px-3.5 font-medium">NO. OF PRE JOG CYCLES</td><td className="py-2 px-3.5 text-right font-mono font-bold">15</td></tr>
+                      <tr><td className="py-2 px-3.5 font-medium">DOSING SET SPEED (RPM)</td><td className="py-2 px-3.5 text-right font-mono font-bold">14.0</td></tr>
+                      <tr><td className="py-2 px-3.5 font-medium">AT BED TEMPERATURE (°C)</td><td className="py-2 px-3.5 text-right font-mono font-bold">48.0</td></tr>
+                      <tr><td className="py-2 px-3.5 font-medium">RATE OF CHANGE (RPM/°C)</td><td className="py-2 px-3.5 text-right font-mono font-bold">0.1</td></tr>
+                      <tr><td className="py-2 px-3.5 font-medium">NO. OF DOSING CYCLES</td><td className="py-2 px-3.5 text-right font-mono font-bold">600</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div className="overflow-hidden border border-slate-200 rounded-xl">
+                  <div className="bg-slate-50 px-3.5 py-2 border-b border-slate-200 text-[11px] font-bold text-slate-600 uppercase">
+                    FILM MODE - POST JOG SETTINGS
+                  </div>
+                  <table className="w-full text-left text-xs text-slate-700">
+                    <tbody className="divide-y divide-slate-100">
+                      <tr><td className="py-2 px-3.5 font-medium">POST JOG PAN ON / OFF (Sec)</td><td className="py-2 px-3.5 text-right font-mono font-bold">5 / 55</td></tr>
+                      <tr><td className="py-2 px-3.5 font-medium">NO. OF POST JOG CYCLES</td><td className="py-2 px-3.5 text-right font-mono font-bold">6</td></tr>
+                      <tr><td className="py-2 px-3.5 font-medium">INLET AIR TEMP - SP (°C)</td><td className="py-2 px-3.5 text-right font-mono font-bold">50.0</td></tr>
+                      <tr><td className="py-2 px-3.5 font-medium">EXHAUST AIR TEMP - SP (°C)</td><td className="py-2 px-3.5 text-right font-mono font-bold">40.0</td></tr>
+                      <tr><td className="py-2 px-3.5 font-medium">POST JOG PAN SPEED (RPM)</td><td className="py-2 px-3.5 text-right font-mono font-bold">1.4</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : eqMeta.type === "CIP" ? (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="overflow-hidden border border-slate-200 rounded-xl">
                   <div className="bg-slate-50 px-3.5 py-2 border-b border-slate-200 text-[11px] font-bold text-slate-600 uppercase">
@@ -2852,15 +2854,15 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="overflow-hidden border border-slate-200 rounded-xl">
                   <div className="bg-slate-50 px-3.5 py-2 border-b border-slate-200 text-[11px] font-bold text-slate-600 uppercase">
-                    DRY & WET CYCLE 1
+                    DRY MIX & WET CYCLE 1
                   </div>
                   <table className="w-full text-left text-xs text-slate-700">
                     <tbody className="divide-y divide-slate-100">
                       <tr><td className="py-2 px-3.5 font-medium">DRY CYCLE 1 - IMPELLER SLOW (Sec)</td><td className="py-2 px-3.5 text-right font-mono font-bold">600</td></tr>
                       <tr><td className="py-2 px-3.5 font-medium">DRY CYCLE 1 - IMPELLER FAST (Sec)</td><td className="py-2 px-3.5 text-right font-mono font-bold">0</td></tr>
-                      <tr><td className="py-2 px-3.5 font-medium">WET CYCLE 1 - IMPELLER SLOW (Sec)</td><td className="py-2 px-3.5 text-right font-mono font-bold">180</td></tr>
-                      <tr><td className="py-2 px-3.5 font-medium">WET CYCLE 1 - PUMP 1 SET (Sec)</td><td className="py-2 px-3.5 text-right font-mono font-bold">180</td></tr>
-                      <tr><td className="py-2 px-3.5 font-medium">WET CYCLE 1 - PUMP 1 RPM</td><td className="py-2 px-3.5 text-right font-mono font-bold">240</td></tr>
+                      <tr><td className="py-2 px-3.5 font-medium">WET CYCLE 1 - IMPELLER SLOW (Sec)</td><td className="py-2 px-3.5 text-right font-mono font-bold">150</td></tr>
+                      <tr><td className="py-2 px-3.5 font-medium">WET CYCLE 1 - PUMP 1 SET (Sec)</td><td className="py-2 px-3.5 text-right font-mono font-bold">150</td></tr>
+                      <tr><td className="py-2 px-3.5 font-medium">WET CYCLE 1 - PUMP 1 RPM</td><td className="py-2 px-3.5 text-right font-mono font-bold">60</td></tr>
                     </tbody>
                   </table>
                 </div>
@@ -2871,10 +2873,10 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
                   </div>
                   <table className="w-full text-left text-xs text-slate-700">
                     <tbody className="divide-y divide-slate-100">
-                      <tr><td className="py-2 px-3.5 font-medium">WET CYCLE 2 - IMPELLER SLOW (Sec)</td><td className="py-2 px-3.5 text-right font-mono font-bold">180</td></tr>
-                      <tr><td className="py-2 px-3.5 font-medium">WET CYCLE 2 - CHOPPER SLOW (Sec)</td><td className="py-2 px-3.5 text-right font-mono font-bold">180</td></tr>
-                      <tr><td className="py-2 px-3.5 font-medium">WET CYCLE 3 - IMPELLER SLOW (Sec)</td><td className="py-2 px-3.5 text-right font-mono font-bold">480</td></tr>
-                      <tr><td className="py-2 px-3.5 font-medium">WET CYCLE 3 - CHOPPER SLOW (Sec)</td><td className="py-2 px-3.5 text-right font-mono font-bold">480</td></tr>
+                      <tr><td className="py-2 px-3.5 font-medium">WET CYCLE 2 - IMPELLER SLOW (Sec)</td><td className="py-2 px-3.5 text-right font-mono font-bold">60</td></tr>
+                      <tr><td className="py-2 px-3.5 font-medium">WET CYCLE 2 - CHOPPER SLOW (Sec)</td><td className="py-2 px-3.5 text-right font-mono font-bold">60</td></tr>
+                      <tr><td className="py-2 px-3.5 font-medium">WET CYCLE 3 - IMPELLER FAST (Sec)</td><td className="py-2 px-3.5 text-right font-mono font-bold">30</td></tr>
+                      <tr><td className="py-2 px-3.5 font-medium">WET CYCLE 3 - CHOPPER FAST (Sec)</td><td className="py-2 px-3.5 text-right font-mono font-bold">30</td></tr>
                       <tr><td className="py-2 px-3.5 font-medium">UNLOADING PARAMETERS</td><td className="py-2 px-3.5 text-right font-mono font-bold">IMPELLER/CHOPPER: SLOW</td></tr>
                     </tbody>
                   </table>
@@ -2906,7 +2908,7 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
               </div>
             </div>
 
-            {targetEquipmentCode.includes("FBD") ? (
+            {eqMeta.type === "FBD" ? (
               <div className="overflow-hidden border border-slate-200 rounded-xl max-w-2xl">
                 <table className="w-full text-left text-xs text-slate-700">
                   <thead className="bg-slate-50 text-[11px] font-bold text-slate-600 uppercase border-b border-slate-200">
@@ -2930,7 +2932,7 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
                   </tbody>
                 </table>
               </div>
-            ) : targetEquipmentCode.includes("COAT") ? (
+            ) : eqMeta.type === "COAT" ? (
               <div className="overflow-hidden border border-slate-200 rounded-xl max-w-2xl">
                 <table className="w-full text-left text-xs text-slate-700">
                   <thead className="bg-slate-50 text-[11px] font-bold text-slate-600 uppercase border-b border-slate-200">
@@ -2964,7 +2966,7 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
                   </tbody>
                 </table>
               </div>
-            ) : targetEquipmentCode.includes("CIP") ? (
+            ) : eqMeta.type === "CIP" ? (
               <div className="overflow-hidden border border-slate-200 rounded-xl max-w-2xl">
                 <table className="w-full text-left text-xs text-slate-700">
                   <thead className="bg-slate-50 text-[11px] font-bold text-slate-600 uppercase border-b border-slate-200">
@@ -2993,7 +2995,7 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
                   </tbody>
                 </table>
               </div>
-            ) : targetEquipmentCode.includes("OGB") || targetEquipmentCode.includes("BLE") || targetEquipmentCode.includes("OCB") ? (
+            ) : eqMeta.type === "BLE" ? (
               <div className="overflow-hidden border border-slate-200 rounded-xl max-w-2xl">
                 <table className="w-full text-left text-xs text-slate-700">
                   <thead className="bg-slate-50 text-[11px] font-bold text-slate-600 uppercase border-b border-slate-200">
@@ -3007,6 +3009,35 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
                     <tr>
                       <td className="py-2.5 px-3.5 font-medium">BLENDING SPEED (RPM)</td>
                       <td className="py-2.5 px-3.5 text-right font-mono font-bold text-slate-800">0.0</td>
+                      <td className="py-2.5 px-3.5 text-right font-mono font-bold text-slate-800">5.0</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            ) : eqMeta.type === "COMP" ? (
+              <div className="overflow-hidden border border-slate-200 rounded-xl max-w-2xl">
+                <table className="w-full text-left text-xs text-slate-700">
+                  <thead className="bg-slate-50 text-[11px] font-bold text-slate-600 uppercase border-b border-slate-200">
+                    <tr>
+                      <th className="py-2.5 px-3.5">Parameters</th>
+                      <th className="py-2.5 px-3.5 text-right">Min Value</th>
+                      <th className="py-2.5 px-3.5 text-right">Max Value</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    <tr>
+                      <td className="py-2.5 px-3.5 font-medium">TURRET SPEED (RPM)</td>
+                      <td className="py-2.5 px-3.5 text-right font-mono font-bold text-slate-800">20.0</td>
+                      <td className="py-2.5 px-3.5 text-right font-mono font-bold text-slate-800">35.0</td>
+                    </tr>
+                    <tr>
+                      <td className="py-2.5 px-3.5 font-medium">MAIN COMPRESSION FORCE (kN)</td>
+                      <td className="py-2.5 px-3.5 text-right font-mono font-bold text-slate-800">18.0</td>
+                      <td className="py-2.5 px-3.5 text-right font-mono font-bold text-slate-800">24.5</td>
+                    </tr>
+                    <tr>
+                      <td className="py-2.5 px-3.5 font-medium">PRE-COMPRESSION FORCE (kN)</td>
+                      <td className="py-2.5 px-3.5 text-right font-mono font-bold text-slate-800">3.5</td>
                       <td className="py-2.5 px-3.5 text-right font-mono font-bold text-slate-800">5.0</td>
                     </tr>
                   </tbody>
@@ -3130,24 +3161,15 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
                   <thead className="bg-slate-50 text-[11px] font-bold text-slate-600 uppercase tracking-wider border-b border-slate-200">
                     <tr>
                       <th className="py-3 px-3.5 whitespace-nowrap">Observed Timestamp</th>
-                      {(!targetEquipmentCode.includes("FBD") && !targetEquipmentCode.includes("COAT")) && (
+                      {eqMeta.type === "RMG" && (
                         <th className="py-3 px-3.5 whitespace-nowrap"><div className="font-bold text-slate-800">STATUS</div></th>
                       )}
-                      {(availableMetricsList.length > 0
-                        ? availableMetricsList
-                        : [
-                            { key: "Ag_Speed", label: "Agitator Speed", unit: "RPM" },
-                            { key: "Ag_Amps", label: "Agitator Amps", unit: "A" },
-                            { key: "Chp_Speed", label: "Chopper Speed", unit: "RPM" },
-                            { key: "Chp_Amps", label: "Chopper Amps", unit: "A" },
-                            { key: "Heater_Temp", label: "Temperature", unit: "°C" },
-                          ]
-                      ).map((col) => {
+                      {activeCols.map((col) => {
                         const meta = resolveMetricLimits(col.key, targetEquipmentCode, paramLimits, criticalParams);
                         const lim = meta.limits;
                         return (
                           <th key={col.key} className="py-3 px-3.5 whitespace-nowrap">
-                            <div className="font-bold text-slate-800">{meta.parameterName} ({meta.unit})</div>
+                            <div className="font-bold text-slate-800">{meta.parameterName || col.label} ({meta.unit || col.unit})</div>
                             {lim && (lim.lowerCriticalLimit !== undefined || lim.upperCriticalLimit !== undefined) ? (
                               <div className="text-[9px] font-mono text-indigo-600 font-semibold normal-case">
                                 Lim: [{lim.lowerCriticalLimit ?? "-"} to {lim.upperCriticalLimit ?? "-"}]
@@ -3162,7 +3184,7 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
                     {filteredParameters.length === 0 ? (
                       <tr>
                         <td
-                          colSpan={Math.max(6, availableMetricsList.length + (!targetEquipmentCode.includes("FBD") && !targetEquipmentCode.includes("COAT") ? 2 : 1))}
+                          colSpan={Math.max(6, activeCols.length + (eqMeta.type === "RMG" ? 2 : 1))}
                           className="py-8 text-center text-slate-500 font-medium"
                         >
                           <div className="flex flex-col items-center justify-center gap-1.5">
@@ -3197,18 +3219,7 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
                         const rowRec = record as unknown as Record<string, unknown>;
                         const rowMeta = (record.meta || {}) as Record<string, unknown>;
                         const rowStatus = toText(rowRec.status || rowMeta.status || rowRec.Status || "RUNNING");
-                        const showStatus = !targetEquipmentCode.includes("FBD") && !targetEquipmentCode.includes("COAT");
-                        const activeCols =
-                          availableMetricsList.length > 0
-                            ? availableMetricsList
-                            : [
-                                { key: "Ag_Speed", label: "Agitator Speed", unit: "RPM" },
-                                { key: "Ag_Amps", label: "Agitator Current", unit: "A" },
-                                { key: "Chp_Speed", label: "Granulator Speed", unit: "RPM" },
-                                { key: "Chp_Amps", label: "Granulator Current", unit: "A" },
-                                { key: "Heater_Temp", label: "Granulation Temp", unit: "°C" },
-                                { key: "Duration_Sec", label: "Duration", unit: "Sec" },
-                              ];
+                        const showStatus = eqMeta.type === "RMG";
 
                         return (
                           <tr
@@ -3598,35 +3609,41 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {(() => {
-                    const eq = targetEquipmentCode.toUpperCase();
                     let sessions = [
-                      { u: "91525 (PB3 RMGC0219 Supervisor)", dt: "09/02/2026 16:04:17", act: "Login", isLog: true },
-                      { u: "91525 (PB3 RMGC0219 Operator)", dt: "09/02/2026 16:05:30", act: "Login", isLog: true },
-                      { u: "91525 (PB3 RMGC0219 Operator)", dt: "09/02/2026 19:04:00", act: "Logout Successfully", isLog: false },
-                      { u: "91525 (PB3 RMGC0219 Supervisor)", dt: "09/02/2026 19:05:40", act: "Logout Successfully", isLog: false },
+                      { u: `96365 (${eqMeta.block} ${eqMeta.code} Supervisor)`, dt: stageStartTime, act: "Login", isLog: true },
+                      { u: `96828 (${eqMeta.block} ${eqMeta.code} Operator)`, dt: stageStartTime, act: "Login", isLog: true },
+                      { u: `96828 (${eqMeta.block} ${eqMeta.code} Operator)`, dt: stageEndTime, act: "Logout Successfully", isLog: false },
+                      { u: `96365 (${eqMeta.block} ${eqMeta.code} Supervisor)`, dt: stageEndTime, act: "Logout Successfully", isLog: false },
                     ];
-                    if (eq.includes("FBD")) {
+                    if (eqMeta.type === "FBD") {
                       sessions = [
-                        { u: "91525 (PB3 FBDC0220 Supervisor)", dt: "09/02/2026 18:44:47", act: "Logout Successfully", isLog: false },
-                        { u: "91525 (PB3 FBDC0220 Operator)", dt: "09/02/2026 18:45:50", act: "Login", isLog: true },
-                        { u: "91525 (PB3 FBDC0220 Operator)", dt: "09/02/2026 22:01:42", act: "Logout Successfully", isLog: false },
-                        { u: "91525 (PB3 FBDC0220 Operator)", dt: "09/02/2026 22:02:01", act: "Login", isLog: true },
-                        { u: "91525 (PB3 FBDC0220 Operator)", dt: "09/02/2026 23:45:11", act: "Logout Successfully", isLog: false },
-                        { u: "91525 (PB3 FBDC0220 Supervisor)", dt: "09/02/2026 23:46:40", act: "Login", isLog: true },
+                        { u: `191555 (${eqMeta.block} ${eqMeta.code} Supervisor)`, dt: "09/02/2026 18:44:47", act: "Logout Successfully", isLog: false },
+                        { u: `11173 (${eqMeta.block} ${eqMeta.code} Operator)`, dt: "09/02/2026 18:45:50", act: "Login", isLog: true },
+                        { u: `11173 (${eqMeta.block} ${eqMeta.code} Operator)`, dt: "09/02/2026 22:01:42", act: "Logout Successfully", isLog: false },
+                        { u: `11173 (${eqMeta.block} ${eqMeta.code} Operator)`, dt: "09/02/2026 22:02:01", act: "Login", isLog: true },
+                        { u: `11173 (${eqMeta.block} ${eqMeta.code} Operator)`, dt: "09/02/2026 23:45:11", act: "Logout Successfully", isLog: false },
+                        { u: `191555 (${eqMeta.block} ${eqMeta.code} Supervisor)`, dt: "09/02/2026 23:46:40", act: "Login", isLog: true },
                       ];
-                    } else if (eq.includes("OGB") || eq.includes("BLE") || eq.includes("OCB")) {
+                    } else if (eqMeta.type === "BLE") {
                       sessions = [
-                        { u: "91525 (PB3 OCBC0222 Supervisor)", dt: "11/02/2026 09:05:19", act: "Logout Successfully", isLog: false },
-                        { u: "91525 (PB3 OCBC0222 Operator)", dt: "11/02/2026 09:05:40", act: "Login", isLog: true },
-                        { u: "91525 (PB3 OCBC0222 Operator)", dt: "11/02/2026 11:02:10", act: "Logout Successfully", isLog: false },
-                        { u: "91525 (PB3 OCBC0222 Supervisor)", dt: "11/02/2026 11:02:31", act: "Login", isLog: true },
+                        { u: `191164 (${eqMeta.block} ${eqMeta.code} Supervisor)`, dt: "11/02/2026 09:05:19", act: "Logout Successfully", isLog: false },
+                        { u: `11173 (${eqMeta.block} ${eqMeta.code} Operator)`, dt: "11/02/2026 09:05:40", act: "Login", isLog: true },
+                        { u: `11173 (${eqMeta.block} ${eqMeta.code} Operator)`, dt: "11/02/2026 11:02:10", act: "Logout Successfully", isLog: false },
+                        { u: `191164 (${eqMeta.block} ${eqMeta.code} Supervisor)`, dt: "11/02/2026 11:02:31", act: "Login", isLog: true },
                       ];
-                    } else if (eq.includes("COAT")) {
+                    } else if (eqMeta.type === "COMP") {
                       sessions = [
-                        { u: "91525 (PB3 COATC0223 Supervisor)", dt: "12/02/2026 08:30:00", act: "Login", isLog: true },
-                        { u: "91525 (PB3 COATC0223 Operator)", dt: "12/02/2026 08:31:15", act: "Login", isLog: true },
-                        { u: "91525 (PB3 COATC0223 Operator)", dt: "12/02/2026 12:40:00", act: "Logout Successfully", isLog: false },
-                        { u: "91525 (PB3 COATC0223 Supervisor)", dt: "12/02/2026 12:45:30", act: "Logout Successfully", isLog: false },
+                        { u: `10402 (${eqMeta.block} ${eqMeta.code} Supervisor)`, dt: "11/02/2026 14:15:00", act: "Login", isLog: true },
+                        { u: `10401 (${eqMeta.block} ${eqMeta.code} Operator)`, dt: "11/02/2026 14:16:30", act: "Login", isLog: true },
+                        { u: `10401 (${eqMeta.block} ${eqMeta.code} Operator)`, dt: "11/02/2026 18:40:00", act: "Logout Successfully", isLog: false },
+                        { u: `10402 (${eqMeta.block} ${eqMeta.code} Supervisor)`, dt: "11/02/2026 18:45:20", act: "Logout Successfully", isLog: false },
+                      ];
+                    } else if (eqMeta.type === "COAT") {
+                      sessions = [
+                        { u: `191257 (${eqMeta.block} ${eqMeta.code} Supervisor)`, dt: "12/02/2026 08:30:00", act: "Login", isLog: true },
+                        { u: `29995 (${eqMeta.block} ${eqMeta.code} Operator)`, dt: "12/02/2026 08:31:15", act: "Login", isLog: true },
+                        { u: `29995 (${eqMeta.block} ${eqMeta.code} Operator)`, dt: "12/02/2026 12:40:00", act: "Logout Successfully", isLog: false },
+                        { u: `191257 (${eqMeta.block} ${eqMeta.code} Supervisor)`, dt: "12/02/2026 12:45:30", act: "Logout Successfully", isLog: false },
                       ];
                     }
                     return sessions.map((s, idx) => (
@@ -3816,14 +3833,8 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
                             return rawStr;
                           }
                           const u = rawStr.toUpperCase();
-                          const eq = (eqCode || targetEquipmentCode || "COATC0223").toUpperCase();
-                          const eqTag = eq.includes("FBD")
-                            ? "PB3 FBDC0220"
-                            : eq.includes("OGB") || eq.includes("BLE") || eq.includes("OCB")
-                            ? "PB3 OCBC0222"
-                            : eq.includes("COAT")
-                            ? "PB3 COATC0223"
-                            : "PB3 RMGC0219";
+                          const eqInfo = resolveEquipmentInfo(eqCode || targetEquipmentCode);
+                          const eqTag = `${eqInfo.block} ${eqInfo.code}`;
 
                           if (u.includes("SUPERVISOR") || u.includes("REVIEWER") || u.includes("APPROVER") || u.includes("98204") || u.includes("SUPERVISIOR")) {
                             return `91525 (${eqTag} Supervisor)`;
@@ -4078,9 +4089,9 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
           batchContext={{
             batchNo: queryBatchNo,
             lotNo: queryLotNo || toText(batchSummary?.lotNo) || "01 of 05",
-            equipmentCode: queryEquipmentCode || toText(batchSummary?.equipmentId) || "G5RMG",
-            equipmentName: toText(batchSummary?.equipmentId || "Equipment"),
-            productName: toText(batchSummary?.productName || "Allopurinol Tablets"),
+            equipmentCode: targetEquipmentCode,
+            equipmentName: eqMeta.name,
+            productName: toText(batchSummary?.productName || "Mirtazapine Tablets USP 5 mg"),
             currentStatus: activeStatus,
           }}
           tenantId="TNT-0001"
@@ -4099,9 +4110,9 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
         batchContext={{
           batchNo: queryBatchNo,
           lotNo: queryLotNo || toText(batchSummary?.lotNo) || "01 of 05",
-          equipmentCode: queryEquipmentCode || toText(batchSummary?.equipmentId) || "G5RMG",
-          equipmentName: toText(batchSummary?.equipmentId || "Equipment"),
-          productName: toText(batchSummary?.productName || "Allopurinol Tablets"),
+          equipmentCode: targetEquipmentCode,
+          equipmentName: eqMeta.name,
+          productName: toText(batchSummary?.productName || "Mirtazapine Tablets USP 5 mg"),
           currentStatus: activeStatus,
         }}
         tenantId="TNT-0001"
