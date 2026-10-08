@@ -2,7 +2,7 @@
 export const COMP_BATCH_SUMMARY_MOCK = {
   batchNo: "AGO0026016",
   lotNo: "01",
-  equipmentId: "MB040",
+  equipmentId: "MC081",
   equipmentName: "ROTARY TABLET PRESS (COMPRESSION)",
   productName: "Lamotrigine Tablets USP 100 mg",
   productCode: "STGW2000",
@@ -29,7 +29,7 @@ export const COMP_ALARM_SUMMARY_MOCK = [
     resolved_time: "11/02/2026 15:30:45",
     duration: "00:00:35",
     severity: "WARNING",
-    equipmentId: "MB040",
+    equipmentId: "MC081",
     batchNo: "AGO0026016",
     lotNo: "01",
     eventCategory: "ALARM",
@@ -44,7 +44,7 @@ export const COMP_ALARM_SUMMARY_MOCK = [
     resolved_time: "11/02/2026 16:12:18",
     duration: "00:00:18",
     severity: "CRITICAL",
-    equipmentId: "MB040",
+    equipmentId: "MC081",
     batchNo: "AGO0026016",
     lotNo: "01",
     eventCategory: "ALARM",
@@ -52,14 +52,14 @@ export const COMP_ALARM_SUMMARY_MOCK = [
 ];
 
 const RAW_COMP_AUDIT_ROWS = [
-  { dt: "11/02/2026 14:15:00", desc: "BATCH START", oldV: "-", newV: "-", reason: "-", user: "10402 (PB1 MB040 Supervisor)", role: "PRODUCTION_SUPERVISOR" },
-  { dt: "11/02/2026 14:18:22", desc: "TOOLING INSPECTION COMPLETED", oldV: "-", newV: "PASSED", reason: "PRE-RUN CHECKS", user: "10401 (PB1 MB040 Operator)", role: "PRODUCTION_OPERATOR" },
-  { dt: "11/02/2026 14:25:00", desc: "FEEDER START", oldV: "-", newV: "28.0 RPM", reason: "-", user: "10401 (PB1 MB040 Operator)", role: "PRODUCTION_OPERATOR" },
-  { dt: "11/02/2026 14:30:10", desc: "TURRET ROTATION START", oldV: "-", newV: "35.0 RPM", reason: "-", user: "10401 (PB1 MB040 Operator)", role: "PRODUCTION_OPERATOR" },
-  { dt: "11/02/2026 15:00:00", desc: "IN-PROCESS WEIGHT SAMPLING", oldV: "248.5 mg", newV: "250.2 mg", reason: "HOURLY IPC", user: "10401 (PB1 MB040 Operator)", role: "PRODUCTION_OPERATOR" },
-  { dt: "11/02/2026 16:00:00", desc: "IN-PROCESS HARDNESS CHECK", oldV: "88.0 N", newV: "91.5 N", reason: "HOURLY IPC", user: "10401 (PB1 MB040 Operator)", role: "PRODUCTION_OPERATOR" },
-  { dt: "11/02/2026 18:40:00", desc: "COMPRESSION RUN COMPLETE", oldV: "-", newV: "-", reason: "BATCH TARGET REACHED", user: "10401 (PB1 MB040 Operator)", role: "PRODUCTION_OPERATOR" },
-  { dt: "11/02/2026 18:45:20", desc: "BATCH END", oldV: "-", newV: "-", reason: "-", user: "10402 (PB1 MB040 Supervisor)", role: "PRODUCTION_SUPERVISOR" },
+  { dt: "11/02/2026 14:15:00", desc: "BATCH START", oldV: "-", newV: "-", reason: "-", user: "10402 (PB1 MC081 Supervisor)", role: "PRODUCTION_SUPERVISOR" },
+  { dt: "11/02/2026 14:18:22", desc: "TOOLING INSPECTION COMPLETED", oldV: "-", newV: "PASSED", reason: "PRE-RUN CHECKS", user: "10401 (PB1 MC081 Operator)", role: "PRODUCTION_OPERATOR" },
+  { dt: "11/02/2026 14:25:00", desc: "FEEDER START", oldV: "-", newV: "28.0 RPM", reason: "-", user: "10401 (PB1 MC081 Operator)", role: "PRODUCTION_OPERATOR" },
+  { dt: "11/02/2026 14:30:10", desc: "TURRET ROTATION START", oldV: "-", newV: "35.0 RPM", reason: "-", user: "10401 (PB1 MC081 Operator)", role: "PRODUCTION_OPERATOR" },
+  { dt: "11/02/2026 15:00:00", desc: "IN-PROCESS WEIGHT SAMPLING", oldV: "248.5 mg", newV: "250.2 mg", reason: "HOURLY IPC", user: "10401 (PB1 MC081 Operator)", role: "PRODUCTION_OPERATOR" },
+  { dt: "11/02/2026 16:00:00", desc: "IN-PROCESS HARDNESS CHECK", oldV: "88.0 N", newV: "91.5 N", reason: "HOURLY IPC", user: "10401 (PB1 MC081 Operator)", role: "PRODUCTION_OPERATOR" },
+  { dt: "11/02/2026 18:40:00", desc: "COMPRESSION RUN COMPLETE", oldV: "-", newV: "-", reason: "BATCH TARGET REACHED", user: "10401 (PB1 MC081 Operator)", role: "PRODUCTION_OPERATOR" },
+  { dt: "11/02/2026 18:45:20", desc: "BATCH END", oldV: "-", newV: "-", reason: "-", user: "10402 (PB1 MC081 Supervisor)", role: "PRODUCTION_SUPERVISOR" },
 ];
 
 export const COMP_AUDIT_TRAIL_MOCK = RAW_COMP_AUDIT_ROWS.map((row, idx) => {
@@ -82,8 +82,8 @@ export const COMP_AUDIT_TRAIL_MOCK = RAW_COMP_AUDIT_ROWS.map((row, idx) => {
     userName: row.user,
     user_name: row.user,
     role: row.role,
-    equipmentId: "MB040",
-    equipmentCode: "MB040",
+    equipmentId: "MC081",
+    equipmentCode: "MC081",
     category: "AUDIT",
   };
 });

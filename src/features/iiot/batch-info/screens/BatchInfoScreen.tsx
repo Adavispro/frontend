@@ -70,7 +70,6 @@ import { RMG_ALARM_SUMMARY_MOCK, RMG_AUDIT_TRAIL_MOCK } from "../../batch-detail
 import { FBD_ALARM_SUMMARY_MOCK, FBD_AUDIT_TRAIL_MOCK } from "../../batch-details/data/fbdMockData";
 import { BLE_AUDIT_TRAIL_MOCK } from "../../batch-details/data/bleMockData";
 import { COAT_ALARM_SUMMARY_MOCK, COAT_AUDIT_TRAIL_MOCK } from "../../batch-details/data/coatMockData";
-import { COMP_ALARM_SUMMARY_MOCK, COMP_AUDIT_TRAIL_MOCK } from "../../batch-details/data/compMockData";
 import { resolveEquipmentInfo, type EquipmentMeta } from "@/features/iiot/utils/equipment-resolver";
 import Pagination from "@/components/ui/Pagination";
 import { WorkflowActionModal } from "../../components/WorkflowActionModal";
@@ -115,6 +114,24 @@ export const BATCH_INFO_SECTIONS: { id: BatchInfoSectionType; label: string; sho
 
 const toText = (value: unknown): string =>
   typeof value === "string" ? value.trim() : value == null ? "" : String(value).trim();
+
+const displaySourceValue = (value: unknown): string => toText(value) || "Not available";
+
+const displaySourceValueWithUnit = (value: unknown, unit: string): string => {
+  const text = toText(value);
+  return text ? `${text} ${unit}` : "Not available";
+};
+
+const flattenCompressionSection = (
+  value: Record<string, unknown>,
+  prefix = "",
+): Array<{ label: string; value: unknown }> => Object.entries(value).flatMap(([key, item]) => {
+  const label = prefix ? `${prefix} / ${key}` : key;
+  if (item && typeof item === "object" && !Array.isArray(item)) {
+    return flattenCompressionSection(item as Record<string, unknown>, label);
+  }
+  return [{ label, value: item }];
+});
 
 export function parseFlexibleTimestamp(val: unknown): number | null {
   if (!val) return null;
@@ -618,6 +635,53 @@ export default function BatchInfoScreen({ batchId }: BatchInfoScreenProps) {
     return resolveEquipmentInfo(targetEquipmentCode);
   }, [targetEquipmentCode]);
 
+  const isRmg = eqMeta.type === "RMG";
+  const isFbd = eqMeta.type === "FBD";
+  const isBle = eqMeta.type === "BLE";
+  const isComp = eqMeta.type === "COMP";
+  const isCoat = eqMeta.type === "COAT";
+
+  const compDetails = useMemo(() => {
+    if (!isComp) return null;
+    const selected = (cppRecords as Array<Record<string, unknown>>).find((record) => {
+      const meta = (record.meta || {}) as Record<string, unknown>;
+      return queryLotNo && (toText(meta.derivedLotNo) === queryLotNo || toText(meta.lotNo) === queryLotNo);
+    }) || (cppRecords[0] as Record<string, unknown> | undefined);
+    return (selected?.compression_details as Record<string, unknown>) || null;
+  }, [isComp, cppRecords, queryLotNo]);
+
+  const compressionLots = useMemo(() => (cppRecords as Array<Record<string, unknown>>).map((record) => {
+    const meta = (record.meta || {}) as Record<string, unknown>;
+    const details = (record.compression_details || {}) as Record<string, unknown>;
+    const metadata = (details.metadata || {}) as Record<string, unknown>;
+    return {
+      lotNo: toText(meta.derivedLotNo || meta.lotNo),
+      sourceFile: toText(metadata.sourceFile),
+      observedAt: toText(record.observedAt),
+    };
+  }).filter((lot) => lot.lotNo), [cppRecords]);
+
+  const compBatchInfo = useMemo(() => ((compDetails?.batchInfo || {}) as Record<string, unknown>), [compDetails]);
+  const compRecipe = useMemo(() => ((compDetails?.recipeSettings || {}) as Record<string, unknown>), [compDetails]);
+  const compFeeder = useMemo(() => ((compRecipe?.feeder || {}) as Record<string, unknown>), [compRecipe]);
+  const compHydra = useMemo(() => ((compRecipe?.hydraulicPressureLimits || {}) as Record<string, unknown>), [compRecipe]);
+  const compOil = useMemo(() => ((compRecipe?.oilLubrication || {}) as Record<string, unknown>), [compRecipe]);
+  const compControlLimits = useMemo(() => ((compRecipe?.controlLimits || {}) as Record<string, unknown>), [compRecipe]);
+  const compPressure = useMemo(() => ((compDetails?.pressureData || {}) as Record<string, unknown>), [compDetails]);
+  const compPrePressure = useMemo(() => ((compPressure?.prePressure || {}) as Record<string, unknown>), [compPressure]);
+  const compMainPressure = useMemo(() => ((compPressure?.mainPressure || {}) as Record<string, unknown>), [compPressure]);
+  const compDepthAdj = useMemo(() => ((compPressure?.fillingDepthAdjustments || {}) as Record<string, unknown>), [compPressure]);
+  const compOpVals = useMemo(() => ((compDetails?.operationValues || {}) as Record<string, unknown>), [compDetails]);
+  const compCounters = useMemo(() => ((compDetails?.tabletCounters || {}) as Record<string, unknown>), [compDetails]);
+  const compTightness = useMemo(() => ((compDetails?.tightness || {}) as Record<string, unknown>), [compDetails]);
+  const compTabletChecker = useMemo(() => ((compDetails?.tabletChecker || {}) as Record<string, unknown>), [compDetails]);
+  const compHep = useMemo(() => ((compCounters?.hep || {}) as Record<string, unknown>), [compCounters]);
+  const compLep = useMemo(() => ((compCounters?.lep || {}) as Record<string, unknown>), [compCounters]);
+  const compGood = useMemo(() => ((compCounters?.good || {}) as Record<string, unknown>), [compCounters]);
+  const compOpHistory = useMemo(() => ((compDetails?.operation_history || []) as Array<Record<string, unknown>>), [compDetails]);
+  const compLoginHistory = useMemo(() => ((compDetails?.login_history || []) as Array<Record<string, unknown>>), [compDetails]);
+  const compAlarmHistory = useMemo(() => ((compDetails?.alarm_history || []) as Array<Record<string, unknown>>), [compDetails]);
+
   const activeStatus = useMemo(() => {
     if (workflowInstance?.currentStatus) {
       return toText(workflowInstance.currentStatus).toUpperCase();
@@ -756,8 +820,6 @@ export default function BatchInfoScreen({ batchId }: BatchInfoScreenProps) {
             setAlarmRecords(RMG_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[]);
           } else if (eqInfo.type === "FBD") {
             setAlarmRecords(FBD_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[]);
-          } else if (eqInfo.type === "COMP") {
-            setAlarmRecords(COMP_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[]);
           } else if (eqInfo.type === "COAT") {
             setAlarmRecords(COAT_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[]);
           } else {
@@ -785,8 +847,6 @@ export default function BatchInfoScreen({ batchId }: BatchInfoScreenProps) {
             setEventDataRecords(FBD_AUDIT_TRAIL_MOCK as unknown as Record<string, unknown>[]);
           } else if (eqInfo.type === "BLE") {
             setEventDataRecords(BLE_AUDIT_TRAIL_MOCK as unknown as Record<string, unknown>[]);
-          } else if (eqInfo.type === "COMP") {
-            setEventDataRecords(COMP_AUDIT_TRAIL_MOCK as unknown as Record<string, unknown>[]);
           } else if (eqInfo.type === "COAT") {
             setEventDataRecords(COAT_AUDIT_TRAIL_MOCK as unknown as Record<string, unknown>[]);
           } else {
@@ -1382,6 +1442,18 @@ export default function BatchInfoScreen({ batchId }: BatchInfoScreenProps) {
   // Alarms Data Prep
   const filteredAlarms = useMemo(() => {
     let list = alarmRecords;
+    if (list.length === 0 && isComp && compAlarmHistory.length > 0) {
+      list = compAlarmHistory.map((a: Record<string, unknown>, i: number) => ({
+        id: `comp_alarm_${i}`,
+        alarmCode: toText(a.alarm_id || a.alarm_code || `ALM-${i + 1}`),
+        alarmDescription: toText(a.description || a.alarm_name || "Emergency / Machine Interruption"),
+        severity: toText(a.severity || "WARNING").toUpperCase(),
+        eventAt: toText(a.start_time || a.timestamp || stageStartTime),
+        status: a.duration_sec ? "RESOLVED" : "ACTIVE",
+        durationSeconds: Number(a.duration_sec || 0),
+        acknowledgedBy: toText(a.acknowledged_by || "OP-10402"),
+      })) as unknown as AlarmEventRecord[];
+    }
     if (alarmFilter !== "ALL") {
       list = list.filter((a) => calculateAlarmSeverity(a as unknown as Record<string, unknown>) === alarmFilter);
     }
@@ -1396,7 +1468,7 @@ export default function BatchInfoScreen({ batchId }: BatchInfoScreenProps) {
       });
     }
     return list;
-  }, [alarmRecords, alarmFilter, alarmSearch]);
+  }, [alarmRecords, alarmFilter, alarmSearch, isComp, compAlarmHistory, stageStartTime]);
 
   const totalAlarms = filteredAlarms.length;
   const safeAlarmPage = Math.max(1, Math.min(alarmsPage, Math.ceil(totalAlarms / alarmsPageSize) || 1));
@@ -1415,6 +1487,18 @@ export default function BatchInfoScreen({ batchId }: BatchInfoScreenProps) {
       const comments = toText(e.comments).toUpperCase();
       return !act.includes("PRINT") && !desc.includes("PRINT") && !reason.includes("PRINT") && !comments.includes("PRINT");
     });
+    if (list.length === 0 && isComp && compOpHistory.length > 0) {
+      list = compOpHistory.map((op: Record<string, unknown>, i: number) => ({
+        id: `comp_op_${i}`,
+        action: toText(op.description || op.operation_id || "BATCH_OPERATION"),
+        actionCode: toText(op.operation_id || "OP_EXEC"),
+        userName: toText(op.operator_name || op.operator_id || "Operator 10402"),
+        userId: toText(op.operator_id || "10402"),
+        timestamp: toText(op.start_time || stageStartTime),
+        description: `${toText(op.description || "Operation")} (Duration: ${toText(op.duration_sec || "0")}s)`,
+        status: "SUCCESS",
+      })) as unknown as WorkflowAuditEvent[];
+    }
     if (auditSearch.trim()) {
       const q = auditSearch.toLowerCase().trim();
       list = list.filter((e) => {
@@ -1426,7 +1510,7 @@ export default function BatchInfoScreen({ batchId }: BatchInfoScreenProps) {
       });
     }
     return list;
-  }, [auditEvents, auditSearch]);
+  }, [auditEvents, auditSearch, isComp, compOpHistory, stageStartTime]);
 
   const totalAudit = filteredAuditEvents.length;
   const safeAuditPage = Math.max(1, Math.min(auditPage, Math.ceil(totalAudit / auditPageSize) || 1));
@@ -1472,12 +1556,12 @@ export default function BatchInfoScreen({ batchId }: BatchInfoScreenProps) {
         ];
       case "COMP":
         return [
-          { key: "Turret_Speed", label: "Turret Speed", unit: "RPM", idealTarget: 35 },
-          { key: "Main_Force", label: "Main Compression Force", unit: "kN", idealTarget: 22.5 },
-          { key: "Pre_Force", label: "Pre-Compression Force", unit: "kN", idealTarget: 4.2 },
-          { key: "Feeder_Speed", label: "Feeder Speed", unit: "RPM", idealTarget: 28 },
-          { key: "Tablet_Weight", label: "Tablet Weight", unit: "mg", idealTarget: 250 },
-          { key: "Tablet_Hardness", label: "Hardness", unit: "N", idealTarget: 90 },
+          { key: "MainPressure", label: "Main Compression Force", unit: "kN", idealTarget: 14.83 },
+          { key: "PrePressure", label: "Pre-Compression Force", unit: "kN", idealTarget: 3.80 },
+          { key: "DiskSpeed", label: "Disk Speed", unit: "RPM", idealTarget: 18.0 },
+          { key: "FeederRpm", label: "Feeder Speed", unit: "RPM", idealTarget: 10.0 },
+          { key: "MainThickness", label: "Main-Pressure Thickness", unit: "mm", idealTarget: 4.28 },
+          { key: "FillingDepth", label: "Filling Depth", unit: "mm", idealTarget: 12.01 },
         ];
       case "COAT":
         return [
@@ -1609,12 +1693,6 @@ export default function BatchInfoScreen({ batchId }: BatchInfoScreenProps) {
     if (s.includes("REVIEW")) return "bg-blue-100 text-blue-800 border-blue-300";
     return "bg-amber-100 text-amber-800 border-amber-300";
   };
-
-  const isRmg = eqMeta.type === "RMG";
-  const isFbd = eqMeta.type === "FBD";
-  const isBle = eqMeta.type === "BLE";
-  const isComp = eqMeta.type === "COMP";
-  const isCoat = eqMeta.type === "COAT";
 
   return (
     <div className="flex-1 space-y-6 p-4 sm:p-6 bg-slate-50 text-slate-900 min-h-screen">
@@ -1922,13 +2000,13 @@ export default function BatchInfoScreen({ batchId }: BatchInfoScreenProps) {
               <div className="p-2.5 bg-slate-50/80 rounded-xl border border-slate-200/80">
                 <span className="text-[10px] uppercase font-bold text-slate-400 block">Equipment Name</span>
                 <span className="font-bold text-slate-900 mt-0.5 block">
-                  {eqMeta.name}
+                  {(isComp && toText(compBatchInfo.machineName)) ? toText(compBatchInfo.machineName) : eqMeta.name}
                 </span>
               </div>
               <div className="p-2.5 bg-slate-50/80 rounded-xl border border-slate-200/80">
                 <span className="text-[10px] uppercase font-bold text-slate-400 block">Equipment ID</span>
                 <span className="font-bold font-mono text-slate-900 mt-0.5 block">
-                  {eqMeta.code}
+                  {(isComp && toText(compBatchInfo.equipmentId)) ? toText(compBatchInfo.equipmentId) : eqMeta.code}
                 </span>
               </div>
               <div className="p-2.5 bg-slate-50/80 rounded-xl border border-slate-200/80">
@@ -1942,8 +2020,8 @@ export default function BatchInfoScreen({ batchId }: BatchInfoScreenProps) {
                 </span>
               </div>
               <div className="p-2.5 bg-slate-50/80 rounded-xl border border-slate-200/80">
-                <span className="text-[10px] uppercase font-bold text-slate-400 block">Block</span>
-                <span className="font-bold text-slate-900 mt-0.5 block">{eqMeta.block}</span>
+                <span className="text-[10px] uppercase font-bold text-slate-400 block">{isComp ? "Station / Block" : "Block"}</span>
+                <span className="font-bold text-slate-900 mt-0.5 block">{isComp ? `${toText(compBatchInfo.stationNo) || "Station 1"} (${eqMeta.block})` : eqMeta.block}</span>
               </div>
             </div>
           </div>
@@ -1962,29 +2040,37 @@ export default function BatchInfoScreen({ batchId }: BatchInfoScreenProps) {
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
               <div className="p-2.5 bg-slate-50/80 rounded-xl border border-slate-200/80">
                 <span className="text-[10px] uppercase font-bold text-slate-400 block">Batch Number</span>
-                <span className="font-bold font-mono text-indigo-700 mt-0.5 block">{queryBatchNo || "NL0026008"}</span>
+                <span className="font-bold font-mono text-indigo-700 mt-0.5 block">{toText(compBatchInfo.batchNo) || queryBatchNo || "-"}</span>
               </div>
               <div className="p-2.5 bg-slate-50/80 rounded-xl border border-slate-200/80">
                 <span className="text-[10px] uppercase font-bold text-slate-400 block">Lot Number</span>
                 <span className="font-bold font-mono text-slate-900 mt-0.5 block">
-                  {queryLotNo || toText(batchSummary?.lotNo) || "01 of 05"}
+                  {isComp ? (toText(compBatchInfo.derivedLotNo) || compressionLots[0]?.lotNo || "Not available") : (queryLotNo || toText(batchSummary?.lotNo) || "-")}
                 </span>
               </div>
               <div className="p-2.5 bg-slate-50/80 rounded-xl border border-slate-200/80">
                 <span className="text-[10px] uppercase font-bold text-slate-400 block">Product Name</span>
-                <span className="font-bold text-slate-900 mt-0.5 block truncate" title={toText(batchSummary?.productName) || "Mirtazapine Tablets USP 5 mg"}>
-                  {toText(batchSummary?.productName) || "Mirtazapine Tablets USP 5 mg"}
+                <span className="font-bold text-slate-900 mt-0.5 block truncate" title={toText(compBatchInfo.productName) || toText(batchSummary?.productName) || "-"}>
+                  {toText(compBatchInfo.productName) || toText(batchSummary?.productName) || "-"}
                 </span>
               </div>
               <div className="p-2.5 bg-slate-50/80 rounded-xl border border-slate-200/80">
-                <span className="text-[10px] uppercase font-bold text-slate-400 block">Product Code / Recipe</span>
+                <span className="text-[10px] uppercase font-bold text-slate-400 block">Product Code</span>
                 <span className="font-bold font-mono text-slate-900 mt-0.5 block">
-                  {toText(batchSummary?.productCode) || eqMeta.defaultRecipe}
+                  {toText(batchSummary?.productCode) || "-"}
+                </span>
+              </div>
+              <div className="p-2.5 bg-slate-50/80 rounded-xl border border-slate-200/80">
+                <span className="text-[10px] uppercase font-bold text-slate-400 block">Recipe Name</span>
+                <span className="font-bold text-slate-900 mt-0.5 block">
+                  {toText(batchSummary?.recipeName) || "-"}
                 </span>
               </div>
               <div className="p-2.5 bg-slate-50/80 rounded-xl border border-slate-200/80">
                 <span className="text-[10px] uppercase font-bold text-slate-400 block">Batch Size</span>
-                <span className="font-bold text-slate-900 mt-0.5 block">900.000 Kg</span>
+                <span className="font-bold text-slate-900 mt-0.5 block">
+                  {toText(batchSummary?.batchSize) || (compRecipe.targetQuantity ? `${Number(compRecipe.targetQuantity).toLocaleString()} Tabs` : "-")}
+                </span>
               </div>
               <div className="p-2.5 bg-slate-50/80 rounded-xl border border-slate-200/80">
                 <span className="text-[10px] uppercase font-bold text-slate-400 block">Start Time</span>
@@ -1999,14 +2085,30 @@ export default function BatchInfoScreen({ batchId }: BatchInfoScreenProps) {
                 </span>
               </div>
               <div className="p-2.5 bg-slate-50/80 rounded-xl border border-slate-200/80">
-                <span className="text-[10px] uppercase font-bold text-slate-400 block">Duration In Hours</span>
+                <span className="text-[10px] uppercase font-bold text-slate-400 block">{isComp ? "Running Time" : "Duration In Hours"}</span>
                 <span className="font-bold text-emerald-700 mt-0.5 block">
-                  {stageDuration}
+                  {(isComp && toText(compBatchInfo.runningTime)) ? toText(compBatchInfo.runningTime) : stageDuration}
                 </span>
               </div>
             </div>
           </div>
         </div>
+        {isComp && compressionLots.length > 0 && (
+          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900 mb-3">
+              Compression Production Reports ({compressionLots.length})
+            </h3>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {compressionLots.map((lot) => (
+                <div key={lot.lotNo} className="rounded-xl border border-slate-200 bg-slate-50/80 p-3">
+                  <div className="font-mono text-xs font-bold text-indigo-700">{lot.lotNo}</div>
+                  <div className="mt-1 truncate text-[11px] text-slate-600" title={lot.sourceFile}>{lot.sourceFile || "Source file unavailable"}</div>
+                  <div className="mt-1 text-[10px] text-slate-400">{toDisplayDate(lot.observedAt)}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </section>
 
       {/* =========================================================================
@@ -2143,29 +2245,88 @@ export default function BatchInfoScreen({ batchId }: BatchInfoScreenProps) {
                 </div>
                 <table className="w-full text-left text-xs text-slate-700">
                   <tbody className="divide-y divide-slate-100">
-                    <tr><td className="py-2 px-3.5 font-medium">TURRET / DISK SPEED (RPM)</td><td className="py-2 px-3.5 text-right font-mono font-bold">23.0</td></tr>
-                    <tr><td className="py-2 px-3.5 font-medium">FEEDER SPEED (RPM)</td><td className="py-2 px-3.5 text-right font-mono font-bold">13.0</td></tr>
-                    <tr><td className="py-2 px-3.5 font-medium">PRE-PRESSURE THICKNESS (mm)</td><td className="py-2 px-3.5 text-right font-mono font-bold">5.15</td></tr>
-                    <tr><td className="py-2 px-3.5 font-medium">MAIN PRESSURE THICKNESS (mm)</td><td className="py-2 px-3.5 text-right font-mono font-bold">2.33</td></tr>
-                    <tr><td className="py-2 px-3.5 font-medium">FILLING DEPTH (mm)</td><td className="py-2 px-3.5 text-right font-mono font-bold">6.87</td></tr>
-                    <tr><td className="py-2 px-3.5 font-medium">MAIN COMPRESSION FORCE (kN)</td><td className="py-2 px-3.5 text-right font-mono font-bold">8.55 (Ref: 8.65)</td></tr>
-                    <tr><td className="py-2 px-3.5 font-medium">PRODUCTION CAPACITY (Tabs/hr)</td><td className="py-2 px-3.5 text-right font-mono font-bold">201,480</td></tr>
+                    <tr><td className="py-2 px-3.5 font-medium">FEEDER AUTO %</td><td className="py-2 px-3.5 text-right font-mono font-bold">{displaySourceValue(compFeeder.autoPercent)} %</td></tr>
+                    <tr><td className="py-2 px-3.5 font-medium">FEEDER MANUAL SPEED</td><td className="py-2 px-3.5 text-right font-mono font-bold">{displaySourceValue(compFeeder.manualRpm)} RPM</td></tr>
+                    <tr><td className="py-2 px-3.5 font-medium">FILLING CAM</td><td className="py-2 px-3.5 text-right font-mono font-bold">{displaySourceValue(compRecipe.fillingCam)}</td></tr>
+                    <tr><td className="py-2 px-3.5 font-medium">TARGET QUANTITY</td><td className="py-2 px-3.5 text-right font-mono font-bold">{toText(compRecipe.targetQuantity) ? `${Number(compRecipe.targetQuantity).toLocaleString()} Tabs` : "Not available"}</td></tr>
+                    <tr><td className="py-2 px-3.5 font-medium">AIR PRESSURE LOW LIMIT</td><td className="py-2 px-3.5 text-right font-mono font-bold">{displaySourceValue(compRecipe.airPressureLowLimitKpa)} Kpa</td></tr>
+                    <tr><td className="py-2 px-3.5 font-medium">HYDRAULIC PRESSURE LIMITS</td><td className="py-2 px-3.5 text-right font-mono font-bold">Low: {displaySourceValue(compHydra.lowLimitMpa)} Mpa | High: {displaySourceValue(compHydra.highLimitMpa)} Mpa</td></tr>
+                    <tr><td className="py-2 px-3.5 font-medium">OIL LUBRICATION (S1 UPPER PUNCH)</td><td className="py-2 px-3.5 text-right font-mono font-bold">Interval: {displaySourceValueWithUnit(((compOil.upperPunchS1 || {}) as Record<string, unknown>).intervalMin, "Min")} | Supply: {displaySourceValueWithUnit(((compOil.upperPunchS1 || {}) as Record<string, unknown>).supplySec, "Sec")}</td></tr>
+                    <tr><td className="py-2 px-3.5 font-medium">OIL LUBRICATION (S2 LOWER PUNCH)</td><td className="py-2 px-3.5 text-right font-mono font-bold">Interval: {displaySourceValueWithUnit(((compOil.lowerPunchS2 || {}) as Record<string, unknown>).intervalMin, "Min")} | Supply: {displaySourceValueWithUnit(((compOil.lowerPunchS2 || {}) as Record<string, unknown>).supplySec, "Sec")}</td></tr>
+                    <tr><td className="py-2 px-3.5 font-medium">OIL LUBRICATION (S3 LOWER HEAD)</td><td className="py-2 px-3.5 text-right font-mono font-bold">Interval: {displaySourceValueWithUnit(((compOil.lowerHeadS3 || {}) as Record<string, unknown>).intervalMin, "Min")} | Supply: {displaySourceValueWithUnit(((compOil.lowerHeadS3 || {}) as Record<string, unknown>).supplySec, "Sec")}</td></tr>
+                    <tr><td className="py-2 px-3.5 font-medium">POWDER SUPPLY TIME</td><td className="py-2 px-3.5 text-right font-mono font-bold">{displaySourceValue(compRecipe.powderSupplyTimeSec)} Sec</td></tr>
+                    <tr><td className="py-2 px-3.5 font-medium">INITIAL REJECT TIME</td><td className="py-2 px-3.5 text-right font-mono font-bold">{displaySourceValue(compRecipe.initialRejectTimeSec)} Sec</td></tr>
                   </tbody>
                 </table>
               </div>
               <div className="overflow-hidden border border-slate-200 rounded-xl">
                 <div className="bg-slate-50 px-3.5 py-2 border-b border-slate-200 text-[11px] font-bold text-slate-600 uppercase">
-                  BATCH COUNTERS & MACHINE STATUS
+                  CONTROL LIMITS & STOP CONDITIONS (SEJONG 49D)
                 </div>
                 <table className="w-full text-left text-xs text-slate-700">
-                  <tbody className="divide-y divide-slate-100">
-                    <tr><td className="py-2 px-3.5 font-medium">TARGET QUANTITY (Tabs)</td><td className="py-2 px-3.5 text-right font-mono font-bold">2,000,000</td></tr>
-                    <tr><td className="py-2 px-3.5 font-medium">TOTAL COUNTER (Tabs)</td><td className="py-2 px-3.5 text-right font-mono font-bold">49,250</td></tr>
-                    <tr><td className="py-2 px-3.5 font-medium">GOOD TABLETS</td><td className="py-2 px-3.5 text-right font-mono font-bold text-emerald-600">30,001 (89.9%)</td></tr>
-                    <tr><td className="py-2 px-3.5 font-medium">HIGH REJECTION (HEP)</td><td className="py-2 px-3.5 text-right font-mono font-bold text-amber-600">3,352 (10.0%)</td></tr>
-                    <tr><td className="py-2 px-3.5 font-medium">LOW REJECTION (LEP)</td><td className="py-2 px-3.5 text-right font-mono font-bold">8 (0.0%)</td></tr>
-                    <tr><td className="py-2 px-3.5 font-medium">AIR PRESSURE (Kpa)</td><td className="py-2 px-3.5 text-right font-mono font-bold">555 (Min: 400)</td></tr>
-                    <tr><td className="py-2 px-3.5 font-medium">HYDRAULIC PRESSURE (Mpa)</td><td className="py-2 px-3.5 text-right font-mono font-bold">7.5 (Max: 15.0)</td></tr>
+                  <thead className="bg-slate-100 text-[10px] font-bold text-slate-600 uppercase">
+                    <tr>
+                      <th className="py-2 px-2.5">Parameter</th>
+                      <th className="py-2 px-2.5 text-center">% Setting</th>
+                      <th className="py-2 px-2.5 text-center">kN Limit</th>
+                      <th className="py-2 px-2.5">Stop Condition</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 font-mono text-[11px]">
+                    <tr>
+                      <td className="py-1.5 px-2.5 font-sans font-medium">HSP (High Stop Pressure)</td>
+                      <td className="py-1.5 px-2.5 text-center">{displaySourceValueWithUnit(((compControlLimits.hsp || {}) as Record<string, unknown>).percent, "%")}</td>
+                      <td className="py-1.5 px-2.5 text-center font-bold text-rose-700">{displaySourceValueWithUnit(((compControlLimits.hsp || {}) as Record<string, unknown>).kn, "kN")}</td>
+                      <td className="py-1.5 px-2.5 font-sans">Stop: {displaySourceValue(((compControlLimits.hsp || {}) as Record<string, unknown>).stop)}</td>
+                    </tr>
+                    <tr>
+                      <td className="py-1.5 px-2.5 font-sans font-medium">HEP (High Error Pressure)</td>
+                      <td className="py-1.5 px-2.5 text-center">{displaySourceValueWithUnit(((compControlLimits.hep || {}) as Record<string, unknown>).percent, "%")}</td>
+                      <td className="py-1.5 px-2.5 text-center font-bold text-amber-700">{displaySourceValueWithUnit(((compControlLimits.hep || {}) as Record<string, unknown>).kn, "kN")}</td>
+                      <td className="py-1.5 px-2.5 font-sans">{displaySourceValueWithUnit(((compControlLimits.hep || {}) as Record<string, unknown>).rot, "Rot")} / {displaySourceValueWithUnit(((compControlLimits.hep || {}) as Record<string, unknown>).tabs, "Tabs")}</td>
+                    </tr>
+                    <tr>
+                      <td className="py-1.5 px-2.5 font-sans font-medium">HCP (High Control Pressure)</td>
+                      <td className="py-1.5 px-2.5 text-center">{displaySourceValueWithUnit(((compControlLimits.hcp || {}) as Record<string, unknown>).percent, "%")}</td>
+                      <td className="py-1.5 px-2.5 text-center font-bold text-slate-700">{displaySourceValueWithUnit(((compControlLimits.hcp || {}) as Record<string, unknown>).kn, "kN")}</td>
+                      <td className="py-1.5 px-2.5 font-sans">{displaySourceValueWithUnit(((compControlLimits.hcp || {}) as Record<string, unknown>).times, "Times")}</td>
+                    </tr>
+                    <tr className="bg-indigo-50/60 font-semibold">
+                      <td className="py-1.5 px-2.5 font-sans font-bold text-indigo-900">Ref (Reference Pressure)</td>
+                      <td className="py-1.5 px-2.5 text-center text-slate-400">-</td>
+                      <td className="py-1.5 px-2.5 text-center font-bold text-indigo-700">{displaySourceValueWithUnit(((compControlLimits.ref || {}) as Record<string, unknown>).kn, "kN")}</td>
+                      <td className="py-1.5 px-2.5 font-sans text-slate-400">-</td>
+                    </tr>
+                    <tr>
+                      <td className="py-1.5 px-2.5 font-sans font-medium">LCP (Low Control Pressure)</td>
+                      <td className="py-1.5 px-2.5 text-center">{displaySourceValueWithUnit(((compControlLimits.lcp || {}) as Record<string, unknown>).percent, "%")}</td>
+                      <td className="py-1.5 px-2.5 text-center font-bold text-slate-700">{displaySourceValueWithUnit(((compControlLimits.lcp || {}) as Record<string, unknown>).kn, "kN")}</td>
+                      <td className="py-1.5 px-2.5 font-sans">{displaySourceValueWithUnit(((compControlLimits.lcp || {}) as Record<string, unknown>).times, "Times")}</td>
+                    </tr>
+                    <tr>
+                      <td className="py-1.5 px-2.5 font-sans font-medium">LEP (Low Error Pressure)</td>
+                      <td className="py-1.5 px-2.5 text-center">{displaySourceValueWithUnit(((compControlLimits.lep || {}) as Record<string, unknown>).percent, "%")}</td>
+                      <td className="py-1.5 px-2.5 text-center font-bold text-amber-700">{displaySourceValueWithUnit(((compControlLimits.lep || {}) as Record<string, unknown>).kn, "kN")}</td>
+                      <td className="py-1.5 px-2.5 font-sans">{displaySourceValueWithUnit(((compControlLimits.lep || {}) as Record<string, unknown>).rot, "Rot")} / {displaySourceValueWithUnit(((compControlLimits.lep || {}) as Record<string, unknown>).tabs, "Tabs")}</td>
+                    </tr>
+                    <tr>
+                      <td className="py-1.5 px-2.5 font-sans font-medium">LSP (Low Stop Pressure)</td>
+                      <td className="py-1.5 px-2.5 text-center">{displaySourceValueWithUnit(((compControlLimits.lsp || {}) as Record<string, unknown>).percent, "%")}</td>
+                      <td className="py-1.5 px-2.5 text-center font-bold text-rose-700">{displaySourceValueWithUnit(((compControlLimits.lsp || {}) as Record<string, unknown>).kn, "kN")}</td>
+                      <td className="py-1.5 px-2.5 font-sans">Stop: {displaySourceValue(((compControlLimits.lsp || {}) as Record<string, unknown>).stop)}</td>
+                    </tr>
+                    <tr>
+                      <td className="py-1.5 px-2.5 font-sans font-medium">SD Limit</td>
+                      <td className="py-1.5 px-2.5 text-center">{displaySourceValueWithUnit(((compControlLimits.sdLimit || {}) as Record<string, unknown>).percent, "%")}</td>
+                      <td className="py-1.5 px-2.5 text-center text-slate-400">-</td>
+                      <td className="py-1.5 px-2.5 font-sans">Stop: {displaySourceValue(((compControlLimits.sdLimit || {}) as Record<string, unknown>).stop)}</td>
+                    </tr>
+                    <tr>
+                      <td className="py-1.5 px-2.5 font-sans font-medium">Pre HSP</td>
+                      <td className="py-1.5 px-2.5 text-center text-slate-400">-</td>
+                      <td className="py-1.5 px-2.5 text-center font-bold text-rose-700">{displaySourceValueWithUnit(((compControlLimits.preHsp || {}) as Record<string, unknown>).kn, "kN")}</td>
+                      <td className="py-1.5 px-2.5 font-sans">Stop: {displaySourceValue(((compControlLimits.preHsp || {}) as Record<string, unknown>).stop)}</td>
+                    </tr>
                   </tbody>
                 </table>
               </div>
@@ -2326,7 +2487,13 @@ export default function BatchInfoScreen({ batchId }: BatchInfoScreenProps) {
                 )}
               </div>
               <p className="text-xs text-slate-400 mt-0.5">
-                Process telemetry table with compact <strong className="text-indigo-600 font-bold font-mono">Set / Actual</strong> parameter value display
+                {isComp
+                  ? "Operational telemetry, compression pressure data, machine values and production tablet counters"
+                  : (
+                    <>
+                      Process telemetry table with compact <strong className="text-indigo-600 font-bold font-mono">Set / Actual</strong> parameter value display
+                    </>
+                  )}
               </p>
             </div>
           </div>
@@ -2411,6 +2578,234 @@ export default function BatchInfoScreen({ batchId }: BatchInfoScreenProps) {
           </div>
         </div>
 
+        {isComp && (
+          <div className="space-y-6">
+            {/* Panel 1: Pressure Data & Adjust Depth (kN / mm) */}
+            <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
+              <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <SlidersHorizontal className="h-5 w-5 text-indigo-600" />
+                    Compression Pressure Data & Adjust Depth
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Pre & Main Compression Pressures (kN) with multi-point load cell analysis and turret depth adjustments
+                  </p>
+                </div>
+                <span className="px-2.5 py-1 rounded-md text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 font-mono">
+                  SEJONG 49D COMPRESSION
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                {/* Pre Pressure */}
+                <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">Pre Compression Pressure</span>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-100 text-blue-800 font-bold">kN</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="p-2 rounded bg-white border border-slate-200">
+                      <span className="text-[10px] text-slate-400 font-semibold block">ACTUAL</span>
+                      <span className="text-sm font-bold font-mono text-slate-900">{displaySourceValue(compPrePressure?.meanKn)}</span>
+                    </div>
+                    <div className="p-2 rounded bg-white border border-slate-200">
+                      <span className="text-[10px] text-slate-400 font-semibold block">AVERAGE</span>
+                      <span className="text-sm font-bold font-mono text-slate-900">{displaySourceValue(compPrePressure?.meanKn)}</span>
+                    </div>
+                    <div className="p-2 rounded bg-white border border-slate-200">
+                      <span className="text-[10px] text-slate-400 font-semibold block">MAXIMUM</span>
+                      <span className="text-sm font-bold font-mono text-slate-900">{displaySourceValue(compPrePressure?.maxKn)}</span>
+                    </div>
+                    <div className="p-2 rounded bg-white border border-slate-200">
+                      <span className="text-[10px] text-slate-400 font-semibold block">MINIMUM</span>
+                      <span className="text-sm font-bold font-mono text-slate-900">{displaySourceValue(compPrePressure?.minKn)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Main Pressure */}
+                <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">Main Compression Pressure</span>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 font-bold">kN</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="p-2 rounded bg-white border border-slate-200">
+                      <span className="text-[10px] text-slate-400 font-semibold block">ACTUAL</span>
+                      <span className="text-sm font-bold font-mono text-slate-900">{displaySourceValue(compMainPressure?.meanKn)}</span>
+                    </div>
+                    <div className="p-2 rounded bg-white border border-slate-200">
+                      <span className="text-[10px] text-slate-400 font-semibold block">AVERAGE</span>
+                      <span className="text-sm font-bold font-mono text-slate-900">{displaySourceValue(compMainPressure?.meanKn)}</span>
+                    </div>
+                    <div className="p-2 rounded bg-white border border-slate-200">
+                      <span className="text-[10px] text-slate-400 font-semibold block">MAXIMUM</span>
+                      <span className="text-sm font-bold font-mono text-slate-900">{displaySourceValue(compMainPressure?.maxKn)}</span>
+                    </div>
+                    <div className="p-2 rounded bg-white border border-slate-200">
+                      <span className="text-[10px] text-slate-400 font-semibold block">MINIMUM</span>
+                      <span className="text-sm font-bold font-mono text-slate-900">{displaySourceValue(compMainPressure?.minKn)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Adjust Depth */}
+                <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">Adjust Depth</span>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold">mm</span>
+                  </div>
+                  <div className="space-y-2 text-xs">
+                    <div className="p-2 rounded bg-white border border-slate-200 flex items-center justify-between">
+                      <span className="text-[11px] text-slate-600 font-semibold">Pre Thickness</span>
+                      <span className="text-sm font-bold font-mono text-slate-900">{displaySourceValue(((compOpVals.prePressure || {}) as Record<string, unknown>).thicknessMm)} mm</span>
+                    </div>
+                    <div className="p-2 rounded bg-white border border-slate-200 flex items-center justify-between">
+                      <span className="text-[11px] text-slate-600 font-semibold">Main Thickness</span>
+                      <span className="text-sm font-bold font-mono text-slate-900">{displaySourceValue(((compOpVals.mainPressure || {}) as Record<string, unknown>).thicknessMm)} mm</span>
+                    </div>
+                    <div className="p-2 rounded bg-white border border-slate-200 flex items-center justify-between">
+                      <span className="text-[11px] text-slate-600 font-semibold">Filling Depth</span>
+                      <span className="text-sm font-bold font-mono text-slate-900">{displaySourceValue(compOpVals?.fillingDepthMm)} mm</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Panel 2: Operation Values & Auxiliary Machine State */}
+            <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
+              <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <Cpu className="h-5 w-5 text-indigo-600" />
+                    Machine Operation Values & Auxiliary Status
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Active drive speeds, cam settings, pneumatic air and hydraulic pressure status
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                <div className="p-3 rounded-xl border border-slate-200 bg-slate-50/50">
+                  <span className="text-[10px] text-slate-400 uppercase font-bold block">Disk Speed</span>
+                  <span className="text-base font-bold font-mono text-slate-900">{displaySourceValue(compOpVals?.diskSpeedRpm)}</span>
+                  <span className="text-[10px] text-slate-500 font-semibold block">RPM</span>
+                </div>
+                <div className="p-3 rounded-xl border border-slate-200 bg-slate-50/50">
+                  <span className="text-[10px] text-slate-400 uppercase font-bold block">Production Rate</span>
+                  <span className="text-base font-bold font-mono text-slate-900">{displaySourceValue(compOpVals?.capacityTabsPerHour)}</span>
+                  <span className="text-[10px] text-slate-500 font-semibold block">Tab / hr</span>
+                </div>
+                <div className="p-3 rounded-xl border border-slate-200 bg-slate-50/50">
+                  <span className="text-[10px] text-slate-400 uppercase font-bold block">Feeder Speed</span>
+                  <span className="text-base font-bold font-mono text-slate-900">{displaySourceValue(((compOpVals.feeder || {}) as Record<string, unknown>).speedRpm ?? compFeeder?.manualRpm)}</span>
+                  <span className="text-[10px] text-slate-500 font-semibold block">RPM</span>
+                </div>
+                <div className="p-3 rounded-xl border border-slate-200 bg-slate-50/50">
+                  <span className="text-[10px] text-slate-400 uppercase font-bold block">Current Cam</span>
+                  <span className="text-base font-bold font-mono text-slate-900">{displaySourceValue(compOpVals?.currentCam ?? compRecipe?.fillingCam)}</span>
+                  <span className="text-[10px] text-slate-500 font-semibold block">mm</span>
+                </div>
+                <div className="p-3 rounded-xl border border-slate-200 bg-slate-50/50">
+                  <span className="text-[10px] text-slate-400 uppercase font-bold block">Main Air Pressure</span>
+                  <span className="text-base font-bold font-mono text-slate-900">{displaySourceValue(compOpVals?.mainAirPressureKpa)}</span>
+                  <span className="text-[10px] text-slate-500 font-semibold block">kPa</span>
+                </div>
+                <div className="p-3 rounded-xl border border-slate-200 bg-slate-50/50">
+                  <span className="text-[10px] text-slate-400 uppercase font-bold block">Hydraulic Pressure</span>
+                  <span className="text-base font-bold font-mono text-slate-900">{displaySourceValue(compOpVals?.hydraulicPressureMpa)}</span>
+                  <span className="text-[10px] text-slate-500 font-semibold block">MPa</span>
+                </div>
+                <div className="p-3 rounded-xl border border-slate-200 bg-slate-50/50">
+                  <span className="text-[10px] text-slate-400 uppercase font-bold block">Lubrication Rem.</span>
+                  <span className="text-base font-bold font-mono text-slate-900">{displaySourceValue(((compOpVals.lubricationRemainingMin || {}) as Record<string, unknown>).upperPunchS1)}</span>
+                  <span className="text-[10px] text-slate-500 font-semibold block">min</span>
+                </div>
+                <div className="p-3 rounded-xl border border-slate-200 bg-slate-50/50">
+                  <span className="text-[10px] text-slate-400 uppercase font-bold block">Feeder Mode</span>
+                  <span className="text-base font-bold font-mono text-slate-900">{displaySourceValue(((compOpVals.feeder || {}) as Record<string, unknown>).status)}</span>
+                  <span className="text-[10px] text-slate-500 font-semibold block">Control</span>
+                </div>
+                <div className="p-3 rounded-xl border border-slate-200 bg-slate-50/50">
+                  <span className="text-[10px] text-slate-400 uppercase font-bold block">Powder Supply</span>
+                  <span className="text-base font-bold font-mono text-slate-900">{displaySourceValue(compRecipe?.powderSupplyTimeSec)}</span>
+                  <span className="text-[10px] text-slate-500 font-semibold block">sec</span>
+                </div>
+                <div className="p-3 rounded-xl border border-slate-200 bg-slate-50/50">
+                  <span className="text-[10px] text-slate-400 uppercase font-bold block">Initial Reject</span>
+                  <span className="text-base font-bold font-mono text-slate-900">{displaySourceValue(compRecipe?.initialRejectTimeSec)}</span>
+                  <span className="text-[10px] text-slate-500 font-semibold block">sec</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Panel 3: Tablet Production Counters */}
+            <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
+              <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <ListNumbers className="h-5 w-5 text-indigo-600" />
+                    Tablet Production Counters & Rejection Analysis
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Real-time batch yield, good tablet quantities, and AWC rejection breakdown
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50">
+                  <span className="text-[10px] text-slate-400 uppercase font-bold block">Total Counter</span>
+                  <span className="text-xl font-bold font-mono text-slate-900">{displaySourceValue(compCounters?.totalCounter)}</span>
+                  <span className="text-[10px] text-slate-500 font-semibold block">Tablets</span>
+                </div>
+                <div className="p-4 rounded-xl border border-emerald-200 bg-emerald-50/50">
+                  <span className="text-[10px] text-emerald-600 uppercase font-bold block">Good Tablets</span>
+                  <span className="text-xl font-bold font-mono text-emerald-900">{displaySourceValue(compGood?.count)}</span>
+                  <span className="text-[10px] text-emerald-600 font-semibold block font-mono">{displaySourceValue(compGood?.raw)}</span>
+                </div>
+                <div className="p-4 rounded-xl border border-amber-200 bg-amber-50/50">
+                  <span className="text-[10px] text-amber-600 uppercase font-bold block">AWC Counter</span>
+                  <span className="text-xl font-bold font-mono text-amber-900">{displaySourceValue(compCounters?.awcCounter)}</span>
+                  <span className="text-[10px] text-amber-600 font-semibold block">Auto Rejections</span>
+                </div>
+                <div className="p-4 rounded-xl border border-rose-200 bg-rose-50/50">
+                  <span className="text-[10px] text-rose-600 uppercase font-bold block">HEP (High Reject)</span>
+                  <span className="text-xl font-bold font-mono text-rose-900">{displaySourceValue(compHep?.count)}</span>
+                  <span className="text-[10px] text-rose-600 font-semibold block font-mono">{displaySourceValue(compHep?.raw)}</span>
+                </div>
+                <div className="p-4 rounded-xl border border-purple-200 bg-purple-50/50">
+                  <span className="text-[10px] text-purple-600 uppercase font-bold block">LEP (Low Reject)</span>
+                  <span className="text-xl font-bold font-mono text-purple-900">{displaySourceValue(compLep?.count)}</span>
+                  <span className="text-[10px] text-purple-600 font-semibold block font-mono">{displaySourceValue(compLep?.raw)}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Panels 4-5: source-complete Tightness and Tablet Checker sections */}
+            {[{ title: "Tightness", data: compTightness }, { title: "Tablet Checker", data: compTabletChecker }].map((section) => (
+              <div key={section.title} className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
+                <h3 className="text-sm font-bold text-slate-900">{section.title}</h3>
+                <div className="overflow-hidden rounded-xl border border-slate-200">
+                  <table className="w-full text-xs">
+                    <tbody className="divide-y divide-slate-100">
+                      {flattenCompressionSection(section.data).map((row) => (
+                        <tr key={`${section.title}-${row.label}`}>
+                          <td className="px-3.5 py-2 font-medium text-slate-600">{row.label.replace(/([A-Z])/g, " $1").trim()}</td>
+                          <td className="px-3.5 py-2 text-right font-mono font-bold text-slate-900">{displaySourceValue(row.value)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Operational Detail Values Table with Set / Actual */}
         <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
           <div className="overflow-hidden border border-slate-200 rounded-xl">
@@ -2428,11 +2823,13 @@ export default function BatchInfoScreen({ batchId }: BatchInfoScreenProps) {
                       return (
                         <th key={col.key} className="py-3 px-3.5 whitespace-nowrap">
                           <div className="font-bold text-slate-800">{meta.parameterName} ({meta.unit})</div>
-                          <div className="text-[9px] font-mono text-indigo-600 font-semibold normal-case">
-                            {lim && (lim.lowerCriticalLimit !== undefined || lim.upperCriticalLimit !== undefined) ? (
-                              <span>Lim: [{lim.lowerCriticalLimit ?? "-"} to {lim.upperCriticalLimit ?? "-"}]</span>
-                            ) : null}
-                          </div>
+                          {!isComp && (
+                            <div className="text-[9px] font-mono text-indigo-600 font-semibold normal-case">
+                              {lim && (lim.lowerCriticalLimit !== undefined || lim.upperCriticalLimit !== undefined) ? (
+                                <span>Lim: [{lim.lowerCriticalLimit ?? "-"} to {lim.upperCriticalLimit ?? "-"}]</span>
+                              ) : null}
+                            </div>
+                          )}
                         </th>
                       );
                     })}
@@ -2518,8 +2915,8 @@ export default function BatchInfoScreen({ batchId }: BatchInfoScreenProps) {
 
                             return (
                               <td key={col.key} className="py-2.5 px-3.5 whitespace-nowrap">
-                                <span className={evaluation.statusClass} title={`Set: ${setVal ?? "-"} | Actual: ${evaluation.formattedValue}`}>
-                                  {displaySetActual}
+                                <span className={evaluation.statusClass} title={isComp ? `Actual: ${evaluation.formattedValue}` : `Set: ${setVal ?? "-"} | Actual: ${evaluation.formattedValue}`}>
+                                  {isComp ? evaluation.formattedValue : displaySetActual}
                                 </span>
                               </td>
                             );
@@ -3014,12 +3411,25 @@ export default function BatchInfoScreen({ batchId }: BatchInfoScreenProps) {
                       { u: `191164 (${eqMeta.block} ${eqMeta.code} Supervisor)`, dt: "11/02/2026 11:02:31", act: "Login", isLog: true },
                     ];
                   } else if (eqMeta.type === "COMP") {
-                    sessions = [
-                      { u: `10402 (${eqMeta.block} ${eqMeta.code} Supervisor)`, dt: "11/02/2026 14:15:00", act: "Login", isLog: true },
-                      { u: `10401 (${eqMeta.block} ${eqMeta.code} Operator)`, dt: "11/02/2026 14:16:30", act: "Login", isLog: true },
-                      { u: `10401 (${eqMeta.block} ${eqMeta.code} Operator)`, dt: "11/02/2026 18:40:00", act: "Logout Successfully", isLog: false },
-                      { u: `10402 (${eqMeta.block} ${eqMeta.code} Supervisor)`, dt: "11/02/2026 18:45:20", act: "Logout Successfully", isLog: false },
-                    ];
+                    if (compLoginHistory && compLoginHistory.length > 0) {
+                      sessions = compLoginHistory.map((l: Record<string, unknown>) => {
+                        const actStr = toText(l.action || (toText(l.event_type) === "LOGIN" ? "Login" : "Logout Successfully"));
+                        const isLogin = actStr.toLowerCase().includes("login") && !actStr.toLowerCase().includes("logout");
+                        return {
+                          u: `${toText(l.user_id || l.username || "10402")} (${toText(l.username ? l.username + " - " : "")}${eqMeta.block} ${eqMeta.code} ${isLogin ? "Operator" : "Supervisor"})`,
+                          dt: toText(l.event_time || stageStartTime),
+                          act: actStr,
+                          isLog: isLogin,
+                        };
+                      });
+                    } else {
+                      sessions = [
+                        { u: `10402 (${eqMeta.block} ${eqMeta.code} Supervisor)`, dt: "11/02/2026 14:15:00", act: "Login", isLog: true },
+                        { u: `10401 (${eqMeta.block} ${eqMeta.code} Operator)`, dt: "11/02/2026 14:16:30", act: "Login", isLog: true },
+                        { u: `10401 (${eqMeta.block} ${eqMeta.code} Operator)`, dt: "11/02/2026 18:40:00", act: "Logout Successfully", isLog: false },
+                        { u: `10402 (${eqMeta.block} ${eqMeta.code} Supervisor)`, dt: "11/02/2026 18:45:20", act: "Logout Successfully", isLog: false },
+                      ];
+                    }
                   } else if (eqMeta.type === "COAT") {
                     sessions = [
                       { u: `191257 (${eqMeta.block} ${eqMeta.code} Supervisor)`, dt: "12/02/2026 08:30:00", act: "Login", isLog: true },

@@ -84,7 +84,7 @@ export const equipmentRows: EquipmentRow[] = [
     lastActive: "Just now",
   },
   {
-    id: "MB040",
+    id: "MC081",
     tenantId: "TNT-0001",
     plantId: "PLNT-0001",
     plantName: "PB1 Production Plant",
@@ -93,7 +93,7 @@ export const equipmentRows: EquipmentRow[] = [
     areaId: "AREA-0001",
     areaName: "MODULE-B",
     roomNo: "RM-PB1-02",
-    roomName: "Compression Room 02",
+    roomName: "Compression Room",
     status: "Running",
     stateReason: "RUNNING",
     lastBatchNo: "ADNC26011",

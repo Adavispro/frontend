@@ -8,6 +8,11 @@ import { sessionInactivityManager } from "@/services/session/sessionInactivityMa
 
 export default function SessionInactivityController() {
   const pathname = usePathname();
+  // Temporary rollout switch: inactivity/expiry enforcement remains active in the
+  // manager, while only the interactive "Continue Session" warning is suppressed.
+  // Set NEXT_PUBLIC_CONTINUE_SESSION_POPUP_ENABLED=true to restore the popup.
+  const isContinueSessionPopupEnabled =
+    process.env.NEXT_PUBLIC_CONTINUE_SESSION_POPUP_ENABLED === "true";
 
   const isPublicRoute =
     !pathname ||
@@ -34,7 +39,7 @@ export default function SessionInactivityController() {
     logoutNow,
   } = useSessionInactivity(!isPublicRoute);
 
-  if (isPublicRoute || !isWarningOpen) {
+  if (isPublicRoute || !isContinueSessionPopupEnabled || !isWarningOpen) {
     return null;
   }
 

@@ -12,7 +12,7 @@ export interface EquipmentMeta {
 
 /**
  * Resolves equipment metadata, display names, makes, areas, and equipment type
- * from canonical equipment identifiers (MB003, MB004, MB005, MB040, MB041)
+ * from canonical equipment identifiers (MB003, MB004, MB005, MC081, MB041)
  * or legacy tags (G5RMG, FBDC0220, RMG, FBD, BLE, COMP, COAT, CIP).
  */
 export function resolveEquipmentInfo(codeOrType: string = ""): EquipmentMeta {
@@ -79,23 +79,26 @@ export function resolveEquipmentInfo(codeOrType: string = ""): EquipmentMeta {
     };
   }
 
-  // 4. ROTARY TABLET PRESS / COMPRESSION (MB040)
+  // 4. ROTARY TABLET PRESS / COMPRESSION (MC081). MB040 is accepted only
+  // as a legacy inbound alias and always resolves to the active MC081 master.
   if (
+    norm === "MC081" ||
     norm === "MB040" ||
     norm.includes("COMP") ||
     norm.includes("TAB") ||
     norm === "TABC0225" ||
     norm === "G5COMP" ||
+    norm.includes("SEJONG") ||
     norm.includes("PRESS")
   ) {
     return {
       type: "COMP",
-      code: norm === "MB040" ? "MB040" : norm || "MB040",
+      code: "MC081",
       name: "ROTARY TABLET PRESS (COMPRESSION)",
       make: "SEJONG PHARMATECH",
       area: "MODULE-B",
       block: "PB1",
-      defaultRecipe: "STGW2000",
+      defaultRecipe: "RCP-SERTRALINE-100MG-COMP",
     };
   }
 

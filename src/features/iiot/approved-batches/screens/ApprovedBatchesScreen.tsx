@@ -492,9 +492,17 @@ export default function ApprovedBatchesScreen() {
 
         <div className="flex flex-wrap items-center gap-3">
           <button
-            onClick={loadData}
-            disabled={isLoading}
-            className="inline-flex items-center gap-2 px-3.5 py-2 bg-white hover:bg-slate-100 text-slate-700 rounded-lg text-sm font-medium border border-slate-200 shadow-sm transition disabled:opacity-50"
+            type="button"
+            onClick={() => {
+              if (!isLoading) {
+                loadData();
+              }
+            }}
+            aria-disabled={isLoading}
+            suppressHydrationWarning
+            className={`inline-flex items-center gap-2 px-3.5 py-2 bg-white text-slate-700 rounded-lg text-sm font-medium border border-slate-200 shadow-sm transition ${
+              isLoading ? "opacity-60 cursor-not-allowed pointer-events-none" : "hover:bg-slate-100 cursor-pointer"
+            }`}
           >
             <ArrowClockwise className={`h-4 w-4 text-slate-600 ${isLoading ? "animate-spin" : ""}`} />
             <span>Refresh Queue</span>
