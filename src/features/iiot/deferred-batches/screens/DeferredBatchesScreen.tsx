@@ -145,9 +145,11 @@ export default function DeferredBatchesScreen() {
             `${summary.lineId || "LINE"}_${batchNo}`
         );
 
-        for (const stage of stages) {
+        for (const [stageIdx, stage] of stages.entries()) {
           const equipmentCode = toText(stage.equipmentCode || stage.equipmentId);
           const equipmentType = toText(stage.equipmentType || equipmentCode.slice(-3)).toUpperCase();
+          const stageLotNo = toText(stage.lotNo || stage.derivedLotNo || lotNo || batchNo);
+          const stageId = toText(stage.stageId || `STAGE-${stageIdx + 1}`);
           const approval = (stage.approval as Record<string, unknown>) || {};
           const rawStatus = toText(approval.status || "PENDING").toUpperCase();
 
@@ -156,15 +158,15 @@ export default function DeferredBatchesScreen() {
             continue;
           }
 
-          const sequence = typeof stage.sequenceOrder === "number" ? stage.sequenceOrder : 1;
+          const sequence = typeof stage.sequenceOrder === "number" ? stage.sequenceOrder : stageIdx + 1;
           const displayStatus = "Deferred";
-          const id = `${summaryId}:${batchNo}:${lotNo}:${equipmentCode}:${sequence}`;
+          const id = `${summaryId}:${batchNo}:${stageLotNo}:${equipmentCode}:${stageId}:${sequence}:${stageIdx}`;
 
           let allowedActions: AllowedWorkflowAction[] = [];
           try {
             allowedActions = await getAllowedActions({
               batchNo,
-              lotNo,
+              lotNo: stageLotNo,
               equipmentCode,
             });
           } catch (err) {
@@ -174,7 +176,7 @@ export default function DeferredBatchesScreen() {
           extracted.push({
             id,
             batchNo,
-            lotNo,
+            lotNo: stageLotNo,
             productCode,
             productName: productName || "Allopurinol / Standard",
             equipmentCode,
@@ -496,15 +498,16 @@ export default function DeferredBatchesScreen() {
         </div>
 
         {/* Filter Controls Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5">
+        <div suppressHydrationWarning className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5">
           {/* 1. Product Code */}
-          <div className="space-y-1">
+          <div suppressHydrationWarning className="space-y-1">
             <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wider flex items-center gap-1">
               <Barcode className="h-3.5 w-3.5 text-slate-400" />
               Product Code
             </label>
-            <div className="relative">
+            <div suppressHydrationWarning className="relative">
               <input
+                suppressHydrationWarning
                 type="text"
                 list="deferredProductCodeList"
                 placeholder="e.g. STAPU1000"
@@ -519,6 +522,7 @@ export default function DeferredBatchesScreen() {
               </datalist>
               {filters.productCode && (
                 <button
+                  suppressHydrationWarning
                   type="button"
                   onClick={() => handleFilterChange("productCode", "")}
                   className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
@@ -530,13 +534,14 @@ export default function DeferredBatchesScreen() {
           </div>
 
           {/* 2. Product Name (Auto-populated & Read-Only if Code selected) */}
-          <div className="space-y-1">
+          <div suppressHydrationWarning className="space-y-1">
             <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wider flex items-center gap-1">
               <Flask className="h-3.5 w-3.5 text-slate-400" />
               Product Name
             </label>
-            <div className="relative">
+            <div suppressHydrationWarning className="relative">
               <input
+                suppressHydrationWarning
                 type="text"
                 placeholder="Auto-populated name"
                 value={filters.productName}
@@ -550,6 +555,7 @@ export default function DeferredBatchesScreen() {
               />
               {filters.productName && !filters.productCode && (
                 <button
+                  suppressHydrationWarning
                   type="button"
                   onClick={() => handleFilterChange("productName", "")}
                   className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
@@ -561,13 +567,14 @@ export default function DeferredBatchesScreen() {
           </div>
 
           {/* 3. Batch Number */}
-          <div className="space-y-1">
+          <div suppressHydrationWarning className="space-y-1">
             <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wider flex items-center gap-1">
               <Hash className="h-3.5 w-3.5 text-slate-400" />
               Batch Number
             </label>
-            <div className="relative">
+            <div suppressHydrationWarning className="relative">
               <input
+                suppressHydrationWarning
                 type="text"
                 placeholder="e.g. BATCH-G5-001"
                 value={filters.batchNo}
@@ -576,6 +583,7 @@ export default function DeferredBatchesScreen() {
               />
               {filters.batchNo && (
                 <button
+                  suppressHydrationWarning
                   type="button"
                   onClick={() => handleFilterChange("batchNo", "")}
                   className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
@@ -587,13 +595,14 @@ export default function DeferredBatchesScreen() {
           </div>
 
           {/* 4. Equipment Type */}
-          <div className="space-y-1">
+          <div suppressHydrationWarning className="space-y-1">
             <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wider flex items-center gap-1">
               <Gear className="h-3.5 w-3.5 text-slate-400" />
               Equipment Type
             </label>
-            <div className="relative">
+            <div suppressHydrationWarning className="relative">
               <select
+                suppressHydrationWarning
                 value={filters.equipmentType}
                 onChange={(e) => handleFilterChange("equipmentType", e.target.value)}
                 className="w-full appearance-none bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 pr-8 text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition cursor-pointer"
@@ -618,13 +627,14 @@ export default function DeferredBatchesScreen() {
           </div>
 
           {/* 5. Lot Number */}
-          <div className="space-y-1">
+          <div suppressHydrationWarning className="space-y-1">
             <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wider flex items-center gap-1">
               <Tag className="h-3.5 w-3.5 text-slate-400" />
               Lot Number
             </label>
-            <div className="relative">
+            <div suppressHydrationWarning className="relative">
               <input
+                suppressHydrationWarning
                 type="text"
                 placeholder="e.g. LOT-G5-001"
                 value={filters.lotNo}
@@ -633,6 +643,7 @@ export default function DeferredBatchesScreen() {
               />
               {filters.lotNo && (
                 <button
+                  suppressHydrationWarning
                   type="button"
                   onClick={() => handleFilterChange("lotNo", "")}
                   className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
@@ -644,13 +655,14 @@ export default function DeferredBatchesScreen() {
           </div>
 
           {/* 6. Deferred By */}
-          <div className="space-y-1">
+          <div suppressHydrationWarning className="space-y-1">
             <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wider flex items-center gap-1">
               <User className="h-3.5 w-3.5 text-slate-400" />
               Deferred By
             </label>
-            <div className="relative">
+            <div suppressHydrationWarning className="relative">
               <input
+                suppressHydrationWarning
                 type="text"
                 placeholder="User name / ID"
                 value={filters.deferredBy}
@@ -659,6 +671,7 @@ export default function DeferredBatchesScreen() {
               />
               {filters.deferredBy && (
                 <button
+                  suppressHydrationWarning
                   type="button"
                   onClick={() => handleFilterChange("deferredBy", "")}
                   className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
@@ -675,6 +688,7 @@ export default function DeferredBatchesScreen() {
           <div className="relative flex-1 max-w-md w-full">
             <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
             <input
+              suppressHydrationWarning
               type="text"
               placeholder="Search across deferred batches & reasons..."
               value={filters.searchTerm}
@@ -683,6 +697,7 @@ export default function DeferredBatchesScreen() {
             />
             {filters.searchTerm && (
               <button
+                suppressHydrationWarning
                 type="button"
                 onClick={() => handleFilterChange("searchTerm", "")}
                 className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"

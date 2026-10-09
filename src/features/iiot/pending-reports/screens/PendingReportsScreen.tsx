@@ -181,18 +181,20 @@ export default function PendingReportsScreen() {
               `${summary.lineId || "LINE"}_${batchNo}`
           );
 
-          for (const stage of stages) {
+          stages.forEach((stage, stageIdx) => {
             const equipmentCode = toText(stage.equipmentCode || stage.equipmentId);
             const equipmentType = toText(stage.equipmentType || equipmentCode.slice(-3)).toUpperCase();
+            const stageLotNo = toText(stage.lotNo || stage.derivedLotNo || lotNo || batchNo);
+            const stageId = toText(stage.stageId || `STAGE-${stageIdx + 1}`);
             const approval = (stage.approval as Record<string, unknown>) || {};
             const rawStatus = toText(approval.status || "PENDING").toUpperCase();
 
-            // Exclude approved, completed, and deferred batches (deferred batches belong on their separate page)
-            if (rawStatus === "APPROVED" || rawStatus === "COMPLETED" || rawStatus === "DEFERRED") {
-              continue;
+            // Exclude approved and deferred batches (deferred batches belong on their separate page)
+            if (rawStatus === "APPROVED" || rawStatus === "DEFERRED") {
+              return;
             }
 
-            const sequence = typeof stage.sequenceOrder === "number" ? stage.sequenceOrder : 1;
+            const sequence = typeof stage.sequenceOrder === "number" ? stage.sequenceOrder : stageIdx + 1;
             let displayStatus = rawStatus.replace(/_/g, " ");
             if (rawStatus === "REVIEWER_REVIEWED" || rawStatus === "PENDING_APPROVAL") {
               displayStatus = "Pending Approval";
@@ -209,12 +211,12 @@ export default function PendingReportsScreen() {
               displayStatus = "Pending Submission";
             }
 
-            const id = `${summaryId}:${batchNo}:${lotNo}:${equipmentCode}:${sequence}`;
+            const id = `${summaryId}:${batchNo}:${stageLotNo}:${equipmentCode}:${stageId}:${sequence}:${stageIdx}`;
 
             extracted.push({
               id,
               batchNo,
-              lotNo,
+              lotNo: stageLotNo,
               productCode,
               productName: productName || "Mirtazapine Tablets USP 5 mg",
               equipmentCode,
@@ -227,7 +229,7 @@ export default function PendingReportsScreen() {
               allowedActions: [],
               summaryRef: summary,
             });
-          }
+          });
         }
 
         setItems(extracted);
@@ -579,13 +581,14 @@ export default function PendingReportsScreen() {
       )}
 
       {/* Explicit In-Page Hierarchical Filter Toolbar */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
+      <div suppressHydrationWarning className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
         {/* Top Filter Row: Search + Status Selector + Reset */}
-        <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+        <div suppressHydrationWarning className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 pb-3 border-b border-slate-100">
           {/* Keyword Search Input */}
-          <div className="relative flex-1 max-w-lg">
+          <div suppressHydrationWarning className="relative flex-1 max-w-lg">
             <MagnifyingGlass className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <input
+              suppressHydrationWarning
               type="text"
               placeholder="Search by batch, lot, product, or equipment..."
               value={filters.searchTerm}
@@ -594,6 +597,7 @@ export default function PendingReportsScreen() {
             />
             {filters.searchTerm && (
               <button
+                suppressHydrationWarning
                 type="button"
                 onClick={() => handleFilterChange("searchTerm", "")}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
@@ -603,13 +607,14 @@ export default function PendingReportsScreen() {
             )}
           </div>
 
-          <div className="flex flex-wrap items-center gap-2.5">
+          <div suppressHydrationWarning className="flex flex-wrap items-center gap-2.5">
             {/* Workflow Status Filter Dropdown */}
-            <div className="flex items-center gap-1.5">
+            <div suppressHydrationWarning className="flex items-center gap-1.5">
               <label htmlFor="filter-status" className="text-xs font-bold text-slate-600 whitespace-nowrap">
                 Workflow Status:
               </label>
               <select
+                suppressHydrationWarning
                 id="filter-status"
                 value={filters.status}
                 onChange={(e) => handleFilterChange("status", e.target.value)}
@@ -627,6 +632,7 @@ export default function PendingReportsScreen() {
             {/* Clear All Filters Button */}
             {activeFilterCount > 0 && (
               <button
+                suppressHydrationWarning
                 type="button"
                 onClick={handleResetFilters}
                 className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-xl transition shadow-sm"
@@ -640,13 +646,14 @@ export default function PendingReportsScreen() {
         </div>
 
         {/* Hierarchical Explicit Filter Row (Product Code -> Product Name (Read-Only) -> Batch No -> Equipment -> Lot No) */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 pt-1">
+        <div suppressHydrationWarning className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 pt-1">
           {/* Level 1: Product Code */}
-          <div className="space-y-1">
+          <div suppressHydrationWarning className="space-y-1">
             <label className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
               <Tag className="h-3.5 w-3.5 text-indigo-500" /> Product Code:
             </label>
             <select
+              suppressHydrationWarning
               value={filters.productCode}
               onChange={(e) => handleFilterChange("productCode", e.target.value)}
               className="w-full bg-slate-50 hover:bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500 transition shadow-sm"
@@ -661,11 +668,12 @@ export default function PendingReportsScreen() {
           </div>
 
           {/* Product Name: Read-Only Textbox (Populates on Product Code selection) */}
-          <div className="space-y-1">
+          <div suppressHydrationWarning className="space-y-1">
             <label className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
               <Flask className="h-3.5 w-3.5 text-blue-500" /> Product Name:
             </label>
             <input
+              suppressHydrationWarning
               type="text"
               readOnly
               value={filters.productName || (filters.productCode === "ALL" ? "All Products Active" : "-")}
@@ -676,11 +684,12 @@ export default function PendingReportsScreen() {
           </div>
 
           {/* Level 2: Batch Number (Cascading based on Product Code) */}
-          <div className="space-y-1">
+          <div suppressHydrationWarning className="space-y-1">
             <label className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
               <Barcode className="h-3.5 w-3.5 text-emerald-500" /> Batch Number:
             </label>
             <select
+              suppressHydrationWarning
               value={filters.batchNo}
               onChange={(e) => handleFilterChange("batchNo", e.target.value)}
               className="w-full bg-slate-50 hover:bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500 transition shadow-sm"
@@ -695,11 +704,12 @@ export default function PendingReportsScreen() {
           </div>
 
           {/* Level 3: Equipment Type (Cascading based on Product + Batch) */}
-          <div className="space-y-1">
+          <div suppressHydrationWarning className="space-y-1">
             <label className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
               <Gear className="h-3.5 w-3.5 text-purple-500" /> Equipment Type:
             </label>
             <select
+              suppressHydrationWarning
               value={filters.equipmentType}
               onChange={(e) => handleFilterChange("equipmentType", e.target.value)}
               className="w-full bg-slate-50 hover:bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500 transition shadow-sm"
@@ -714,11 +724,12 @@ export default function PendingReportsScreen() {
           </div>
 
           {/* Level 4: Lot Number (Cascading based on Product + Batch + Equipment) */}
-          <div className="space-y-1">
+          <div suppressHydrationWarning className="space-y-1">
             <label className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
               <Hash className="h-3.5 w-3.5 text-amber-500" /> Lot Number:
             </label>
             <select
+              suppressHydrationWarning
               value={filters.lotNo}
               onChange={(e) => handleFilterChange("lotNo", e.target.value)}
               className="w-full bg-slate-50 hover:bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500 transition shadow-sm"
@@ -752,7 +763,7 @@ export default function PendingReportsScreen() {
         </div>
       </div>
 
-      {/* Pending Batches Table */}
+      {/* Active Pending Batches Table */}
       <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs text-slate-700">
@@ -885,7 +896,7 @@ export default function PendingReportsScreen() {
                         {item.displayStatus}
                       </span>
                     </td>
-                    <td className="py-3 px-4 text-slate-500 font-mono text-[11px]">
+                    <td className="py-3 px-4 text-slate-500 font-mono text-[11px]" suppressHydrationWarning>
                       {toDisplayDate(item.pendingSince)}
                     </td>
                     <td className="py-3 px-4 text-right">

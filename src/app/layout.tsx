@@ -37,8 +37,9 @@ export default function RootLayout({
     <html
       lang="en"
       className={`${poppins.variable} ${alanSans.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
-      <body className="min-h-full font-sans">
+      <body className="min-h-full font-sans" suppressHydrationWarning>
         {children}
         <SessionInactivityController />
       </body>

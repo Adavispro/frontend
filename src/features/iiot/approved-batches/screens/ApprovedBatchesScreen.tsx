@@ -165,19 +165,23 @@ export default function ApprovedBatchesScreen() {
             `${summary.lineId || "LINE"}_${batchNo}`
         );
 
-        for (const stage of stages) {
+        stages.forEach((stage, stageIdx) => {
           const equipmentCode = toText(stage.equipmentCode || stage.equipmentId);
           const equipmentType = toText(stage.equipmentType || equipmentCode.slice(-3)).toUpperCase();
+          const stageLotNo = toText(stage.lotNo || stage.derivedLotNo || lotNo || batchNo);
+          const stageId = toText(stage.stageId || `STAGE-${stageIdx + 1}`);
           const approval = (stage.approval as Record<string, unknown>) || {};
-          const rawStatus = toText(approval.status || summary.overallStatus || summary.batchStatus || "PENDING").toUpperCase();
+          const stageApprovalStatus = toText(approval.status).toUpperCase();
+          const overallStatus = toText(summary.overallStatus).toUpperCase();
+          const rawStatus = stageApprovalStatus || (overallStatus === "APPROVED" ? "APPROVED" : "PENDING");
 
-          // CRITICAL: Approved Batches MUST show ONLY status = APPROVED / COMPLETED
-          if (rawStatus !== "APPROVED" && rawStatus !== "COMPLETED") {
-            continue;
+          // CRITICAL: Approved Batches MUST show ONLY status = APPROVED
+          if (rawStatus !== "APPROVED") {
+            return;
           }
 
-          const sequence = typeof stage.sequenceOrder === "number" ? stage.sequenceOrder : 1;
-          const id = `${summaryId}:${batchNo}:${lotNo}:${equipmentCode}:${sequence}`;
+          const sequence = typeof stage.sequenceOrder === "number" ? stage.sequenceOrder : stageIdx + 1;
+          const id = `${summaryId}:${batchNo}:${stageLotNo}:${equipmentCode}:${stageId}:${sequence}:${stageIdx}`;
 
           const stagePrintCount = typeof (stage as Record<string, unknown>).printCount === "number"
             ? ((stage as Record<string, unknown>).printCount as number)
@@ -192,15 +196,15 @@ export default function ApprovedBatchesScreen() {
           extracted.push({
             id,
             batchNo,
-            lotNo,
+            lotNo: stageLotNo,
             productCode,
             productName: productName || "Allopurinol / Standard",
             equipmentCode,
             equipmentType,
             workflowStage: `Stage ${sequence} (${equipmentType})`,
             stageSequence: sequence,
-            approvedBy: toText(approval.approvedBy || approval.transitionedBy || "QA Approver"),
-            approvedAt: toText(approval.approvedAt || approval.transitionedAt || summary.updatedAt),
+            approvedBy: toText(approval.approvedBy || approval.transitionedBy || ""),
+            approvedAt: toText(approval.approvedAt || approval.transitionedAt || ""),
             rawStatus,
             displayStatus: "Approved",
             pdfDocumentId: toText(approval.pdfDocumentId || summary.pdfDocumentId),
@@ -210,7 +214,7 @@ export default function ApprovedBatchesScreen() {
             lastPrintReason: stageLastPrintReason,
             summaryRef: summary,
           });
-        }
+        });
       }
 
       setItems(extracted);
@@ -525,13 +529,14 @@ export default function ApprovedBatchesScreen() {
       )}
 
       {/* Explicit In-Page Hierarchical Filter Toolbar */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
+      <div suppressHydrationWarning className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
         {/* Top Filter Row: Search + Date Range + Clear */}
-        <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+        <div suppressHydrationWarning className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 pb-3 border-b border-slate-100">
           {/* Keyword Search Input */}
-          <div className="relative flex-1 max-w-lg">
+          <div suppressHydrationWarning className="relative flex-1 max-w-lg">
             <MagnifyingGlass className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <input
+              suppressHydrationWarning
               type="text"
               placeholder="Search by batch, lot, product, or equipment..."
               value={filters.searchTerm}
@@ -540,6 +545,7 @@ export default function ApprovedBatchesScreen() {
             />
             {filters.searchTerm && (
               <button
+                suppressHydrationWarning
                 type="button"
                 onClick={() => handleFilterChange("searchTerm", "")}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
@@ -549,13 +555,14 @@ export default function ApprovedBatchesScreen() {
             )}
           </div>
 
-          <div className="flex flex-wrap items-center gap-2.5">
+          <div suppressHydrationWarning className="flex flex-wrap items-center gap-2.5">
             {/* Approved By Dropdown */}
-            <div className="flex items-center gap-1.5">
+            <div suppressHydrationWarning className="flex items-center gap-1.5">
               <label className="text-xs font-bold text-slate-600 whitespace-nowrap">
                 Approved By:
               </label>
               <select
+                suppressHydrationWarning
                 value={filters.approvedBy}
                 onChange={(e) => handleFilterChange("approvedBy", e.target.value)}
                 className="bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-sm"
@@ -572,6 +579,7 @@ export default function ApprovedBatchesScreen() {
             {/* Clear All Filters Button */}
             {activeFilterCount > 0 && (
               <button
+                suppressHydrationWarning
                 type="button"
                 onClick={handleResetFilters}
                 className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-xl transition shadow-sm"
@@ -585,13 +593,14 @@ export default function ApprovedBatchesScreen() {
         </div>
 
         {/* Hierarchical Explicit Filter Row */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 pt-1">
+        <div suppressHydrationWarning className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 pt-1">
           {/* Level 1: Product Code */}
-          <div className="space-y-1">
+          <div suppressHydrationWarning className="space-y-1">
             <label className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
               <Tag className="h-3.5 w-3.5 text-indigo-500" /> Product Code:
             </label>
             <select
+              suppressHydrationWarning
               value={filters.productCode}
               onChange={(e) => handleFilterChange("productCode", e.target.value)}
               className="w-full bg-slate-50 hover:bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition shadow-sm"
@@ -606,11 +615,12 @@ export default function ApprovedBatchesScreen() {
           </div>
 
           {/* Product Name: Read-Only Textbox */}
-          <div className="space-y-1">
+          <div suppressHydrationWarning className="space-y-1">
             <label className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
               <Flask className="h-3.5 w-3.5 text-blue-500" /> Product Name:
             </label>
             <input
+              suppressHydrationWarning
               type="text"
               readOnly
               value={filters.productName || (filters.productCode === "ALL" ? "All Products Active" : "-")}
@@ -621,11 +631,12 @@ export default function ApprovedBatchesScreen() {
           </div>
 
           {/* Level 2: Batch Number (Cascading) */}
-          <div className="space-y-1">
+          <div suppressHydrationWarning className="space-y-1">
             <label className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
               <Barcode className="h-3.5 w-3.5 text-emerald-500" /> Batch Number:
             </label>
             <select
+              suppressHydrationWarning
               value={filters.batchNo}
               onChange={(e) => handleFilterChange("batchNo", e.target.value)}
               className="w-full bg-slate-50 hover:bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition shadow-sm"
@@ -640,11 +651,12 @@ export default function ApprovedBatchesScreen() {
           </div>
 
           {/* Level 3: Equipment Type (Cascading) */}
-          <div className="space-y-1">
+          <div suppressHydrationWarning className="space-y-1">
             <label className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
               <Gear className="h-3.5 w-3.5 text-purple-500" /> Equipment Type:
             </label>
             <select
+              suppressHydrationWarning
               value={filters.equipmentType}
               onChange={(e) => handleFilterChange("equipmentType", e.target.value)}
               className="w-full bg-slate-50 hover:bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition shadow-sm"
@@ -659,11 +671,12 @@ export default function ApprovedBatchesScreen() {
           </div>
 
           {/* Level 4: Lot Number (Cascading) */}
-          <div className="space-y-1">
+          <div suppressHydrationWarning className="space-y-1">
             <label className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
               <Hash className="h-3.5 w-3.5 text-amber-500" /> Lot Number:
             </label>
             <select
+              suppressHydrationWarning
               value={filters.lotNo}
               onChange={(e) => handleFilterChange("lotNo", e.target.value)}
               className="w-full bg-slate-50 hover:bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition shadow-sm"
@@ -697,7 +710,7 @@ export default function ApprovedBatchesScreen() {
         </div>
       </div>
 
-      {/* Table Container */}
+      {/* Active Approved Batches Table Container */}
       <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden flex flex-col">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs text-slate-700">
@@ -815,7 +828,7 @@ export default function ApprovedBatchesScreen() {
                         </span>
                         <div className="text-[10px] text-slate-500 mt-0.5">{item.workflowStage}</div>
                       </td>
-                      <td className="px-4 py-3 text-slate-600 font-mono text-[11px]">
+                      <td className="px-4 py-3 text-slate-600 font-mono text-[11px]" suppressHydrationWarning>
                         {toDisplayDate(item.approvedAt)}
                       </td>
                       <td className="px-4 py-3 font-medium text-slate-800">
