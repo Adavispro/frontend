@@ -188,6 +188,12 @@ export default function PendingReportsScreen() {
             const stageId = toText(stage.stageId || `STAGE-${stageIdx + 1}`);
             const approval = (stage.approval as Record<string, unknown>) || {};
             const rawStatus = toText(approval.status || "PENDING").toUpperCase();
+            // Exclude unexecuted placeholder stages from other equipment runs
+            const executionStatus = toText(stage.executionStatus).toUpperCase();
+            const hasActivity = Boolean(stage.stageStartAt || stage.stageEndAt || (stage.recordCount && Number(stage.recordCount) > 0));
+            if (executionStatus === "NOT_STARTED" && !hasActivity) {
+              return;
+            }
 
             // Exclude approved and deferred batches (deferred batches belong on their separate page)
             if (rawStatus === "APPROVED" || rawStatus === "DEFERRED") {
@@ -869,8 +875,8 @@ export default function PendingReportsScreen() {
                   </td>
                 </tr>
               ) : (
-                paginatedItems.map((item) => (
-                  <tr key={item.id} className="hover:bg-slate-50/80 transition group">
+                paginatedItems.map((item, index) => (
+                  <tr key={item.id ? `${item.id}-${index}` : `row-${index}`} className="hover:bg-slate-50/80 transition group">
                     <td className="py-3 px-4 font-mono font-medium text-slate-900">
                       <div className="font-bold text-slate-900">{item.batchNo}</div>
                       <div className="text-[11px] text-slate-500 font-sans">{item.lotNo}</div>

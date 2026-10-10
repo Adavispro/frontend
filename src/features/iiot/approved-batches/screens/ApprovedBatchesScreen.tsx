@@ -798,7 +798,7 @@ export default function ApprovedBatchesScreen() {
                   </td>
                 </tr>
               ) : (
-                paginatedItems.map((item) => {
+                paginatedItems.map((item, index) => {
                   const detailUrl = `${ROUTES.iiotBatchInfo}/${encodeURIComponent(
                     item.batchNo
                   )}?batchNo=${encodeURIComponent(item.batchNo)}&lotNo=${encodeURIComponent(
@@ -811,7 +811,7 @@ export default function ApprovedBatchesScreen() {
 
                   return (
                     <tr
-                      key={item.id}
+                      key={item.id ? `${item.id}-${index}` : `row-${index}`}
                       className="hover:bg-slate-50/80 transition group"
                     >
                       <td className="px-4 py-3 font-mono font-medium text-slate-900">

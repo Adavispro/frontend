@@ -164,7 +164,11 @@ const eventCategory = (record: AlarmEventRecord) => {
   return "Others";
 };
 
-import { RECIPE_IDEAL_BATCH_TIMES_HOURS, getShiftForDate } from "@/features/iiot/analytics/utils/oee-engine";
+import { getShiftForDate } from "@/features/iiot/analytics/utils/oee-engine";
+
+const RECIPE_IDEAL_BATCH_TIMES_HOURS: Record<string, number> = {
+  G5FBD: 5, G5RMG: 0.75, G5OGB: 0.42, G5COAT: 1.25,
+};
 
 type ComputedBatch = {
   batch: BatchSummary;

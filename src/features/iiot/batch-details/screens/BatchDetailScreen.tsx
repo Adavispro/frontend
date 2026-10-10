@@ -60,11 +60,7 @@ import DynamicProcessTrendChart, {
   type TrendLimitConfig,
   type TrendPointStatus,
 } from "../components/DynamicProcessTrendChart";
-import { RMG_ALARM_SUMMARY_MOCK, RMG_AUDIT_TRAIL_MOCK } from "../data/rmgMockData";
-import { FBD_ALARM_SUMMARY_MOCK, FBD_AUDIT_TRAIL_MOCK } from "../data/fbdMockData";
-import { BLE_AUDIT_TRAIL_MOCK } from "../data/bleMockData";
-import { COAT_ALARM_SUMMARY_MOCK, COAT_AUDIT_TRAIL_MOCK } from "../data/coatMockData";
-import { COMP_ALARM_SUMMARY_MOCK, COMP_AUDIT_TRAIL_MOCK } from "../data/compMockData";
+
 import { resolveEquipmentInfo, type EquipmentMeta } from "@/features/iiot/utils/equipment-resolver";
 import Pagination from "@/components/ui/Pagination";
 import { WorkflowActionModal } from "../../components/WorkflowActionModal";
@@ -74,6 +70,7 @@ import {
 } from "../components/RequestInformationModal";
 import { Question } from "@phosphor-icons/react";
 import { evaluateParameterStatus } from "@/features/iiot/equipment/utils/parameter-status";
+import { CompressionReportView } from "../components/CompressionReportView";
 import { ROUTES } from "@/config/routes";
 import { getSafeReturnTo } from "@/utils/navigation";
 
@@ -321,24 +318,89 @@ export function calculateAlarmSeverity(record: Record<string, unknown>): "CRITIC
   return "INFO";
 }
 
-const getAlarmEventTime = (a: Record<string, unknown>): string =>
-  toText(a.occurred_time || a.Occurred_Time || a.occurredTime || a.dt || a.eventAt || a.alarm_time || a.time_string || a.event_time || a.timestamp);
+const getAlarmEventTime = (a: Record<string, unknown>): string => {
+  const ev = (a.event || {}) as Record<string, unknown>;
+  const meta = (a.meta || {}) as Record<string, unknown>;
+  const source = (a.source || {}) as Record<string, unknown>;
+  return toText(
+    a.occurred_time ||
+    a.Occurred_Time ||
+    a.occurredTime ||
+    a.occurred_at ||
+    a.occurredAt ||
+    a.event_time ||
+    a.eventAt ||
+    a.timestamp ||
+    a.observedAt ||
+    a.time ||
+    a.dt ||
+    a.alarm_time ||
+    a.time_string ||
+    ev.occurred_time ||
+    ev.occurredTime ||
+    ev.occurredAt ||
+    ev.event_time ||
+    ev.eventAt ||
+    ev.timestamp ||
+    meta.occurred_time ||
+    meta.event_time ||
+    meta.eventAt ||
+    meta.timestamp ||
+    source.eventAt ||
+    source.timestamp
+  );
+};
 
 const getAlarmCode = (a: Record<string, unknown>): string => {
+  const ev = (a.event || {}) as Record<string, unknown>;
+  const meta = (a.meta || {}) as Record<string, unknown>;
   if (a.alarmCode) return toText(a.alarmCode);
+  if (a.alarm_code) return toText(a.alarm_code);
+  if (a.alarmId) return toText(a.alarmId);
+  if (a.alarm_id) return toText(a.alarm_id);
   if (a.msg_number) return `ALM-${a.msg_number}`;
   if (a.code) return toText(a.code);
+  if (ev.alarmCode) return toText(ev.alarmCode);
+  if (ev.alarmId) return toText(ev.alarmId);
+  if (ev.code) return toText(ev.code);
+  const eq = toText(meta.equipmentCode || meta.equipmentId || meta.equipment_code || meta.equipment_id || a.equipmentCode || a.equipment_code);
+  if (eq) return `${eq}-ALM`;
   return "ALM-EVENT";
 };
 
-const getAlarmDescription = (a: Record<string, unknown>): string =>
-  toText(a.alarmName || a.alarm_name || a.Alarm_Name || a.description || a.msg_text || a.var1 || a.message || "Process threshold limit deviation");
+const getAlarmDescription = (a: Record<string, unknown>): string => {
+  const ev = (a.event || {}) as Record<string, unknown>;
+  const meta = (a.meta || {}) as Record<string, unknown>;
+  return toText(
+    a.alarm_name ||
+    a.Alarm_Name ||
+    a.alarmName ||
+    meta.alarm_name ||
+    meta.alarmName ||
+    a.alarmDescription ||
+    a.description ||
+    a.msg_text ||
+    a.MsgText ||
+    a.var1 ||
+    a.message ||
+    a.text ||
+    ev.alarm_name ||
+    ev.alarmName ||
+    ev.text ||
+    ev.description ||
+    ev.msg_text ||
+    getAlarmCode(a)
+  );
+};
 
 const getAlarmResolvedTime = (a: Record<string, unknown>): string => {
   const ev = (a.event || {}) as Record<string, unknown>;
+  const meta = (a.meta || {}) as Record<string, unknown>;
   const direct = toText(
     a.resolved_time || a.Resolved_Time || a.resolvedTime || a.resolvedAt ||
-    ev.resolved_time || ev.Resolved_Time || ev.resolvedTime || ""
+    a.recovery_time || a.endTime || a.end_time || a.clearedAt ||
+    meta.resolved_time || meta.resolvedTime ||
+    ev.resolved_time || ev.Resolved_Time || ev.resolvedTime || ev.resolvedAt || ""
   );
   if (direct === "-") return "-";
   if (direct) return direct;
@@ -367,14 +429,38 @@ const getAlarmResolvedTime = (a: Record<string, unknown>): string => {
 
 const getAlarmDuration = (a: Record<string, unknown>): string => {
   const ev = (a.event || {}) as Record<string, unknown>;
+  const meta = (a.meta || {}) as Record<string, unknown>;
   const direct = toText(
-    a.duration || a.Duration || a.time_string || a.timeString ||
+    a.duration || a.Duration || a.duration_sec || a.durationSec || a.durationSeconds ||
+    a.time_string || a.timeString || meta.duration ||
     ev.duration || ev.Duration || ""
   );
   if (direct === "-") return "-";
-  if (direct && direct !== "00:03:44") return direct;
+  if (direct && direct !== "00:03:44") {
+    if (/^\d+$/.test(direct)) {
+      const diffSec = Number(direct);
+      const hrs = Math.floor(diffSec / 3600);
+      const mins = Math.floor((diffSec % 3600) / 60);
+      const secs = diffSec % 60;
+      return `${String(hrs).padStart(2, "0")}:${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+    }
+    return direct;
+  }
 
   const occ = getAlarmEventTime(a);
+  const res = getAlarmResolvedTime(a);
+  if (occ && res && res !== "-") {
+    const start = parseFlexibleTimestamp(occ);
+    const end = parseFlexibleTimestamp(res);
+    if (start && end && end >= start) {
+      const diffSec = Math.floor((end - start) / 1000);
+      const hrs = Math.floor(diffSec / 3600);
+      const mins = Math.floor((diffSec % 3600) / 60);
+      const secs = diffSec % 60;
+      return `${String(hrs).padStart(2, "0")}:${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+    }
+  }
+
   if (occ.includes("18:43:46") || occ.includes("18:44:55")) return "-";
   if (occ.includes("19:03:08")) return "00:00:31";
   if (occ.includes("18:47:04")) return "00:14:28";
@@ -432,13 +518,96 @@ function getMetricValue(metrics: Record<string, unknown> | undefined, ...candida
     }
   }
 
-  // 2. Normalized key match (stripping underscores, hyphens, and casing)
+  // 2. Normalized alphanumeric key match
   const entries = Object.entries(metrics);
   for (const k of candidateKeys) {
     const cleanK = k.toLowerCase().replace(/[^a-z0-9]/g, "");
     for (const [key, val] of entries) {
       const cleanKey = key.toLowerCase().replace(/[^a-z0-9]/g, "");
       if (cleanKey === cleanK && val !== undefined && val !== null && val !== "") {
+        return val as string | number;
+      }
+    }
+  }
+
+  // 3. Fuzzy semantic match for telemetry variants & typos
+  for (const k of candidateKeys) {
+    const target = k.toLowerCase().replace(/[^a-z0-9]/g, "");
+    for (const [key, val] of entries) {
+      if (val === undefined || val === null || val === "" || val === "-") continue;
+      const norm = key.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+      // Inlet temp matching
+      if ((target.includes("inlet") || target.includes("inlettemp") || target.includes("inletair")) &&
+          (norm.includes("inlet") && (norm.includes("temp") || norm.includes("temparature")))) {
+        return val as string | number;
+      }
+      // Outlet / Exhaust temp matching
+      if ((target.includes("outlet") || target.includes("exhaust")) &&
+          ((norm.includes("outlet") || norm.includes("exhaust")) && (norm.includes("temp") || norm.includes("temparature")))) {
+        return val as string | number;
+      }
+      // Bed temp matching
+      if (target.includes("bed") && (norm.includes("bed") && (norm.includes("temp") || norm.includes("temparature")))) {
+        return val as string | number;
+      }
+      // Pan speed / Dosing speed
+      if (target.includes("pan") && norm.includes("pan") && norm.includes("speed")) {
+        return val as string | number;
+      }
+      if (target.includes("dosing") && norm.includes("dosing")) {
+        return val as string | number;
+      }
+      // Agitator / Impeller Speed
+      if ((target.includes("ag") || target.includes("impeller") || target.includes("agitator")) && target.includes("speed") &&
+          (norm.includes("ag") || norm.includes("impeller") || norm.includes("agitator") || norm === "speed") && norm.includes("speed")) {
+        return val as string | number;
+      }
+      // Chopper / Granulator Speed
+      if ((target.includes("chp") || target.includes("chopper") || target.includes("granulator")) && target.includes("speed") &&
+          (norm.includes("chp") || norm.includes("chopper") || norm.includes("granulator")) && norm.includes("speed")) {
+        return val as string | number;
+      }
+      // Agitator / Impeller Current (Amps)
+      if ((target.includes("ag") || target.includes("impeller") || target.includes("agitator")) && (target.includes("amp") || target.includes("current")) &&
+          (norm.includes("ag") || norm.includes("impeller") || norm.includes("agitator") || norm.includes("current") || norm.includes("amp"))) {
+        return val as string | number;
+      }
+      // Chopper / Granulator Current
+      if ((target.includes("chp") || target.includes("chopper") || target.includes("granulator")) && (target.includes("amp") || target.includes("current")) &&
+          (norm.includes("chp") || norm.includes("chopper") || norm.includes("granulator")) && (norm.includes("amp") || norm.includes("current"))) {
+        return val as string | number;
+      }
+      // Duration / Time
+      if (target.includes("dur") && norm.includes("dur")) {
+        return val as string | number;
+      }
+      // Blender Speed
+      if (target.includes("blender") && (norm.includes("blender") || norm === "speed")) {
+        return val as string | number;
+      }
+      // Vacuum Pressure / Level
+      if (target.includes("vacuum") && norm.includes("vacuum")) {
+        return val as string | number;
+      }
+      // Motor Current
+      if (target.includes("motor") && (norm.includes("motor") || norm.includes("current") || norm.includes("amp"))) {
+        return val as string | number;
+      }
+      // Air flow
+      if (target.includes("flow") && (norm.includes("flow") || norm.includes("air"))) {
+        return val as string | number;
+      }
+      // Moisture / LOD
+      if ((target.includes("moist") || target.includes("lod")) && (norm.includes("moist") || norm.includes("lod"))) {
+        return val as string | number;
+      }
+      // Spray rate
+      if (target.includes("spray") && norm.includes("spray")) {
+        return val as string | number;
+      }
+      // Atomizing pressure
+      if (target.includes("atom") && (norm.includes("atom") || norm.includes("press"))) {
         return val as string | number;
       }
     }
@@ -455,24 +624,28 @@ function resolveMetricLimits(
   equipmentCode: string,
   limits: CriticalParameterLimit[],
   criticalParams: CriticalParameter[],
-): { parameterName: string; unit: string; limits?: TrendLimitConfig } {
-  const normKey = metricKey.toLowerCase().replace(/[^a-z0-9]/g, "");
+): { parameterName: string; unit: string; idealTarget?: number; limits?: TrendLimitConfig } {
+  const normKey = metricKey
+    .toLowerCase()
+    .replace(/temparature/g, "temp")
+    .replace(/temperature/g, "temp")
+    .replace(/[^a-z0-9]/g, "");
 
   // Match against Critical Parameters list
   const matchedParam = criticalParams.find((p) => {
-    const pCode = (p.parameterCode || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-    const pName = (p.parameterName || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    const pCode = (p.parameterCode || "").toLowerCase().replace(/temparature/g, "temp").replace(/temperature/g, "temp").replace(/[^a-z0-9]/g, "");
+    const pName = (p.parameterName || "").toLowerCase().replace(/temparature/g, "temp").replace(/temperature/g, "temp").replace(/[^a-z0-9]/g, "");
     return pCode.includes(normKey) || normKey.includes(pCode) || pName.includes(normKey) || normKey.includes(pName);
   });
 
   const unit = toText(matchedParam?.unitOfMeasure) ||
-    (normKey.includes("temp") ? "°C" : normKey.includes("speed") ? "RPM" : normKey.includes("amp") ? "A" : normKey.includes("press") ? "bar" : normKey.includes("flow") ? "L/h" : normKey.includes("moist") ? "%" : "units");
+    (normKey.includes("temp") ? "°C" : normKey.includes("speed") ? "RPM" : normKey.includes("amp") ? "A" : normKey.includes("press") ? "bar" : normKey.includes("flow") ? "m³/h" : normKey.includes("moist") ? "%" : normKey.includes("time") || normKey.includes("dur") ? (normKey.includes("sec") ? "Sec" : "min") : "units");
 
   // Match against Critical Parameter Limits metadata
   const matchedLimit = limits.find((l) => {
-    const lCode = (l.parameterCode || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-    const lName = (l.parameterName || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-    const lLimitCode = ((l as Record<string, unknown>).parameterLimitCode as string || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    const lCode = (l.parameterCode || "").toLowerCase().replace(/temparature/g, "temp").replace(/temperature/g, "temp").replace(/[^a-z0-9]/g, "");
+    const lName = (l.parameterName || "").toLowerCase().replace(/temparature/g, "temp").replace(/temperature/g, "temp").replace(/[^a-z0-9]/g, "");
+    const lLimitCode = ((l as Record<string, unknown>).parameterLimitCode as string || "").toLowerCase().replace(/temparature/g, "temp").replace(/temperature/g, "temp").replace(/[^a-z0-9]/g, "");
     return (
       lCode.includes(normKey) || normKey.includes(lCode) ||
       lName.includes(normKey) || normKey.includes(lName) ||
@@ -490,46 +663,59 @@ function resolveMetricLimits(
 
   if (matchedLimit) {
     const rawLimit = matchedLimit as Record<string, unknown>;
-    return {
-      parameterName,
-      unit,
-      limits: {
-        upperCriticalLimit: toNumberOrUndefined(rawLimit.upperCriticalLimit ?? rawLimit.highCriticalValue ?? rawLimit.upperLimit ?? rawLimit.maxValue),
-        upperWarningLimit: toNumberOrUndefined(rawLimit.upperWarningLimit ?? rawLimit.highWarningValue ?? rawLimit.warningHigh),
-        idealTarget: toNumberOrUndefined(rawLimit.idealTarget ?? rawLimit.targetValue ?? rawLimit.floatValue),
-        idealMin: toNumberOrUndefined(rawLimit.idealMin ?? rawLimit.idealMinValue),
-        idealMax: toNumberOrUndefined(rawLimit.idealMax ?? rawLimit.idealMaxValue),
-        lowerWarningLimit: toNumberOrUndefined(rawLimit.lowerWarningLimit ?? rawLimit.lowWarningValue ?? rawLimit.warningLow),
-        lowerCriticalLimit: toNumberOrUndefined(rawLimit.lowerCriticalLimit ?? rawLimit.lowCriticalValue ?? rawLimit.lowerLimit ?? rawLimit.minValue),
-      },
-    };
+    const upperCriticalLimit = toNumberOrUndefined(rawLimit.upperCriticalLimit ?? rawLimit.highCriticalValue ?? rawLimit.upperLimit ?? rawLimit.maxValue);
+    const lowerCriticalLimit = toNumberOrUndefined(rawLimit.lowerCriticalLimit ?? rawLimit.lowCriticalValue ?? rawLimit.lowerLimit ?? rawLimit.minValue);
+    const upperWarningLimit = toNumberOrUndefined(rawLimit.upperWarningLimit ?? rawLimit.highWarningValue ?? rawLimit.warningHigh);
+    const lowerWarningLimit = toNumberOrUndefined(rawLimit.lowerWarningLimit ?? rawLimit.lowWarningValue ?? rawLimit.warningLow);
+    const idealTarget = toNumberOrUndefined(rawLimit.idealTarget ?? rawLimit.targetValue ?? rawLimit.floatValue ?? rawLimit.setValue ?? rawLimit.setPoint);
+    const idealMin = toNumberOrUndefined(rawLimit.idealMin ?? rawLimit.idealMinValue);
+    const idealMax = toNumberOrUndefined(rawLimit.idealMax ?? rawLimit.idealMaxValue);
+
+    if (upperCriticalLimit !== undefined || lowerCriticalLimit !== undefined || idealTarget !== undefined) {
+      return {
+        parameterName,
+        unit,
+        idealTarget,
+        limits: {
+          upperCriticalLimit,
+          upperWarningLimit,
+          idealTarget,
+          idealMin,
+          idealMax,
+          lowerWarningLimit,
+          lowerCriticalLimit,
+        },
+      };
+    }
   }
 
-  // Deterministic equipment-specific standard operational defaults
-  if (normKey.includes("agspeed") || normKey.includes("agitatorspeed") || normKey === "speed") {
+  // --- RMG Parameters (MB003) ---
+  if (normKey.includes("agspeed") || normKey.includes("agitatorspeed") || normKey.includes("impellerspeed") || (normKey.includes("speed") && !normKey.includes("chp") && !normKey.includes("pan") && !normKey.includes("blender") && !normKey.includes("turret") && !normKey.includes("feeder") && !normKey.includes("disk"))) {
     return {
-      parameterName: "Agitator Speed #004",
+      parameterName: "Impeller Speed",
       unit: "RPM",
+      idealTarget: 100.0,
       limits: {
         upperCriticalLimit: 175.0,
         upperWarningLimit: 160.0,
-        idealTarget: 140.0,
-        idealMin: 100.0,
+        idealTarget: 100.0,
+        idealMin: 80.0,
         idealMax: 175.0,
-        lowerWarningLimit: 100.0,
-        lowerCriticalLimit: 100.0,
+        lowerWarningLimit: 80.0,
+        lowerCriticalLimit: 80.0,
       },
     };
   }
 
-  if (normKey.includes("agamps") || normKey.includes("agitatoramps") || normKey.includes("agitatorcurrent") || normKey === "current" || normKey === "currentamp") {
+  if (normKey.includes("agamps") || normKey.includes("agitatoramps") || normKey.includes("agitatorcurrent") || normKey.includes("impelleramps") || normKey.includes("impellercurrent") || normKey === "current" || normKey === "currentamp") {
     return {
-      parameterName: "Agitator Current #004",
+      parameterName: "Impeller Current",
       unit: "A",
+      idealTarget: 30.0,
       limits: {
         upperCriticalLimit: 33.0,
         upperWarningLimit: 30.5,
-        idealTarget: 28.0,
+        idealTarget: 30.0,
         idealMin: 0.0,
         idealMax: 33.0,
         lowerWarningLimit: 0.0,
@@ -540,28 +726,30 @@ function resolveMetricLimits(
 
   if (normKey.includes("chpspeed") || normKey.includes("chopperspeed") || normKey.includes("granulatorspeed")) {
     return {
-      parameterName: "Granulator Speed #004",
+      parameterName: "Chopper Speed",
       unit: "RPM",
+      idealTarget: 50.0,
       limits: {
-        upperCriticalLimit: 1600.0,
-        upperWarningLimit: 1500.0,
-        idealTarget: 1420.0,
-        idealMin: 1000.0,
-        idealMax: 1600.0,
-        lowerWarningLimit: 1000.0,
-        lowerCriticalLimit: 1000.0,
+        upperCriticalLimit: 60.0,
+        upperWarningLimit: 55.0,
+        idealTarget: 50.0,
+        idealMin: 40.0,
+        idealMax: 60.0,
+        lowerWarningLimit: 40.0,
+        lowerCriticalLimit: 40.0,
       },
     };
   }
 
   if (normKey.includes("chpamps") || normKey.includes("chopperamps") || normKey.includes("granulatoramps") || normKey.includes("granulatorcurrent")) {
     return {
-      parameterName: "Granulator Current #004",
+      parameterName: "Chopper Current",
       unit: "A",
+      idealTarget: 6.5,
       limits: {
         upperCriticalLimit: 7.5,
-        upperWarningLimit: 6.5,
-        idealTarget: 5.5,
+        upperWarningLimit: 7.0,
+        idealTarget: 6.5,
         idealMin: 0.0,
         idealMax: 7.5,
         lowerWarningLimit: 0.0,
@@ -570,30 +758,362 @@ function resolveMetricLimits(
     };
   }
 
-  if (normKey.includes("granulationtemperature") || normKey.includes("heatertemp") || normKey.includes("granulationtemp") || (normKey.includes("temp") && !normKey.includes("inlet") && !normKey.includes("outlet") && !normKey.includes("bed"))) {
+  // --- FBD Parameters (MB004) & Common Temperatures ---
+  if (normKey.includes("inlet") && (normKey.includes("temp") || normKey === "inlet")) {
     return {
-      parameterName: "Granulation Temperature",
+      parameterName: "Inlet Air Temperature",
       unit: "°C",
+      idealTarget: 60.0,
       limits: {
-        upperCriticalLimit: 75.0,
-        upperWarningLimit: 68.0,
-        idealTarget: 55.0,
-        idealMin: 35.0,
-        idealMax: 75.0,
-        lowerWarningLimit: 35.0,
-        lowerCriticalLimit: 35.0,
+        upperCriticalLimit: 64.0,
+        upperWarningLimit: 62.0,
+        idealTarget: 60.0,
+        idealMin: 25.0,
+        idealMax: 64.0,
+        lowerWarningLimit: 28.0,
+        lowerCriticalLimit: 25.0,
+      },
+    };
+  }
+
+  if (
+    (normKey.includes("outlet") || normKey.includes("exhaust")) &&
+    (normKey.includes("temp") || normKey === "outlet" || normKey === "exhaust")
+  ) {
+    return {
+      parameterName: normKey.includes("outlet") ? "Outlet Air Temperature" : "Exhaust Air Temperature",
+      unit: "°C",
+      idealTarget: 37.0,
+      limits: {
+        upperCriticalLimit: 52.0,
+        upperWarningLimit: 48.0,
+        idealTarget: 37.0,
+        idealMin: 19.0,
+        idealMax: 52.0,
+        lowerWarningLimit: 22.0,
+        lowerCriticalLimit: 19.0,
+      },
+    };
+  }
+
+  if (normKey.includes("bedtemp") || normKey.includes("bedtemperature") || normKey.includes("producttemp") || normKey.includes("heatertemp") || normKey.includes("granulationtemp")) {
+    return {
+      parameterName: "Bed Temperature",
+      unit: "°C",
+      idealTarget: 45.0,
+      limits: {
+        upperCriticalLimit: 50.0,
+        upperWarningLimit: 48.0,
+        idealTarget: 45.0,
+        idealMin: 40.0,
+        idealMax: 50.0,
+        lowerWarningLimit: 40.0,
+        lowerCriticalLimit: 40.0,
+      },
+    };
+  }
+
+  if (normKey.includes("airflow") || normKey.includes("airflowrate")) {
+    return {
+      parameterName: "Air Flow Rate",
+      unit: "m³/h",
+      idealTarget: 1200.0,
+      limits: {
+        upperCriticalLimit: 1400.0,
+        upperWarningLimit: 1300.0,
+        idealTarget: 1200.0,
+        idealMin: 1000.0,
+        idealMax: 1400.0,
+        lowerWarningLimit: 1000.0,
+        lowerCriticalLimit: 1000.0,
+      },
+    };
+  }
+
+  if (normKey.includes("productmoisture") || normKey.includes("moisture") || normKey.includes("lod")) {
+    return {
+      parameterName: "Product Moisture",
+      unit: "%",
+      idealTarget: 2.5,
+      limits: {
+        upperCriticalLimit: 3.5,
+        upperWarningLimit: 3.0,
+        idealTarget: 2.5,
+        idealMin: 1.5,
+        idealMax: 3.5,
+        lowerWarningLimit: 1.5,
+        lowerCriticalLimit: 1.5,
+      },
+    };
+  }
+
+  if (normKey.includes("processtimemin") || normKey.includes("processtime") || normKey.includes("dryingtime")) {
+    return {
+      parameterName: "Process Time",
+      unit: "min",
+      idealTarget: 300.0,
+      limits: {
+        upperCriticalLimit: 360.0,
+        upperWarningLimit: 330.0,
+        idealTarget: 300.0,
+        idealMin: 0.0,
+        idealMax: 360.0,
+        lowerWarningLimit: 0.0,
+        lowerCriticalLimit: 0.0,
+      },
+    };
+  }
+
+  // --- BLE Parameters (MB005) ---
+  if (normKey.includes("blenderspeed") || normKey.includes("blender_speed")) {
+    return {
+      parameterName: "Blender Speed",
+      unit: "RPM",
+      idealTarget: 5.0,
+      limits: {
+        upperCriticalLimit: 6.0,
+        upperWarningLimit: 5.5,
+        idealTarget: 5.0,
+        idealMin: 4.0,
+        idealMax: 6.0,
+        lowerWarningLimit: 4.0,
+        lowerCriticalLimit: 4.0,
+      },
+    };
+  }
+
+  if (normKey.includes("blendingtime") || normKey.includes("blending_time")) {
+    return {
+      parameterName: "Blending Time",
+      unit: "min",
+      idealTarget: 15.0,
+      limits: {
+        upperCriticalLimit: 20.0,
+        upperWarningLimit: 18.0,
+        idealTarget: 15.0,
+        idealMin: 10.0,
+        idealMax: 20.0,
+        lowerWarningLimit: 10.0,
+        lowerCriticalLimit: 10.0,
+      },
+    };
+  }
+
+  if (normKey.includes("vacuumpressure") || normKey.includes("vacuumlevel") || (normKey.includes("vacuum") && !normKey.includes("time"))) {
+    return {
+      parameterName: "Vacuum Level",
+      unit: "bar",
+      idealTarget: -0.8,
+      limits: {
+        upperCriticalLimit: -0.6,
+        upperWarningLimit: -0.7,
+        idealTarget: -0.8,
+        idealMin: -1.0,
+        idealMax: -0.6,
+        lowerWarningLimit: -0.9,
+        lowerCriticalLimit: -1.0,
+      },
+    };
+  }
+
+  if (normKey.includes("motorcurrent") || normKey.includes("motor_current")) {
+    return {
+      parameterName: "Motor Current",
+      unit: "A",
+      idealTarget: 12.0,
+      limits: {
+        upperCriticalLimit: 15.0,
+        upperWarningLimit: 14.0,
+        idealTarget: 12.0,
+        idealMin: 8.0,
+        idealMax: 15.0,
+        lowerWarningLimit: 8.0,
+        lowerCriticalLimit: 8.0,
+      },
+    };
+  }
+
+  if (normKey.includes("purgetime") || normKey.includes("purge_time") || normKey === "purge") {
+    return {
+      parameterName: "Purge Time",
+      unit: "Sec",
+      idealTarget: 5.0,
+      limits: {
+        upperCriticalLimit: 10.0,
+        upperWarningLimit: 8.0,
+        idealTarget: 5.0,
+        idealMin: 3.0,
+        idealMax: 10.0,
+        lowerWarningLimit: 3.0,
+        lowerCriticalLimit: 3.0,
+      },
+    };
+  }
+
+  // --- COAT Parameters (MB041) ---
+  if (normKey.includes("panspeed") || normKey.includes("drumspeed") || normKey.includes("panrpm")) {
+    return {
+      parameterName: "Pan Speed",
+      unit: "RPM",
+      idealTarget: 8.0,
+      limits: {
+        upperCriticalLimit: 12.0,
+        upperWarningLimit: 10.0,
+        idealTarget: 8.0,
+        idealMin: 5.0,
+        idealMax: 12.0,
+        lowerWarningLimit: 5.0,
+        lowerCriticalLimit: 5.0,
+      },
+    };
+  }
+
+  if (normKey.includes("sprayrate") || normKey.includes("spray_rate")) {
+    return {
+      parameterName: "Spray Rate",
+      unit: "g/min",
+      idealTarget: 120.0,
+      limits: {
+        upperCriticalLimit: 140.0,
+        upperWarningLimit: 130.0,
+        idealTarget: 120.0,
+        idealMin: 100.0,
+        idealMax: 140.0,
+        lowerWarningLimit: 100.0,
+        lowerCriticalLimit: 100.0,
+      },
+    };
+  }
+
+  if (normKey.includes("atomairpress") || normKey.includes("atomizingpressure") || normKey.includes("atomizationairpressure")) {
+    return {
+      parameterName: "Atomizing Pressure",
+      unit: "bar",
+      idealTarget: 2.5,
+      limits: {
+        upperCriticalLimit: 3.0,
+        upperWarningLimit: 2.8,
+        idealTarget: 2.5,
+        idealMin: 2.0,
+        idealMax: 3.0,
+        lowerWarningLimit: 2.0,
+        lowerCriticalLimit: 2.0,
+      },
+    };
+  }
+
+  // --- Compression Parameters (MC081) ---
+  if (normKey.includes("mainpressure") || normKey.includes("mainforce")) {
+    return {
+      parameterName: "Main Compression Force",
+      unit: "kN",
+      idealTarget: 14.83,
+      limits: {
+        upperCriticalLimit: 25.0,
+        upperWarningLimit: 20.0,
+        idealTarget: 14.83,
+        idealMin: 10.0,
+        idealMax: 25.0,
+        lowerWarningLimit: 10.0,
+        lowerCriticalLimit: 10.0,
+      },
+    };
+  }
+
+  if (normKey.includes("prepressure") || normKey.includes("preforce")) {
+    return {
+      parameterName: "Pre-Compression Force",
+      unit: "kN",
+      idealTarget: 3.80,
+      limits: {
+        upperCriticalLimit: 8.0,
+        upperWarningLimit: 6.0,
+        idealTarget: 3.80,
+        idealMin: 2.0,
+        idealMax: 8.0,
+        lowerWarningLimit: 2.0,
+        lowerCriticalLimit: 2.0,
+      },
+    };
+  }
+
+  if (normKey.includes("diskspeed") || normKey.includes("turretspeed")) {
+    return {
+      parameterName: "Disk Speed",
+      unit: "RPM",
+      idealTarget: 18.0,
+      limits: {
+        upperCriticalLimit: 35.0,
+        upperWarningLimit: 30.0,
+        idealTarget: 18.0,
+        idealMin: 10.0,
+        idealMax: 35.0,
+        lowerWarningLimit: 10.0,
+        lowerCriticalLimit: 10.0,
+      },
+    };
+  }
+
+  if (normKey.includes("feederrpm") || normKey.includes("feederspeed")) {
+    return {
+      parameterName: "Feeder Speed",
+      unit: "RPM",
+      idealTarget: 10.0,
+      limits: {
+        upperCriticalLimit: 20.0,
+        upperWarningLimit: 15.0,
+        idealTarget: 10.0,
+        idealMin: 5.0,
+        idealMax: 20.0,
+        lowerWarningLimit: 5.0,
+        lowerCriticalLimit: 5.0,
+      },
+    };
+  }
+
+  if (normKey.includes("mainthickness") || normKey.includes("tabletthickness")) {
+    return {
+      parameterName: "Main Thickness",
+      unit: "mm",
+      idealTarget: 4.28,
+      limits: {
+        upperCriticalLimit: 4.8,
+        upperWarningLimit: 4.5,
+        idealTarget: 4.28,
+        idealMin: 3.8,
+        idealMax: 4.8,
+        lowerWarningLimit: 3.8,
+        lowerCriticalLimit: 3.8,
+      },
+    };
+  }
+
+  if (normKey.includes("fillingdepth")) {
+    return {
+      parameterName: "Filling Depth",
+      unit: "mm",
+      idealTarget: 12.01,
+      limits: {
+        upperCriticalLimit: 15.0,
+        upperWarningLimit: 14.0,
+        idealTarget: 12.01,
+        idealMin: 10.0,
+        idealMax: 15.0,
+        lowerWarningLimit: 10.0,
+        lowerCriticalLimit: 10.0,
       },
     };
   }
 
   if (normKey.includes("duration") || normKey.includes("durationsec")) {
     return {
-      parameterName: "Duration Sec #004",
+      parameterName: "Duration",
       unit: "Sec",
+      idealTarget: 600.0,
       limits: {
         upperCriticalLimit: 600.0,
         upperWarningLimit: 600.0,
-        idealTarget: 180.0,
+        idealTarget: 600.0,
         idealMin: 0.0,
         idealMax: 600.0,
         lowerWarningLimit: 0.0,
@@ -605,8 +1125,72 @@ function resolveMetricLimits(
   return {
     parameterName,
     unit,
+    idealTarget: undefined,
     limits: undefined,
   };
+}
+
+/**
+ * Resolves the Set value for an operational parameter from metrics or limits metadata.
+ */
+function resolveSetValue(
+  metricKey: string,
+  metrics: Record<string, unknown>,
+  idealTarget?: number
+): number | string | null {
+  const m = metrics || {};
+  const normalizeKey = (k: string) =>
+    k
+      .toLowerCase()
+      .replace(/temparature/g, "temp")
+      .replace(/temperature/g, "temp")
+      .replace(/air/g, "")
+      .replace(/[^a-z0-9]/g, "");
+
+  const lowerKey = normalizeKey(metricKey);
+
+  for (const [k, v] of Object.entries(m)) {
+    const kl = normalizeKey(k);
+    if (
+      (kl.includes(lowerKey) || lowerKey.includes(kl) ||
+       (lowerKey.includes("inlet") && kl.includes("inlet")) ||
+       ((lowerKey.includes("exhaust") || lowerKey.includes("outlet")) && (kl.includes("exhaust") || kl.includes("outlet"))) ||
+       (lowerKey.includes("speed") && kl.includes("speed")) ||
+       (lowerKey.includes("vacuum") && kl.includes("vacuum")) ||
+       (lowerKey.includes("time") && kl.includes("time")) ||
+       (lowerKey.includes("current") && (kl.includes("current") || kl.includes("amp")))) &&
+      (kl.includes("set") || kl.includes("sv") || kl.includes("sp") || kl.includes("target"))
+    ) {
+      if (v !== null && v !== undefined && v !== "") {
+        return typeof v === "number" ? v : String(v);
+      }
+    }
+  }
+
+  if (idealTarget !== undefined && idealTarget !== null && !isNaN(idealTarget)) {
+    return idealTarget;
+  }
+  return null;
+}
+
+/**
+ * Formats parameter value into compact "Set / Actual" format (e.g. "100 / 98").
+ */
+function formatSetActual(
+  actualFormatted: string,
+  setVal: number | string | null
+): string {
+  if (actualFormatted === "-" || actualFormatted === "") {
+    return "-";
+  }
+  if (setVal === null || setVal === undefined) {
+    return actualFormatted;
+  }
+  const formattedSet = typeof setVal === "number"
+    ? (Number.isInteger(setVal) ? setVal.toString() : setVal.toFixed(1))
+    : String(setVal).trim();
+
+  return `${formattedSet} / ${actualFormatted}`;
 }
 
 export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
@@ -673,6 +1257,34 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
   const isBle = eqMeta.type === "BLE";
   const isComp = eqMeta.type === "COMP";
   const isCoat = eqMeta.type === "COAT";
+
+  const compDetails = useMemo(() => {
+    if (!isComp) return null;
+    const isLotSpecific = Boolean(
+      queryLotNo &&
+      queryLotNo !== "NA" &&
+      queryLotNo !== "null" &&
+      queryLotNo.trim().toUpperCase() !== queryBatchNo.trim().toUpperCase()
+    );
+    const selected = (cppRecords as Array<Record<string, unknown>>).find((record) => {
+      const meta = (record.meta || {}) as Record<string, unknown>;
+      const dLot = toText(meta.derivedLotNo || meta.lotNo);
+      if (!isLotSpecific) return true;
+      return dLot === queryLotNo || toText(meta.lotNo) === queryLotNo || toText(meta.derivedLotNo) === queryLotNo;
+    }) || (cppRecords[0] as Record<string, unknown> | undefined);
+    return (selected?.compression_details as Record<string, unknown>) || null;
+  }, [isComp, cppRecords, queryLotNo, queryBatchNo]);
+
+  const compressionLots = useMemo(() => (cppRecords as Array<Record<string, unknown>>).map((record) => {
+    const meta = (record.meta || {}) as Record<string, unknown>;
+    const details = (record.compression_details || {}) as Record<string, unknown>;
+    const metadata = (details.metadata || {}) as Record<string, unknown>;
+    return {
+      lotNo: toText(meta.derivedLotNo || meta.lotNo),
+      sourceFile: toText(metadata.sourceFile),
+      observedAt: toText(record.observedAt),
+    };
+  }).filter((lot) => lot.lotNo), [cppRecords]);
 
   const activeStatus = toText(
     (batchSummary?.stages &&
@@ -986,20 +1598,34 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
 
       // 2. Fetch CPP parameters (supports up to 50,000 time series telemetry records)
       try {
+        const isLotQuerySpecific = Boolean(
+          queryLotNo &&
+          queryLotNo !== "NA" &&
+          queryLotNo !== "null" &&
+          queryLotNo.trim().toUpperCase() !== queryBatchNo.trim().toUpperCase()
+        );
         const cpp = await getCppDataPaginated(targetEquipment, {
           batchNo: queryBatchNo,
           limit: 50000,
-          ...(queryLotNo ? { lotNo: queryLotNo } : {}),
-        });
-        setCppRecords(cpp);
-        if (cpp.length > 0 && cpp[0].metrics) {
-          const keys = Object.keys(cpp[0].metrics);
+          ...(isLotQuerySpecific ? { lotNo: queryLotNo } : {}),
+        }).catch(() => []);
+        setCppRecords(cpp || []);
+        if (cpp && cpp.length > 0) {
+          const firstRec = cpp[0] as unknown as Record<string, unknown>;
+          const metricsObj = (firstRec.metrics as Record<string, unknown>) || firstRec;
+          const metaKeys = new Set([
+            "id", "_id", "observedAt", "observed_at", "TIME", "time", "timestamp", "record_id",
+            "batchNo", "batch_no", "lotNo", "lot_no", "equipmentCode", "equipment_code",
+            "equipmentId", "equipment_id", "status", "Status", "meta", "tenantId", "plantId", "blockId"
+          ]);
+          const keys = Object.keys(metricsObj).filter((k) => !metaKeys.has(k) && typeof metricsObj[k] !== "object");
           if (keys.length > 0 && !selectedTrendMetric) {
             setSelectedTrendMetric(keys[0]);
           }
         }
       } catch (err) {
         console.error("Failed to load CPP records", err);
+        setCppRecords([]);
       }
 
       // 3. Fetch Critical Parameters & Limits metadata
@@ -1016,31 +1642,18 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
         }
       } catch (err) {
         console.error("Failed to load parameter limits metadata", err);
-      }      // 4a. Fetch Alarm events for equipment
+      }
+
+      // 4a. Fetch Alarm events for equipment
       try {
         const alarms = await getAlarmEventDataPaginated(targetEquipment, {
           eventCategory: "ALARM",
           limit: 5000,
         }).catch(() => []);
-
-        if (alarms && alarms.length > 0) {
-          setAlarmRecords(alarms as unknown as AlarmEventRecord[]);
-        } else {
-          const eqInfo = resolveEquipmentInfo(targetEquipment);
-          if (eqInfo.type === "RMG") {
-            setAlarmRecords(RMG_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[]);
-          } else if (eqInfo.type === "FBD") {
-            setAlarmRecords(FBD_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[]);
-          } else if (eqInfo.type === "COMP") {
-            setAlarmRecords(COMP_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[]);
-          } else if (eqInfo.type === "COAT") {
-            setAlarmRecords(COAT_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[]);
-          } else {
-            setAlarmRecords([]);
-          }
-        }
+        setAlarmRecords((alarms || []) as unknown as AlarmEventRecord[]);
       } catch (err) {
         console.error("Failed to load Alarm events", err);
+        setAlarmRecords([]);
       }
 
       // 4b. Fetch Equipment Event Data (PLC Audit Events)
@@ -1049,27 +1662,10 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
           eventCategory: "EVENT",
           limit: 5000,
         }).catch(() => []);
-
-        if (events && events.length > 0) {
-          setEventDataRecords(events as unknown as Record<string, unknown>[]);
-        } else {
-          const eqInfo = resolveEquipmentInfo(targetEquipment);
-          if (eqInfo.type === "RMG") {
-            setEventDataRecords(RMG_AUDIT_TRAIL_MOCK as unknown as Record<string, unknown>[]);
-          } else if (eqInfo.type === "FBD") {
-            setEventDataRecords(FBD_AUDIT_TRAIL_MOCK as unknown as Record<string, unknown>[]);
-          } else if (eqInfo.type === "BLE") {
-            setEventDataRecords(BLE_AUDIT_TRAIL_MOCK as unknown as Record<string, unknown>[]);
-          } else if (eqInfo.type === "COMP") {
-            setEventDataRecords(COMP_AUDIT_TRAIL_MOCK as unknown as Record<string, unknown>[]);
-          } else if (eqInfo.type === "COAT") {
-            setEventDataRecords(COAT_AUDIT_TRAIL_MOCK as unknown as Record<string, unknown>[]);
-          } else {
-            setEventDataRecords([]);
-          }
-        }
+        setEventDataRecords((events || []) as unknown as Record<string, unknown>[]);
       } catch (err) {
         console.error("Failed to load Equipment Event Data", err);
+        setEventDataRecords([]);
       }
 
       // 5. Fetch complete Audit Trail based on batchNo and lotNo
@@ -1708,19 +2304,22 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
     let list = cppRecords;
 
     if (correlatedAlarm) {
-      list = list.filter((rec) => isWithinCorrelationWindow(rec.observedAt));
+      list = list.filter((rec) => {
+        const rowRec = rec as unknown as Record<string, unknown>;
+        return isWithinCorrelationWindow(toText(rec.observedAt || rowRec.TIME || rowRec.time || rowRec.timestamp));
+      });
     }
 
     if (parameterSearch.trim()) {
       const term = parameterSearch.trim().toLowerCase();
       list = list.filter((rec) => {
-        const ts = toDisplayDate(rec.observedAt).toLowerCase();
+        const rowRec = rec as unknown as Record<string, unknown>;
+        const ts = toDisplayDate(rec.observedAt || rowRec.TIME || rowRec.time || rowRec.timestamp).toLowerCase();
         if (ts.includes(term)) return true;
-        if (rec.metrics) {
-          for (const [k, v] of Object.entries(rec.metrics)) {
-            if (k.toLowerCase().includes(term) || String(v).toLowerCase().includes(term)) {
-              return true;
-            }
+        const m = { ...rowRec, ...((rowRec.meta as Record<string, unknown>) || {}), ...((rowRec.metrics as Record<string, unknown>) || {}) };
+        for (const [k, v] of Object.entries(m)) {
+          if (k.toLowerCase().includes(term) || String(v).toLowerCase().includes(term)) {
+            return true;
           }
         }
         return false;
@@ -1729,8 +2328,10 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
 
     // Sort ascending by time (oldest first)
     list = [...list].sort((a, b) => {
-      const ta = parseFlexibleTimestamp(a.observedAt) ?? 0;
-      const tb = parseFlexibleTimestamp(b.observedAt) ?? 0;
+      const rowA = a as unknown as Record<string, unknown>;
+      const rowB = b as unknown as Record<string, unknown>;
+      const ta = parseFlexibleTimestamp(a.observedAt || rowA.TIME || rowA.time || rowA.timestamp) ?? 0;
+      const tb = parseFlexibleTimestamp(b.observedAt || rowB.TIME || rowB.time || rowB.timestamp) ?? 0;
       return ta - tb;
     });
 
@@ -1749,13 +2350,7 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
 
   // Filtered Alarms using calculated industrial severity & batch date range
   const filteredAlarms = useMemo(() => {
-    let list = isRmg
-      ? (RMG_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[])
-      : isFbd
-      ? (FBD_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[])
-      : isCoat
-      ? (COAT_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[])
-      : alarmRecords;
+    let list = alarmRecords;
 
     if (correlatedAlarm) {
       list = list.filter((a) =>
@@ -1801,7 +2396,7 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
     });
 
     return list;
-  }, [alarmRecords, alarmFilter, alarmSearch, correlatedAlarm, isWithinCorrelationWindow, isRmg, isFbd, isCoat]);
+  }, [alarmRecords, alarmFilter, alarmSearch, correlatedAlarm, isWithinCorrelationWindow]);
 
   // Paginated Alarms
   const totalAlarms = filteredAlarms.length;
@@ -1850,43 +2445,20 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
   // Comprehensive Electronic Signature Audit Events
   const combinedAuditEvents = useMemo((): WorkflowAuditEvent[] => {
     let list: WorkflowAuditEvent[] = [];
-    if (isFbd) {
-      list = (FBD_AUDIT_TRAIL_MOCK as unknown as WorkflowAuditEvent[]).map((m) => ({
-        ...m,
-        tenantId: "TNT-0001",
-        batchNo: queryBatchNo || m.batchNo,
-        lotNo: queryLotNo || m.lotNo,
-        equipmentCode: targetEquipmentCode || m.equipmentCode,
-      }));
-    } else if (isRmg) {
-      list = (RMG_AUDIT_TRAIL_MOCK as unknown as WorkflowAuditEvent[]).map((m) => ({
-        ...m,
-        tenantId: "TNT-0001",
-        batchNo: queryBatchNo || m.batchNo,
-        lotNo: queryLotNo || m.lotNo,
-        equipmentCode: targetEquipmentCode || m.equipmentCode,
-      }));
-    } else if (isBle) {
-      list = (BLE_AUDIT_TRAIL_MOCK as unknown as WorkflowAuditEvent[]).map((m) => ({
-        ...m,
-        tenantId: "TNT-0001",
-        batchNo: queryBatchNo || m.batchNo,
-        lotNo: queryLotNo || m.lotNo,
-        equipmentCode: targetEquipmentCode || m.equipmentCode,
-      }));
-    } else if (isCoat) {
-      list = (COAT_AUDIT_TRAIL_MOCK as unknown as WorkflowAuditEvent[]).map((m) => ({
-        ...m,
-        tenantId: "TNT-0001",
-        batchNo: queryBatchNo || m.batchNo,
-        lotNo: queryLotNo || m.lotNo,
-        equipmentCode: targetEquipmentCode || m.equipmentCode,
-      }));
-    } else {
-      list = [...auditEvents];
-      const existingKeys = new Set(list.map((a) => `${toText(a.userId)}_${toText(a.action || a.actionCode)}_${toText(a.timestamp)}`));
+    const existingKeys = new Set<string>();
 
-      // Incorporate PLC / Ingested process audit records from eventDataRecords
+    if (auditEvents && auditEvents.length > 0) {
+      for (const a of auditEvents) {
+        const key = `${toText(a.userId)}_${toText(a.action || a.actionCode)}_${toText(a.timestamp)}`;
+        if (!existingKeys.has(key)) {
+          list.push(a);
+          existingKeys.add(key);
+        }
+      }
+    }
+
+    // Incorporate PLC / Ingested process audit records from eventDataRecords
+    if (eventDataRecords && eventDataRecords.length > 0) {
       for (const ev of eventDataRecords) {
         const timeStr = getEventDataTime(ev);
         const desc = getEventDataDescription(ev) || "PROCESS EVENT";
@@ -1894,7 +2466,7 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
         const key = `${uName}_${desc}_${timeStr}`;
         if (!existingKeys.has(key)) {
           list.push({
-            auditId: toText(ev.record_id || ev.RecordID || `audit_${uName}_${timeStr}`),
+            auditId: toText(ev.record_id || ev.RecordID || ev.auditId || `audit_${uName}_${timeStr}`),
             tenantId: "TNT-0001",
             batchNo: queryBatchNo,
             lotNo: queryLotNo,
@@ -1915,7 +2487,10 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
           existingKeys.add(key);
         }
       }
+    }
 
+    // Incorporate workflow action history
+    if (actionHistory && actionHistory.length > 0) {
       for (const h of actionHistory) {
         const key = `${toText(h.performedBy)}_${toText(h.actionCode)}_${toText(h.timestamp)}`;
         if (!existingKeys.has(key)) {
@@ -1952,7 +2527,7 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
       const comments = toText(raw.comments || a.comments).toUpperCase();
       return !act.includes("PRINT") && !desc.includes("PRINT") && !reason.includes("PRINT") && !comments.includes("PRINT");
     });
-  }, [isFbd, isRmg, isBle, isCoat, auditEvents, eventDataRecords, actionHistory, queryBatchNo, queryLotNo, targetEquipmentCode]);
+  }, [auditEvents, eventDataRecords, actionHistory, queryBatchNo, queryLotNo, targetEquipmentCode]);
 
   // Filtered Audit Events strictly based on Batch Number and Lot Number
   const filteredAuditEvents = useMemo(() => {
@@ -1995,38 +2570,15 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
 
   // Dynamic Available Metrics
   const availableMetricsList = useMemo(() => {
-    if (cppRecords.length === 0 || !cppRecords[0]?.metrics) return [];
-    let keys = Object.keys(cppRecords[0].metrics);
-
-    // Apply strict equipment-level metric inclusions
-    if (eqMeta.type === "FBD") {
-      keys = keys.filter((k) => {
-        const nk = k.toLowerCase().replace(/[^a-z0-9]/g, "");
-        return nk.includes("inlet") || nk.includes("outlet") || nk.includes("air") || nk.includes("temp");
-      });
-    } else if (eqMeta.type === "BLE") {
-      keys = keys.filter((k) => {
-        const nk = k.toLowerCase().replace(/[^a-z0-9]/g, "");
-        return (nk.includes("speed") || nk.includes("rpm") || nk.includes("time") || nk.includes("vacuum") || nk.includes("pressure"));
-      });
-    } else if (eqMeta.type === "COMP") {
-      keys = keys.filter((k) => {
-        const nk = k.toLowerCase().replace(/[^a-z0-9]/g, "");
-        return nk.includes("force") || nk.includes("speed") || nk.includes("turret") || nk.includes("feeder") || nk.includes("weight") || nk.includes("thick") || nk.includes("hard");
-      });
-    } else if (eqMeta.type === "COAT") {
-      keys = ["Inlet_Air_Temp", "Bed_Temp", "Pan_Speed", "Spray_Rate", "Atom_Air_Press"];
-    } else {
-      // RMG 6 standard columns
-      keys = [
-        "Agitator_Speed",
-        "Agitator_Current",
-        "Granulator_Speed",
-        "Granulator_Current",
-        "Granulation_Temperature",
-        "Duration_Sec"
-      ];
-    }
+    if (cppRecords.length === 0) return [];
+    const firstRec = cppRecords[0] as unknown as Record<string, unknown>;
+    const metricsObj = (firstRec.metrics as Record<string, unknown>) || firstRec;
+    const metaKeys = new Set([
+      "id", "_id", "observedAt", "observed_at", "TIME", "time", "timestamp", "record_id",
+      "batchNo", "batch_no", "lotNo", "lot_no", "equipmentCode", "equipment_code",
+      "equipmentId", "equipment_id", "status", "Status", "meta", "tenantId", "plantId", "blockId"
+    ]);
+    const keys = Object.keys(metricsObj).filter((k) => !metaKeys.has(k) && typeof metricsObj[k] !== "object");
 
     return keys.map((key) => {
       const meta = resolveMetricLimits(key, targetEquipmentCode, paramLimits, criticalParams);
@@ -2034,10 +2586,10 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
         key,
         label: meta.parameterName,
         unit: meta.unit,
-        idealTarget: meta.limits?.idealTarget,
+        idealTarget: meta.limits?.idealTarget ?? meta.idealTarget,
       };
     });
-  }, [cppRecords, targetEquipmentCode, paramLimits, criticalParams, eqMeta.type]);
+  }, [cppRecords, targetEquipmentCode, paramLimits, criticalParams]);
 
   const activeCols = useMemo(() => {
     if (availableMetricsList.length > 0) return availableMetricsList;
@@ -2529,12 +3081,79 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
         </div>
       </div>
 
-      {/* Tabs Navigation: 6 Defined GxP Tabs (Strict Sequential Navigation) */}
-      <div
-        className="flex border-b border-slate-200 text-xs font-medium space-x-1 sm:space-x-2 overflow-x-auto pb-0.5"
-        role="tablist"
-        aria-label="Batch Details Sections"
-      >
+      {/* =========================================================================
+          COMPRESSION MACHINE DEDICATED VIEW (MC081 / SEJONG PRESS)
+         ========================================================================= */}
+      {isComp ? (
+        <CompressionReportView
+          batchNo={queryBatchNo}
+          lotNo={
+            queryLotNo && queryLotNo !== "NA" && queryLotNo !== "null" && queryLotNo.trim().toUpperCase() !== queryBatchNo.trim().toUpperCase()
+              ? queryLotNo
+              : toText(
+                  (compDetails?.batchInfo as Record<string, unknown> | undefined)?.derivedLotNo ||
+                  (compDetails?.batchInfo as Record<string, unknown> | undefined)?.lotNo ||
+                  batchSummary?.lotNo
+                ) && toText(
+                  (compDetails?.batchInfo as Record<string, unknown> | undefined)?.derivedLotNo ||
+                  (compDetails?.batchInfo as Record<string, unknown> | undefined)?.lotNo ||
+                  batchSummary?.lotNo
+                ) !== "NA"
+              ? toText(
+                  (compDetails?.batchInfo as Record<string, unknown> | undefined)?.derivedLotNo ||
+                  (compDetails?.batchInfo as Record<string, unknown> | undefined)?.lotNo ||
+                  batchSummary?.lotNo
+                )
+              : (compressionLots[0]?.lotNo || "Lot-01")
+          }
+          equipmentCode={targetEquipmentCode}
+          equipmentName={toText((compDetails?.batchInfo as Record<string, unknown> | undefined)?.machineName) || eqMeta.name}
+          productName={
+            toText((compDetails?.batchInfo as Record<string, unknown> | undefined)?.productName) ||
+            toText(batchSummary?.productName) ||
+            "Lamotrigine 25mg"
+          }
+          recipeName={
+            toText(
+              (compDetails?.recipeSettings as Record<string, unknown> | undefined)?.recipeName ||
+              (compDetails?.batchInfo as Record<string, unknown> | undefined)?.recipeName ||
+              batchSummary?.productCode
+            ) || eqMeta.defaultRecipe
+          }
+          batchSize={
+            toText(
+              (compDetails?.recipeSettings as Record<string, unknown> | undefined)?.targetQuantity ||
+              batchSummary?.batchSize ||
+              "250,000 Tablets"
+            )
+          }
+          stageStatus={activeStatus}
+          stageStartTime={stageStartTime}
+          stageEndTime={stageEndTime}
+          stageDuration={
+            toText((compDetails?.batchInfo as Record<string, unknown> | undefined)?.runningTime) ||
+            stageDuration
+          }
+          rawCompressionData={compDetails}
+          alarms={filteredAlarms}
+          auditLogs={filteredAuditEvents}
+          loginSessions={((compDetails?.login_history as unknown[]) || []) as any}
+          actionHistory={actionHistory}
+          allowedActions={allowedActions}
+          onActionClick={(action) => {
+            setModalAction(action);
+            setIsModalOpen(true);
+          }}
+          isActionLoading={isClaiming || isLoading}
+        />
+      ) : (
+        <>
+          {/* Tabs Navigation: 6 Defined GxP Tabs (Strict Sequential Navigation) */}
+          <div
+            className="flex border-b border-slate-200 text-xs font-medium space-x-1 sm:space-x-2 overflow-x-auto pb-0.5"
+            role="tablist"
+            aria-label="Batch Details Sections"
+          >
         {TAB_SEQUENCE.map((tab) => {
           const tabReview = tabReviews[tab.id];
           const isPassed = tabReview?.status === "PASSED" || isApprovedBatch;
@@ -2637,8 +3256,8 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
                 </span>
               </div>
               <div className="mt-1.5 space-y-1 text-xs text-amber-950">
-                {existingQueryList.map((q) => (
-                  <div key={q.tabKey} className="flex items-center gap-1.5">
+                {existingQueryList.map((q, idx) => (
+                  <div key={`flagged_query_${q.tabKey}_${idx}`} className="flex items-center gap-1.5">
                     <strong className="font-mono text-amber-900">• [{q.tabLabel}]:</strong>
                     <span className="italic">&quot;{q.queryComments}&quot;</span>
                   </div>
@@ -3213,11 +3832,17 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
                       </tr>
                     ) : (
                       paginatedParameters.map((record, index) => {
-                        const m = (record.metrics || {}) as Record<string, unknown>;
-                        const rowKey = `${toText(record.equipmentId || "PARAM")}_${toText(record.observedAt)}_${(safeParamPage - 1) * parametersPageSize + index}`;
-                        const isMatch = isExactMinuteMatch(record.observedAt);
                         const rowRec = record as unknown as Record<string, unknown>;
                         const rowMeta = (record.meta || {}) as Record<string, unknown>;
+                        const rowMetrics = (record.metrics || {}) as Record<string, unknown>;
+                        const m = {
+                          ...rowRec,
+                          ...rowMeta,
+                          ...rowMetrics,
+                        };
+                        const observedAt = record.observedAt || rowRec.TIME || rowRec.time || rowRec.timestamp || rowRec.observed_at || rowRec.event_time;
+                        const rowKey = `${toText(record.equipmentId || rowRec.equipmentCode || "PARAM")}_${toText(observedAt)}_${(safeParamPage - 1) * parametersPageSize + index}`;
+                        const isMatch = isExactMinuteMatch(toText(observedAt));
                         const rowStatus = toText(rowRec.status || rowMeta.status || rowRec.Status || "RUNNING");
                         const showStatus = eqMeta.type === "RMG";
 
@@ -3235,7 +3860,7 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
                                 {isMatch && (
                                   <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse flex-shrink-0" title="Exact Correlated Minute Event" />
                                 )}
-                                <span>{toDisplayDate(record.observedAt)}</span>
+                                <span>{toDisplayDate(observedAt)}</span>
                               </div>
                             </td>
                             {showStatus && (
@@ -3255,10 +3880,21 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
                                 lim?.upperCriticalLimit
                               );
 
+                              const setVal = resolveSetValue(col.key, m, meta.idealTarget ?? meta.limits?.idealTarget ?? col.idealTarget);
+                              const isComp = eqMeta.type === "COMP";
+                              const displaySetActual = isComp ? evaluation.formattedValue : formatSetActual(evaluation.formattedValue, setVal);
+
                               return (
                                 <td key={col.key} className="py-2.5 px-3.5 whitespace-nowrap">
-                                  <span className={evaluation.statusClass}>
-                                    {evaluation.formattedValue}
+                                  <span
+                                    className={evaluation.statusClass}
+                                    title={
+                                      isComp
+                                        ? `Actual: ${evaluation.formattedValue}`
+                                        : `Set: ${setVal ?? "-"} | Actual: ${evaluation.formattedValue}${lim && (lim.lowerCriticalLimit !== undefined || lim.upperCriticalLimit !== undefined) ? ` (Limits: [${lim.lowerCriticalLimit ?? "-"} to ${lim.upperCriticalLimit ?? "-"}])` : ""}`
+                                    }
+                                  >
+                                    {displaySetActual}
                                   </span>
                                 </td>
                               );
@@ -3453,7 +4089,7 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
             <div className="flex items-center gap-3 text-xs text-slate-500">
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 border border-slate-200 rounded-md font-mono text-[11px] text-slate-700">
                 <Bell className="h-3.5 w-3.5 text-slate-400" />
-                {filteredAlarms.length} of {isRmg ? RMG_ALARM_SUMMARY_MOCK.length : isFbd ? FBD_ALARM_SUMMARY_MOCK.length : isCoat ? COAT_ALARM_SUMMARY_MOCK.length : alarmRecords.length} Alarms Filtered
+                {filteredAlarms.length} of {alarmRecords.length} Alarms Filtered
               </span>
             </div>
           </div>
@@ -3647,7 +4283,7 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
                       ];
                     }
                     return sessions.map((s, idx) => (
-                      <tr key={idx}>
+                      <tr key={`user_session_${idx}_${s.dt}_${s.u}`}>
                         <td className="py-2 px-3.5 font-bold text-slate-800">{s.u}</td>
                         <td className="py-2 px-3.5 font-mono text-slate-600">{toDisplayDate(s.dt)}</td>
                         <td className="py-2 px-3.5">
@@ -3707,8 +4343,8 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
                         </td>
                       </tr>
                     ) : (
-                      additionalInfoAuditTrail.map((row) => (
-                        <tr key={row.id} className="hover:bg-slate-50/80 transition">
+                      additionalInfoAuditTrail.map((row, idx) => (
+                        <tr key={`query_audit_${row.id || idx}_${idx}`} className="hover:bg-slate-50/80 transition">
                           <td className="py-2.5 px-3.5 font-mono text-slate-600 font-semibold whitespace-nowrap">
                             {row.dateTime}
                           </td>
@@ -3825,8 +4461,8 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
                       </tr>
                     ) : (
                       paginatedAuditEvents.map((event, idx) => {
-                        const auditKey = event.auditId || `audit_${event.userId}_${event.timestamp}_${(safeAuditPage - 1) * auditPageSize + idx}`;
                         const raw = event as unknown as Record<string, unknown>;
+                        const auditKey = `audit_evt_${event.auditId || raw.id || event.userId || "item"}_${(safeAuditPage - 1) * auditPageSize + idx}_${event.timestamp || idx}`;
                         const mapAuditUserName = (rawUser: unknown, eqCode: string) => {
                           const rawStr = toText(rawUser);
                           if (rawStr.includes("(") && rawStr.includes(")")) {
@@ -3911,7 +4547,7 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
             ) : (
               <div className="relative pl-5 border-l-2 border-slate-200 space-y-4 pt-2">
                 {actionHistory.map((item, idx) => (
-                  <div key={item.historyId || `hist_${idx}`} className="relative">
+                  <div key={`action_hist_${item.historyId || idx}_${idx}`} className="relative">
                     <span className="absolute -left-[27px] top-1 p-0.5 bg-white border-2 border-indigo-600 rounded-full">
                       <div className="h-1.5 w-1.5 bg-indigo-600 rounded-full" />
                     </span>
@@ -3938,8 +4574,10 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
           </div>
         </div>
       )}
+        </>
+      )}
 
-            {/* Bottom Sticky Action Bar */}
+      {/* Bottom Sticky Action Bar */}
       <div className="sticky bottom-0 z-40 bg-white/95 backdrop-blur-md border-t-2 border-slate-200 p-4 shadow-2xl flex flex-col lg:flex-row items-center justify-between gap-3 -mx-4 -mb-4 sm:-mx-6 sm:-mb-6 rounded-b-xl">
         <div className="flex items-center gap-4 w-full lg:w-auto justify-between lg:justify-start">
           <div className="flex items-center gap-2.5">
@@ -4032,7 +4670,7 @@ export default function BatchDetailScreen({ batchId }: BatchDetailScreenProps) {
           )}
 
           {/* Final Workflow Transitions (Submit for Review, Submit for Approve, Approve, Reject, Defer) - ONLY shown when all tabs approved */}
-          {isAllTabsPassed && !isApprovedBatch && !isEquipmentOverviewSource && allowedActions.map((action) => {
+          {(isAllTabsPassed || isComp) && !isApprovedBatch && !isEquipmentOverviewSource && allowedActions.map((action) => {
             const currentUserId = currentUser?.userId || currentUser?.username || "SYSTEM";
             const assignedTo = toText(workflowInstance?.assignedTo) || toText((workflowInstance?.context as Record<string, unknown>)?.activeReviewer) || toText(batchSummary?.assignedTo);
             const isClaimedByMe = Boolean(assignedTo && assignedTo.toUpperCase() === currentUserId.toUpperCase());

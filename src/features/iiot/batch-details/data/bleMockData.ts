@@ -67,3 +67,48 @@ export const BLE_AUDIT_TRAIL_MOCK = RAW_BLE_AUDIT_ROWS.map((row, idx) => {
     regulatoryStatement: "Legally binding electronic signature.",
   };
 });
+
+export const BLE_OPERATIONAL_DETAIL_VALUES_MOCK = [
+  {
+    observedAt: "11/02/2026 09:10:00",
+    time: "09:10:00",
+    equipmentId: "MB005",
+    batchNo: "NL0026008",
+    lotNo: "1",
+    metrics: {
+      Blender_Speed: 5.0,
+      Blending_Time: 5.0,
+      Vacuum_Pressure: -0.8,
+      Motor_Current: 11.8,
+      Purge_Time: 5.0,
+    },
+  },
+  {
+    observedAt: "11/02/2026 09:20:00",
+    time: "09:20:00",
+    equipmentId: "MB005",
+    batchNo: "NL0026008",
+    lotNo: "1",
+    metrics: {
+      Blender_Speed: 5.2,
+      Blending_Time: 10.0,
+      Vacuum_Pressure: -0.82,
+      Motor_Current: 12.1,
+      Purge_Time: 5.0,
+    },
+  },
+  {
+    observedAt: "11/02/2026 09:30:00",
+    time: "09:30:00",
+    equipmentId: "MB005",
+    batchNo: "NL0026008",
+    lotNo: "1",
+    metrics: {
+      Blender_Speed: 5.0,
+      Blending_Time: 15.0,
+      Vacuum_Pressure: -0.8,
+      Motor_Current: 12.0,
+      Purge_Time: 5.0,
+    },
+  },
+];

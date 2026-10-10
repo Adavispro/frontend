@@ -11,9 +11,11 @@ import {
   Plus,
   ArrowRight,
   ArrowsClockwise,
+  PencilSimple,
+  X,
 } from "@phosphor-icons/react";
 import { Button, TextField } from "@/components/ui";
-import { saveRecipeManagementBatch } from "../api";
+import { saveRecipeManagementBatch, updateRecipeManagement } from "../api";
 import type {
   CriticalParameter,
   IiotAsset,
@@ -37,6 +39,9 @@ export interface RecipeManagementConfigWorkspaceProps {
   tenantId?: string;
   plantId?: string;
 }
+
+const normalizeKey = (value?: string | null) =>
+  (value ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
 
 interface ParameterRowState {
   parameterCode: string;
@@ -78,6 +83,83 @@ export default function RecipeManagementConfigWorkspace({
   const [viewMode, setViewMode] = useState<"configure" | "all">("configure");
   const [tableSearch, setTableSearch] = useState("");
 
+  // Inline edit state for persisted configurations
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValues, setEditValues] = useState({
+    targetSetpoint: "",
+    lowLimit: "",
+    highLimit: "",
+    isActive: true,
+  });
+  const [editError, setEditError] = useState<string | null>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  const startEdit = (record: RecipeManagement) => {
+    setEditingId(record.recipeManagementId);
+    setEditValues({
+      targetSetpoint: record.targetSetpoint !== undefined ? String(record.targetSetpoint) : "",
+      lowLimit: record.lowLimit !== undefined ? String(record.lowLimit) : "",
+      highLimit: record.highLimit !== undefined ? String(record.highLimit) : "",
+      isActive: record.isActive !== false,
+    });
+    setEditError(null);
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditError(null);
+  };
+
+  const saveEdit = async (record: RecipeManagement) => {
+    const toNumber = (value: string) => (value.trim() === "" ? undefined : Number(value));
+    const target = toNumber(editValues.targetSetpoint);
+    const low = toNumber(editValues.lowLimit);
+    const high = toNumber(editValues.highLimit);
+
+    if ([target, low, high].some((v) => v !== undefined && Number.isNaN(v))) {
+      setEditError("Target, Low and High must be numeric.");
+      return;
+    }
+    if (low !== undefined && high !== undefined && low > high) {
+      setEditError("Low limit cannot exceed high limit.");
+      return;
+    }
+    if (target !== undefined && low !== undefined && target < low) {
+      setEditError("Target setpoint cannot be less than low limit.");
+      return;
+    }
+    if (target !== undefined && high !== undefined && target > high) {
+      setEditError("Target setpoint cannot exceed high limit.");
+      return;
+    }
+
+    setIsUpdating(true);
+    setEditError(null);
+    try {
+      await updateRecipeManagement(record.recipeManagementId, {
+        productId: record.productId,
+        recipeId: record.recipeId,
+        batchSize: record.batchSize,
+        equipmentId: record.equipmentId,
+        parameterCode: record.parameterCode,
+        parameterName: record.parameterName || undefined,
+        unitOfMeasure: record.unitOfMeasure || undefined,
+        targetSetpoint: target,
+        lowLimit: low,
+        highLimit: high,
+        tenantId: record.tenantId || tenantId,
+        plantId: record.plantId || plantId,
+        isActive: editValues.isActive,
+      });
+      setEditingId(null);
+      await onRefresh();
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : "Unable to update configuration.");
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
   // Sync initial values when they change externally
   useEffect(() => {
     if (initialProductId) setSelectedProductId(initialProductId);
@@ -85,15 +167,26 @@ export default function RecipeManagementConfigWorkspace({
     if (initialBatchSize) setSelectedBatchSize(initialBatchSize);
   }, [initialProductId, initialRecipeId, initialBatchSize]);
 
+  // Product IDs differ between Product Master and Recipe data; match on normalized ID or code.
+  const selectedProductKeys = useMemo(() => {
+    if (!selectedProductId) return new Set<string>();
+    const product = products.find((p) => p.productId === selectedProductId);
+    return new Set(
+      [selectedProductId, product?.productId, product?.productCode]
+        .map((v) => normalizeKey(v))
+        .filter(Boolean),
+    );
+  }, [products, selectedProductId]);
+
   // Step 2 Filter: Recipes belonging to selected Product
   const filteredRecipes = useMemo(() => {
-    if (!selectedProductId) return [];
+    if (selectedProductKeys.size === 0) return [];
     return recipes.filter(
       (r) =>
-        r.productId === selectedProductId ||
-        r.productCode === selectedProductId,
+        selectedProductKeys.has(normalizeKey(r.productId)) ||
+        selectedProductKeys.has(normalizeKey(r.productCode)),
     );
-  }, [recipes, selectedProductId]);
+  }, [recipes, selectedProductKeys]);
 
   // Selected Recipe Object
   const currentRecipe = useMemo(() => {
@@ -167,7 +260,8 @@ export default function RecipeManagementConfigWorkspace({
     // Find existing configurations for this exact context
     const existingConfigs = recipeManagements.filter(
       (m) =>
-        (m.productId === selectedProductId || m.productCode === selectedProductId) &&
+        (selectedProductKeys.has(normalizeKey(m.productId)) ||
+          selectedProductKeys.has(normalizeKey(m.productCode))) &&
         (m.recipeId === selectedRecipeId || m.recipeCode === selectedRecipeId) &&
         m.batchSize?.trim().toUpperCase() === selectedBatchSize.trim().toUpperCase() &&
         (m.equipmentId === selectedEquipmentId || m.equipmentCode === selectedEquipmentId),
@@ -194,6 +288,7 @@ export default function RecipeManagementConfigWorkspace({
     setParameterRows(rows);
   }, [
     selectedProductId,
+    selectedProductKeys,
     selectedRecipeId,
     selectedBatchSize,
     selectedEquipmentId,
@@ -268,7 +363,7 @@ export default function RecipeManagementConfigWorkspace({
     setIsSaving(true);
     try {
       await saveRecipeManagementBatch({
-        productId: selectedProductId,
+        productId: currentRecipe?.productId || selectedProductId,
         recipeId: selectedRecipeId,
         batchSize: selectedBatchSize,
         equipmentId: selectedEquipmentId,
@@ -342,10 +437,13 @@ export default function RecipeManagementConfigWorkspace({
           <Button
             variant="secondary"
             onClick={() => void onRefresh()}
-            className="h-8 gap-1 px-2.5 text-xs"
+            size="sm"
+            paddingX="px-3"
+            className="h-8"
             title="Refresh recipe data"
+            prefixIcon={<ArrowsClockwise size={14} weight="bold" className="block" />}
           >
-            <ArrowsClockwise size={12} /> Refresh
+            Refresh
           </Button>
         </div>
       </div>
@@ -544,17 +642,6 @@ export default function RecipeManagementConfigWorkspace({
                     Assign Target Setpoint, Low Limit, and High Limit.
                   </p>
                 </div>
-
-                {hasConfigurableParameters && (
-                  <Button
-                    onClick={handleSaveConfiguration}
-                    disabled={isSaving || hasValidationErrors}
-                    className="h-9 px-4 text-xs font-medium"
-                    prefixIcon={<FloppyDisk size={14} weight="bold" />}
-                  >
-                    {isSaving ? "Saving..." : "Save Configuration"}
-                  </Button>
-                )}
               </div>
 
               {!hasConfigurableParameters ? (
@@ -740,11 +827,29 @@ export default function RecipeManagementConfigWorkspace({
                     <th className="px-3 py-2.5">High</th>
                     <th className="px-3 py-2.5">Limit Range</th>
                     <th className="px-3 py-2.5">Status</th>
+                    <th className="px-3 py-2.5 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#E2E8F0]">
-                  {filteredPersistedRecords.map((r, idx) => (
-                    <tr key={r.recipeManagementId || idx} className="hover:bg-[#F8FAFC]">
+                  {filteredPersistedRecords.map((r, idx) => {
+                    const isEditing = editingId === r.recipeManagementId;
+                    const numberInput = (field: "targetSetpoint" | "lowLimit" | "highLimit") => (
+                      <input
+                        type="number"
+                        step="any"
+                        aria-label={field}
+                        value={editValues[field]}
+                        onChange={(e) =>
+                          setEditValues((prev) => ({ ...prev, [field]: e.target.value }))
+                        }
+                        className="h-7 w-20 rounded border border-[#CBD5E1] px-2 text-xs focus:border-primary focus:outline-none"
+                      />
+                    );
+                    return (
+                    <tr
+                      key={r.recipeManagementId || idx}
+                      className={isEditing ? "bg-blue-50/40" : "hover:bg-[#F8FAFC]"}
+                    >
                       <td className="px-3 py-2 text-[#64748B]">{idx + 1}</td>
                       <td className="px-3 py-2 font-medium text-[#1E293B]">
                         {r.productName || r.productCode || r.productId}
@@ -764,18 +869,36 @@ export default function RecipeManagementConfigWorkspace({
                         {r.parameterName || r.parameterCode}
                       </td>
                       <td className="px-3 py-2 font-semibold text-primary">
-                        {r.targetSetpoint !== undefined ? r.targetSetpoint : "-"}
+                        {isEditing
+                          ? numberInput("targetSetpoint")
+                          : r.targetSetpoint !== undefined ? r.targetSetpoint : "-"}
                       </td>
                       <td className="px-3 py-2 text-slate-700">
-                        {r.lowLimit !== undefined ? r.lowLimit : "-"}
+                        {isEditing
+                          ? numberInput("lowLimit")
+                          : r.lowLimit !== undefined ? r.lowLimit : "-"}
                       </td>
                       <td className="px-3 py-2 text-slate-700">
-                        {r.highLimit !== undefined ? r.highLimit : "-"}
+                        {isEditing
+                          ? numberInput("highLimit")
+                          : r.highLimit !== undefined ? r.highLimit : "-"}
                       </td>
                       <td className="px-3 py-2 text-[#64748B]">
                         {r.lowLimit} - {r.highLimit} ({r.targetSetpoint})
                       </td>
                       <td className="px-3 py-2">
+                        {isEditing ? (
+                          <label className="inline-flex items-center gap-1.5 text-[11px] text-[#334155]">
+                            <input
+                              type="checkbox"
+                              checked={editValues.isActive}
+                              onChange={(e) =>
+                                setEditValues((prev) => ({ ...prev, isActive: e.target.checked }))
+                              }
+                            />
+                            Active
+                          </label>
+                        ) : (
                         <span
                           className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${
                             r.isActive !== false
@@ -785,9 +908,55 @@ export default function RecipeManagementConfigWorkspace({
                         >
                           {r.isActive !== false ? "Active" : "Inactive"}
                         </span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        {isEditing ? (
+                          <div className="flex flex-col items-end gap-1">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <Button
+                                size="sm"
+                                paddingX="px-2.5"
+                                className="h-7"
+                                onClick={() => void saveEdit(r)}
+                                disabled={isUpdating}
+                                prefixIcon={<FloppyDisk size={12} weight="bold" className="block" />}
+                              >
+                                {isUpdating ? "Saving..." : "Save"}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                paddingX="px-2.5"
+                                className="h-7"
+                                onClick={cancelEdit}
+                                disabled={isUpdating}
+                                prefixIcon={<X size={12} weight="bold" className="block" />}
+                              >
+                                Cancel
+                              </Button>
+                            </div>
+                            {editError && (
+                              <span className="max-w-[220px] text-[10px] text-red-600">{editError}</span>
+                            )}
+                          </div>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            paddingX="px-2.5"
+                            className="h-7"
+                            onClick={() => startEdit(r)}
+                            disabled={!r.recipeManagementId || (editingId !== null && !isEditing)}
+                            prefixIcon={<PencilSimple size={12} weight="bold" className="block" />}
+                          >
+                            Edit
+                          </Button>
+                        )}
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

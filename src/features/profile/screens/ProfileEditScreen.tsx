@@ -191,7 +191,7 @@ export default function ProfileEditScreen() {
         message: "Profile updated successfully.",
         variant: "success",
       });
-      invalidateLoginContext();
+      invalidateLoginContext({ refetch: true });
       router.refresh();
     } catch (error) {
       const message =

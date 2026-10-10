@@ -188,6 +188,18 @@ class SessionInactivityManager {
     });
   }
 
+  public resetSession() {
+    const now = Date.now();
+    this.lastActivityAt = now;
+    this.lastRecordedEventAt = now;
+    this.isExpired = false;
+    this.isSubmitting = false;
+    this.isWarningOpen = false;
+    this.remainingSeconds = 30;
+    this.persistLastActivity(now);
+    this.notify();
+  }
+
   public start() {
     if (typeof window === "undefined") return;
     this.isExpired = false;
@@ -195,15 +207,23 @@ class SessionInactivityManager {
     this.isWarningOpen = false;
     this.remainingSeconds = 30;
 
+    const now = Date.now();
+    this.lastActivityAt = now;
+    this.lastRecordedEventAt = now;
+    this.persistLastActivity(now);
+
     if (this.isRunning) {
-      this.syncFromStorageAndCheck();
+      this.notify();
       return;
     }
     this.isRunning = true;
 
     this.attachEventListeners();
-    this.syncFromStorageAndCheck();
+    this.notify();
 
+    if (this.tickerTimer) {
+      clearInterval(this.tickerTimer);
+    }
     this.tickerTimer = setInterval(() => {
       this.tick();
     }, 500);

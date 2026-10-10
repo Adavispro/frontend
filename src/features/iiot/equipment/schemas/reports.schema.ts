@@ -43,6 +43,11 @@ export const batchSummarySchema = z
     alarmCount: z.number().optional().nullable(),
     eventCount: z.number().optional().nullable(),
     overallStatus: z.string().optional().nullable(),
+    compressionPdfReadiness: z.object({
+      ready: z.boolean(),
+      totalLots: z.number(),
+      pendingLots: z.array(z.string()),
+    }).optional().nullable(),
     printCount: z.number().optional().nullable(),
     lastPrintedBy: z.string().optional().nullable(),
     lastPrintedAt: z.string().optional().nullable(),

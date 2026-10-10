@@ -1,589 +1,245 @@
 "use client";
 
-import React, { useState, useMemo, useEffect, useRef } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  CalendarBlank,
+  ArrowsClockwise,
   CaretDown,
+  MagnifyingGlass,
+  X,
   ChartLineUp,
-  Check,
   CheckCircle,
-  Clock,
-  CornersOut,
   DownloadSimple,
-  Eye,
   Funnel,
   Info,
-  MagnifyingGlass,
   Minus,
   Plus,
-  SlidersHorizontal,
   Warning,
   WarningCircle,
-  X,
-  XCircle,
 } from "@phosphor-icons/react";
-import { getBatchSummaryPaginated } from "@/features/iiot/equipment/api/reports.api";
-import type { BatchSummary } from "@/features/iiot/equipment/schemas/reports.schema";
+import {
+  getCppTrends,
+  type CppLimits,
+  type CppPoint,
+  type CppSeries,
+  type CppTrendsQuery,
+  type CppTrendsResponse,
+} from "../api/cppTrends.api";
 
-// Master reference data for cascading filters
-export interface ProductOption {
-  productCode: string;
-  productName: string;
+const BATCH_COLORS = ["#2563eb", "#059669", "#d97706", "#7c3aed", "#db2777", "#0891b2", "#ea580c", "#4f46e5"];
+const PLANT_ZONE = "Asia/Kolkata";
+const PRESETS = [
+  { value: "ALL", label: "All ingested data" },
+  { value: "7", label: "Last 7 days" },
+  { value: "30", label: "Last 30 days" },
+  { value: "90", label: "Last 3 months" },
+  { value: "CUSTOM", label: "Specific date range" },
+] as const;
+type Preset = (typeof PRESETS)[number]["value"];
+type XAxisMode = "elapsed" | "timeline" | "index";
+
+const selectClass =
+  "w-full bg-slate-50 hover:bg-white focus:bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition cursor-pointer disabled:opacity-60";
+
+function fmt(value: number | null | undefined, digits = 2) {
+  return value === null || value === undefined ? "—" : Number(value.toFixed(digits)).toLocaleString();
 }
 
-export interface RecipeOption {
-  recipeCode: string;
-  recipeName: string;
-  productCode: string;
-  associatedBatchSizes: string[];
-  equipmentIds: string[];
+function fmtTime(value: string | number) {
+  return new Date(value).toLocaleString("en-IN", {
+    timeZone: PLANT_ZONE, day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit",
+  });
 }
 
-export interface CppParameterDef {
-  code: string;
-  name: string;
-  unit: string;
-  equipmentType: "RMG" | "FBD" | "COAT" | "BLE" | "ALL";
-  setpoint: number;
-  upperCritical: number;
-  upperWarning: number;
-  lowerWarning: number;
-  lowerCritical: number;
+function fmtElapsed(minutes: number) {
+  if (minutes < 120) return `+${Math.round(minutes)}m`;
+  if (minutes < 2880) return `+${(minutes / 60).toFixed(1)}h`;
+  return `+${(minutes / 1440).toFixed(1)}d`;
 }
 
-const MASTER_PRODUCTS: ProductOption[] = [
-  { productCode: "STFS7000", productName: "Mirtazapine Tablets USP 5 mg" },
-  { productCode: "STAPU1000", productName: "Allopurinol tablets" },
-  { productCode: "STLEV5000", productName: "Levetiracetam tablets" },
-];
-
-const MASTER_RECIPES: RecipeOption[] = [
-  {
-    recipeCode: "RCP-MIRT-01",
-    recipeName: "Mirtazapine 5mg Granulation & Blending Recipe",
-    productCode: "STFS7000",
-    associatedBatchSizes: ["1000 KG", "2000 KG", "5000 KG"],
-    equipmentIds: ["G5RMG", "G5FBD", "G5OGB"],
-  },
-  {
-    recipeCode: "RCP-ALLO-01",
-    recipeName: "Allopurinol 100mg Direct Compression Recipe",
-    productCode: "STAPU1000",
-    associatedBatchSizes: ["1000 KG", "2500 KG"],
-    equipmentIds: ["G5RMG", "G5FBD", "G5OGB"],
-  },
-  {
-    recipeCode: "RCP-LEVE-01",
-    recipeName: "Levetiracetam 500mg Coating Recipe",
-    productCode: "STLEV5000",
-    associatedBatchSizes: ["1500 KG", "3000 KG"],
-    equipmentIds: ["G5COAT"],
-  },
-];
-
-const MASTER_EQUIPMENT = [
-  { id: "G5RMG", name: "Rapid Mixer Granulator (G5RMG)", type: "RMG" as const },
-  { id: "G5FBD", name: "Fluid Bed Dryer (G5FBD)", type: "FBD" as const },
-  { id: "G5OGB", name: "Octagonal Blender (G5OGB)", type: "BLE" as const },
-  { id: "G5COAT", name: "Auto Coater (G5COAT)", type: "COAT" as const },
-];
-
-const MASTER_CPP_PARAMETERS: CppParameterDef[] = [
-  // FBD Parameters
-  {
-    code: "inletTemp",
-    name: "Inlet Air Temperature",
-    unit: "°C",
-    equipmentType: "FBD",
-    setpoint: 60.0,
-    upperCritical: 66.0,
-    upperWarning: 64.0,
-    lowerWarning: 56.0,
-    lowerCritical: 54.0,
-  },
-  {
-    code: "outletTemp",
-    name: "Outlet Exhaust Temperature",
-    unit: "°C",
-    equipmentType: "FBD",
-    setpoint: 48.0,
-    upperCritical: 55.0,
-    upperWarning: 52.0,
-    lowerWarning: 44.0,
-    lowerCritical: 42.0,
-  },
-  {
-    code: "bedDiffPressure",
-    name: "Bed Differential Pressure",
-    unit: "mbar",
-    equipmentType: "FBD",
-    setpoint: 12.0,
-    upperCritical: 22.0,
-    upperWarning: 18.0,
-    lowerWarning: 6.0,
-    lowerCritical: 4.0,
-  },
-  // RMG Parameters
-  {
-    code: "agSpeed",
-    name: "Agitator Speed",
-    unit: "RPM",
-    equipmentType: "RMG",
-    setpoint: 140.0,
-    upperCritical: 160.0,
-    upperWarning: 150.0,
-    lowerWarning: 130.0,
-    lowerCritical: 120.0,
-  },
-  {
-    code: "chpSpeed",
-    name: "Granulator Speed",
-    unit: "RPM",
-    equipmentType: "RMG",
-    setpoint: 1420.0,
-    upperCritical: 1550.0,
-    upperWarning: 1500.0,
-    lowerWarning: 1350.0,
-    lowerCritical: 1300.0,
-  },
-  {
-    code: "agAmps",
-    name: "Agitator Current",
-    unit: "A",
-    equipmentType: "RMG",
-    setpoint: 28.0,
-    upperCritical: 33.0,
-    upperWarning: 30.5,
-    lowerWarning: 22.0,
-    lowerCritical: 18.0,
-  },
-  {
-    code: "heaterTemp",
-    name: "Granulation Temperature",
-    unit: "°C",
-    equipmentType: "RMG",
-    setpoint: 55.0,
-    upperCritical: 68.0,
-    upperWarning: 62.0,
-    lowerWarning: 48.0,
-    lowerCritical: 42.0,
-  },
-  // COAT Parameters
-  {
-    code: "inletAirTemp",
-    name: "Inlet Air Temperature",
-    unit: "°C",
-    equipmentType: "COAT",
-    setpoint: 65.0,
-    upperCritical: 75.0,
-    upperWarning: 70.0,
-    lowerWarning: 60.0,
-    lowerCritical: 55.0,
-  },
-  {
-    code: "bedTemp",
-    name: "Tablet Bed Temperature",
-    unit: "°C",
-    equipmentType: "COAT",
-    setpoint: 44.0,
-    upperCritical: 52.0,
-    upperWarning: 48.0,
-    lowerWarning: 40.0,
-    lowerCritical: 36.0,
-  },
-  {
-    code: "panSpeed",
-    name: "Pan Rotation Speed",
-    unit: "RPM",
-    equipmentType: "COAT",
-    setpoint: 8.0,
-    upperCritical: 12.0,
-    upperWarning: 10.0,
-    lowerWarning: 6.0,
-    lowerCritical: 4.0,
-  },
-  {
-    code: "sprayRate",
-    name: "Coating Spray Rate",
-    unit: "g/min",
-    equipmentType: "COAT",
-    setpoint: 120.0,
-    upperCritical: 150.0,
-    upperWarning: 135.0,
-    lowerWarning: 105.0,
-    lowerCritical: 90.0,
-  },
-  {
-    code: "atomAirPress",
-    name: "Atomizing Air Pressure",
-    unit: "bar",
-    equipmentType: "COAT",
-    setpoint: 2.5,
-    upperCritical: 3.0,
-    upperWarning: 2.8,
-    lowerWarning: 2.2,
-    lowerCritical: 2.0,
-  },
-  // BLE Parameters
-  {
-    code: "actualRpm",
-    name: "Blending Speed",
-    unit: "RPM",
-    equipmentType: "BLE",
-    setpoint: 5.0,
-    upperCritical: 7.0,
-    upperWarning: 6.0,
-    lowerWarning: 4.0,
-    lowerCritical: 3.0,
-  },
-];
-
-// Color palette for multiple-batch comparison (distinct, accessible colors)
-const BATCH_COLORS = [
-  "#2563eb", // blue-600
-  "#059669", // emerald-600
-  "#d97706", // amber-600
-  "#7c3aed", // violet-600
-  "#db2777", // pink-600
-  "#0891b2", // cyan-600
-  "#ea580c", // orange-600
-  "#4f46e5", // indigo-600
-];
-
-interface BatchTimeSeriesPoint {
-  elapsedMin: number;
-  timeLabel: string;
-  value: number;
-  status: "NORMAL" | "WARNING" | "CRITICAL";
+function seriesLabel(series: CppSeries) {
+  return series.lotNo ? `${series.batchNo} · Lot ${series.lotNo}` : series.batchNo;
 }
 
-interface BatchSeriesData {
-  batchNo: string;
-  color: string;
-  points: BatchTimeSeriesPoint[];
-  min: number;
-  max: number;
-  mean: number;
-  breaches: number;
+function limitValues(limits: CppLimits | null | undefined) {
+  if (!limits) return [];
+  return [limits.setpoint, limits.lowerWarning, limits.upperWarning, limits.lowerCritical, limits.upperCritical]
+    .filter((v): v is number => typeof v === "number");
 }
 
-// Generate deterministic pharmaceutical time-series curves for batch comparison
-function generateBatchTelemetry(
-  batchNo: string,
-  param: CppParameterDef,
-  pointsCount: number = 30
-): BatchTimeSeriesPoint[] {
-  let hash = 0;
-  for (let i = 0; i < batchNo.length; i++) {
-    hash = (hash << 5) - hash + batchNo.charCodeAt(i);
-    hash |= 0;
-  }
-  const seed = Math.abs(hash);
-  const offset = ((seed % 100) / 100 - 0.5) * (param.upperWarning - param.setpoint) * 0.4;
-  const variance = (param.upperWarning - param.setpoint) * 0.25;
-
-  const points: BatchTimeSeriesPoint[] = [];
-  for (let i = 0; i < pointsCount; i++) {
-    const elapsedMin = i * 2;
-    // Harmonic oscillation around setpoint
-    const wave = Math.sin((i / 4) + (seed % 10)) * variance;
-    const noise = Math.cos((i / 2) + (seed % 7)) * (variance * 0.4);
-    let val = param.setpoint + offset + wave + noise;
-
-    // A realistic occasional excursion for visual testing of limits
-    if (seed % 4 === 0 && i === 18) {
-      val = param.upperWarning + 0.5;
-    }
-
-    val = Number(val.toFixed(2));
-
-    let status: "NORMAL" | "WARNING" | "CRITICAL" = "NORMAL";
-    if (val >= param.upperCritical || val <= param.lowerCritical) {
-      status = "CRITICAL";
-    } else if (val >= param.upperWarning || val <= param.lowerWarning) {
-      status = "WARNING";
-    }
-
-    points.push({
-      elapsedMin,
-      timeLabel: `+${elapsedMin}m`,
-      value: val,
-      status,
-    });
-  }
-
-  return points;
-}
+const STATUS_STYLE: Record<CppPoint["status"], string> = {
+  OK: "text-emerald-700 bg-emerald-50 border-emerald-200",
+  WARNING: "text-amber-700 bg-amber-50 border-amber-200",
+  CRITICAL: "text-rose-700 bg-rose-50 border-rose-200",
+  NO_LIMITS: "text-slate-600 bg-slate-50 border-slate-200",
+};
 
 export default function CppTrendsScreen() {
-  // Cascading Filter States
-  const [dateRange, setDateRange] = useState<string>("Last 7 Days");
-  const [customStartDate, setCustomStartDate] = useState<string>("");
-  const [customEndDate, setCustomEndDate] = useState<string>("");
+  const [preset, setPreset] = useState<Preset>("ALL");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
+  const [equipmentId, setEquipmentId] = useState("");
+  const [productCode, setProductCode] = useState("");
+  const [parameter, setParameter] = useState("");
+  const [reloadToken, setReloadToken] = useState(0);
 
-  const [selectedProductCode, setSelectedProductCode] = useState<string>(MASTER_PRODUCTS[0].productCode);
+  const [data, setData] = useState<CppTrendsResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
+  const [xAxis, setXAxis] = useState<XAxisMode>("elapsed");
+  const [zoom, setZoom] = useState(1);
+  const [batchMenuOpen, setBatchMenuOpen] = useState(false);
+  const [batchSearch, setBatchSearch] = useState("");
+  const [excursionsOnly, setExcursionsOnly] = useState(false);
+  const batchMenuRef = useRef<HTMLDivElement>(null);
 
-  // Cascaded Recipes
-  const availableRecipes = useMemo(() => {
-    return MASTER_RECIPES.filter((r) => r.productCode === selectedProductCode);
-  }, [selectedProductCode]);
+  useEffect(() => {
+    if (!batchMenuOpen) return;
+    const close = (event: MouseEvent) => {
+      if (batchMenuRef.current && !batchMenuRef.current.contains(event.target as Node)) setBatchMenuOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") setBatchMenuOpen(false); };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [batchMenuOpen]);
+  const [hover, setHover] = useState<{ series: CppSeries; point: CppPoint; x: number; y: number; color: string } | null>(null);
 
-  const [selectedRecipeCode, setSelectedRecipeCode] = useState<string>(
-    MASTER_RECIPES.find((r) => r.productCode === MASTER_PRODUCTS[0].productCode)?.recipeCode || ""
+  const query = useMemo<CppTrendsQuery | null>(() => {
+    const base: CppTrendsQuery = { equipmentId: equipmentId || undefined, productCode: productCode || undefined, parameter: parameter || undefined };
+    if (preset === "CUSTOM") {
+      if (!customFrom || !customTo) return null;
+      return { ...base, fromDate: customFrom, toDate: customTo };
+    }
+    return preset === "ALL" ? base : { ...base, days: Number(preset) };
+  }, [equipmentId, productCode, parameter, preset, customFrom, customTo]);
+
+  useEffect(() => {
+    if (!query) return;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      setLoading(true);
+      setError(null);
+      getCppTrends(query, controller.signal)
+        .then((response) => {
+          setData(response);
+          const keys = new Set(response.series.map((s) => s.key));
+          setSelectedKeys((prev) => {
+            const kept = prev.filter((k) => keys.has(k));
+            return kept.length ? kept : response.defaultSelection;
+          });
+        })
+        .catch((err: unknown) => {
+          if (controller.signal.aborted) return;
+          setError(err instanceof Error ? err.message : "Unable to load CPP trends.");
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) setLoading(false);
+        });
+    }, 250);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [query, reloadToken]);
+
+  const series = useMemo(() => data?.series ?? [], [data]);
+  const colorByKey = useMemo(
+    () => new Map(series.map((s, i) => [s.key, BATCH_COLORS[i % BATCH_COLORS.length]])),
+    [series],
   );
+  const visible = useMemo(() => series.filter((s) => selectedKeys.includes(s.key)), [series, selectedKeys]);
+  const filteredSeries = useMemo(() => {
+    const term = batchSearch.trim().toLowerCase();
+    return series
+      .filter((s) => !excursionsOnly || s.stats.warningCount > 0 || s.stats.criticalCount > 0)
+      .filter((s) => !term || [s.batchNo, s.lotNo, s.productCode, s.productName].some((v) => v?.toLowerCase().includes(term)))
+      .slice()
+      .reverse();
+  }, [series, batchSearch, excursionsOnly]);
+  const currentParam = data?.parameters.find((p) => p.code === data.selectedParameter);
+  const unit = currentParam?.unit ?? "";
+  const currentEquipment = data?.equipment.find((e) => e.id === data.selectedEquipmentId);
+  const isReportSnapshots = currentEquipment?.type?.toUpperCase().includes("COMPRESS") || series.some((s) => s.points.some((p) => p.label?.includes("Lot")));
 
-  // Sync recipe when product changes
-  useEffect(() => {
-    if (availableRecipes.length > 0 && !availableRecipes.some((r) => r.recipeCode === selectedRecipeCode)) {
-      setSelectedRecipeCode(availableRecipes[0].recipeCode);
-    }
-  }, [availableRecipes, selectedRecipeCode]);
+  const xOf = (point: CppPoint, index: number) =>
+    xAxis === "timeline" ? point.t : xAxis === "index" ? index + 1 : point.elapsedMin;
 
-  const currentRecipe = useMemo(() => {
-    return MASTER_RECIPES.find((r) => r.recipeCode === selectedRecipeCode) || availableRecipes[0];
-  }, [selectedRecipeCode, availableRecipes]);
+  // Chart geometry
+  const svgWidth = 900 * zoom;
+  const svgHeight = 380;
+  const pad = { left: 65, right: 30, top: 25, bottom: 50 };
+  const plotW = svgWidth - pad.left - pad.right;
+  const plotH = svgHeight - pad.top - pad.bottom;
 
-  // Cascaded Batch Sizes
-  const availableBatchSizes = useMemo(() => {
-    return currentRecipe?.associatedBatchSizes || ["1000 KG"];
-  }, [currentRecipe]);
-
-  const [selectedBatchSize, setSelectedBatchSize] = useState<string>(availableBatchSizes[0]);
-
-  useEffect(() => {
-    if (!availableBatchSizes.includes(selectedBatchSize)) {
-      setSelectedBatchSize(availableBatchSizes[0]);
-    }
-  }, [availableBatchSizes, selectedBatchSize]);
-
-  // Cascaded Equipment
-  const availableEquipment = useMemo(() => {
-    const allowedIds = currentRecipe?.equipmentIds || ["G5RMG"];
-    return MASTER_EQUIPMENT.filter((eq) => allowedIds.includes(eq.id));
-  }, [currentRecipe]);
-
-  const [selectedEquipmentId, setSelectedEquipmentId] = useState<string>(
-    availableEquipment[0]?.id || "G5RMG"
-  );
-
-  useEffect(() => {
-    if (!availableEquipment.some((e) => e.id === selectedEquipmentId)) {
-      setSelectedEquipmentId(availableEquipment[0]?.id || "G5RMG");
-    }
-  }, [availableEquipment, selectedEquipmentId]);
-
-  const currentEquipment = useMemo(() => {
-    return MASTER_EQUIPMENT.find((e) => e.id === selectedEquipmentId) || availableEquipment[0];
-  }, [selectedEquipmentId, availableEquipment]);
-
-  // Cascaded CPP Parameters
-  const availableCppParams = useMemo(() => {
-    const eqType = currentEquipment?.type || "RMG";
-    return MASTER_CPP_PARAMETERS.filter((p) => p.equipmentType === eqType || p.equipmentType === "ALL");
-  }, [currentEquipment]);
-
-  const [selectedParamCode, setSelectedParamCode] = useState<string>(
-    availableCppParams[0]?.code || "inletTemp"
-  );
-
-  useEffect(() => {
-    if (!availableCppParams.some((p) => p.code === selectedParamCode)) {
-      setSelectedParamCode(availableCppParams[0]?.code || "");
-    }
-  }, [availableCppParams, selectedParamCode]);
-
-  const currentParam = useMemo(() => {
-    return availableCppParams.find((p) => p.code === selectedParamCode) || availableCppParams[0];
-  }, [selectedParamCode, availableCppParams]);
-
-  // Available Batches for selected product & equipment
-  const [liveBatches, setLiveBatches] = useState<BatchSummary[]>([]);
-  const [isLoadingBatches, setIsLoadingBatches] = useState(false);
-
-  useEffect(() => {
-    setIsLoadingBatches(true);
-    getBatchSummaryPaginated({
-      productCode: selectedProductCode,
-      equipmentId: selectedEquipmentId,
-      limit: 100,
-    })
-      .then((res) => {
-        setLiveBatches(res);
-      })
-      .catch(() => {
-        setLiveBatches([]);
-      })
-      .finally(() => {
-        setIsLoadingBatches(false);
+  const domain = useMemo(() => {
+    const xs: number[] = [];
+    const ys: number[] = [];
+    visible.forEach((s) => {
+      s.points.forEach((p, i) => {
+        xs.push(xAxis === "timeline" ? p.t : xAxis === "index" ? i + 1 : p.elapsedMin);
+        ys.push(p.value);
+        if (typeof p.min === "number") ys.push(p.min);
+        if (typeof p.max === "number") ys.push(p.max);
       });
-  }, [selectedProductCode, selectedEquipmentId]);
-
-  // List of batch numbers available for selection
-  const availableBatchNumbers = useMemo(() => {
-    const fromApi = liveBatches
-      .map((b) => b.batchNo)
-      .filter((no): no is string => Boolean(no && no.trim()));
-
-    if (fromApi.length >= 2) {
-      return Array.from(new Set(fromApi));
-    }
-
-    // Default canonical batches matching pharma dataset
-    const prefix = selectedEquipmentId.replace("G5", "");
-    return [
-      `B-2026-${prefix}-001`,
-      `B-2026-${prefix}-002`,
-      `B-2026-${prefix}-003`,
-      `B-2026-${prefix}-004`,
-    ];
-  }, [liveBatches, selectedEquipmentId]);
-
-  // Multi-Select Batches
-  const [selectedBatches, setSelectedBatches] = useState<string[]>([]);
-  const [isBatchDropdownOpen, setIsBatchDropdownOpen] = useState(false);
-  const [batchSearchQuery, setBatchSearchQuery] = useState("");
-  const batchDropdownRef = useRef<HTMLDivElement>(null);
-
-  // Close dropdown on click outside
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (batchDropdownRef.current && !batchDropdownRef.current.contains(event.target as Node)) {
-        setIsBatchDropdownOpen(false);
-      }
-    }
-    if (isBatchDropdownOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-      return () => document.removeEventListener("mousedown", handleClickOutside);
-    }
-  }, [isBatchDropdownOpen]);
-
-  useEffect(() => {
-    // Default select first two batches for comparison
-    if (availableBatchNumbers.length > 0) {
-      setSelectedBatches(availableBatchNumbers.slice(0, 2));
-    }
-  }, [availableBatchNumbers]);
-
-  const toggleBatchSelection = (bNo: string) => {
-    setSelectedBatches((prev) => {
-      if (prev.includes(bNo)) {
-        if (prev.length === 1) return prev; // Keep at least one selected
-        return prev.filter((b) => b !== bNo);
-      } else {
-        return [...prev, bNo];
-      }
+      ys.push(...limitValues(data?.limitsVary ? s.limits : null));
     });
-  };
+    ys.push(...limitValues(data?.limits));
+    if (!xs.length) return null;
+    let [x0, x1] = [Math.min(...xs), Math.max(...xs)];
+    if (x0 === x1) { x0 -= 1; x1 += 1; }
+    let [y0, y1] = [Math.min(...ys), Math.max(...ys)];
+    const span = y1 - y0 || Math.abs(y1) * 0.1 || 1;
+    y0 -= span * 0.12;
+    y1 += span * 0.12;
+    return { x0, x1, y0, y1 };
+  }, [visible, xAxis, data?.limits, data?.limitsVary]);
 
-  const filteredAvailableBatches = useMemo(() => {
-    if (!batchSearchQuery.trim()) return availableBatchNumbers;
-    return availableBatchNumbers.filter((b) =>
-      b.toLowerCase().includes(batchSearchQuery.trim().toLowerCase())
+  const sx = (x: number) => (domain ? pad.left + ((x - domain.x0) / (domain.x1 - domain.x0)) * plotW : 0);
+  const sy = (y: number) => (domain ? pad.top + plotH - ((y - domain.y0) / (domain.y1 - domain.y0)) * plotH : 0);
+
+  const yTicks = domain ? Array.from({ length: 6 }, (_, i) => domain.y0 + ((domain.y1 - domain.y0) * i) / 5) : [];
+  const xTicks = domain ? Array.from({ length: 6 }, (_, i) => domain.x0 + ((domain.x1 - domain.x0) * i) / 5) : [];
+  const xTickLabel = (x: number) =>
+    xAxis === "timeline"
+      ? new Date(x).toLocaleDateString("en-IN", { timeZone: PLANT_ZONE, day: "2-digit", month: "short" })
+      : xAxis === "index" ? `#${Math.round(x)}` : fmtElapsed(x);
+
+  const toggleKey = (key: string) =>
+    setSelectedKeys((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
+
+  const exportCsv = () => {
+    const rows = [["Batch", "Lot", "Product", "Time", "Sample", "Value", "Min", "Max", "Status"]];
+    visible.forEach((s) =>
+      s.points.forEach((p) =>
+        rows.push([s.batchNo, s.lotNo ?? p.label ?? "", s.productName ?? "", new Date(p.t).toISOString(),
+          String(p.elapsedMin), String(p.value), String(p.min ?? ""), String(p.max ?? ""), p.status]),
+      ),
     );
-  }, [availableBatchNumbers, batchSearchQuery]);
-
-  const handleSelectAllBatches = () => {
-    setSelectedBatches([...availableBatchNumbers]);
+    const csv = rows.map((r) => r.map((c) => `"${c.replace(/"/g, '""')}"`).join(",")).join("\n");
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    link.download = `cpp-trends-${data?.selectedEquipmentId ?? "equipment"}-${data?.selectedParameter ?? "param"}.csv`;
+    link.click();
+    URL.revokeObjectURL(link.href);
   };
 
-  const handleClearBatches = () => {
-    if (availableBatchNumbers.length > 0) {
-      setSelectedBatches([availableBatchNumbers[0]]);
-    }
-  };
-
-  // Zoom Level
-  const [zoomLevel, setZoomLevel] = useState<number>(1);
-  const handleZoomIn = () => setZoomLevel((z) => Math.min(z + 0.25, 2.5));
-  const handleZoomOut = () => setZoomLevel((z) => Math.max(z - 0.25, 0.75));
-  const handleResetZoom = () => setZoomLevel(1);
-
-  // Hover state for interactive tooltip
-  const [hoveredPoint, setHoveredPoint] = useState<{
-    batchNo: string;
-    point: BatchTimeSeriesPoint;
-    x: number;
-    y: number;
-    color: string;
-  } | null>(null);
-
-  // Compute Time-Series for each selected batch
-  const seriesData: BatchSeriesData[] = useMemo(() => {
-    if (!currentParam) return [];
-
-    return selectedBatches.map((bNo, idx) => {
-      const color = BATCH_COLORS[idx % BATCH_COLORS.length];
-      const points = generateBatchTelemetry(bNo, currentParam, 25);
-      const vals = points.map((p) => p.value);
-      const min = Math.min(...vals);
-      const max = Math.max(...vals);
-      const mean = Number((vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(2));
-      const breaches = points.filter((p) => p.status !== "NORMAL").length;
-
-      return {
-        batchNo: bNo,
-        color,
-        points,
-        min,
-        max,
-        mean,
-        breaches,
-      };
-    });
-  }, [selectedBatches, currentParam]);
-
-  // Chart Dimensions & Scaling
-  const svgWidth = 900 * zoomLevel;
-  const svgHeight = 360;
-  const paddingLeft = 65;
-  const paddingRight = 40;
-  const paddingTop = 35;
-  const paddingBottom = 45;
-
-  const chartAreaWidth = svgWidth - paddingLeft - paddingRight;
-  const chartAreaHeight = svgHeight - paddingTop - paddingBottom;
-
-  const yMin = useMemo(() => {
-    if (!currentParam) return 0;
-    const allVals = seriesData.flatMap((s) => s.points.map((p) => p.value));
-    const paramMin = currentParam.lowerCritical;
-    const minVal = allVals.length ? Math.min(...allVals, paramMin) : paramMin;
-    return Math.floor(minVal - (currentParam.setpoint - currentParam.lowerCritical) * 0.3);
-  }, [currentParam, seriesData]);
-
-  const yMax = useMemo(() => {
-    if (!currentParam) return 100;
-    const allVals = seriesData.flatMap((s) => s.points.map((p) => p.value));
-    const paramMax = currentParam.upperCritical;
-    const maxVal = allVals.length ? Math.max(...allVals, paramMax) : paramMax;
-    return Math.ceil(maxVal + (currentParam.upperCritical - currentParam.setpoint) * 0.3);
-  }, [currentParam, seriesData]);
-
-  const yRange = Math.max(yMax - yMin, 1);
-
-  const getYCoord = (val: number) => {
-    const ratio = (val - yMin) / yRange;
-    return paddingTop + chartAreaHeight - ratio * chartAreaHeight;
-  };
-
-  const maxPointsCount = useMemo(() => {
-    return Math.max(...seriesData.map((s) => s.points.length), 1);
-  }, [seriesData]);
-
-  const getXCoord = (index: number) => {
-    if (maxPointsCount <= 1) return paddingLeft + chartAreaWidth / 2;
-    return paddingLeft + (index / (maxPointsCount - 1)) * chartAreaWidth;
-  };
-
-  // Y-Axis Ticks
-  const yTicks = useMemo(() => {
-    const step = (yMax - yMin) / 5;
-    return Array.from({ length: 6 }, (_, i) => Number((yMin + step * i).toFixed(1)));
-  }, [yMin, yMax]);
+  const commonLimits = data?.limits ?? null;
+  const limitLines: { value: number | null | undefined; label: string; color: string; dash?: string }[] = commonLimits
+    ? [
+        { value: commonLimits.upperCritical, label: "UCL", color: "#e11d48", dash: "6 4" },
+        { value: commonLimits.upperWarning, label: "UWL", color: "#d97706", dash: "4 4" },
+        { value: commonLimits.setpoint, label: "SP", color: "#16a34a" },
+        { value: commonLimits.lowerWarning, label: "LWL", color: "#d97706", dash: "4 4" },
+        { value: commonLimits.lowerCritical, label: "LCL", color: "#e11d48", dash: "6 4" },
+      ]
+    : [];
 
   return (
     <div className="space-y-6 pb-12">
-      {/* Top Banner / Breadcrumb Heading */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
         <div>
           <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2.5">
@@ -593,776 +249,356 @@ export default function CppTrendsScreen() {
             Critical Process Parameter (CPP) Trends
           </h1>
           <p className="text-xs text-slate-500 mt-1">
-            Compare continuous critical process parameters across multiple batches with setpoint specifications & tolerance limits
+            Compare ingested process parameters across batches against recipe and equipment control limits
           </p>
         </div>
-
         <div className="flex items-center gap-2">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-xs font-semibold text-slate-700">
-            <span>Comparing:</span>
-            <span className="px-2 py-0.5 rounded-full bg-indigo-600 text-white font-mono font-bold text-[11px]">
-              {selectedBatches.length} {selectedBatches.length === 1 ? "Batch" : "Batches"}
-            </span>
-          </div>
+          {data?.dataRange && (
+            <span className="text-[11px] text-slate-500 font-medium">Ingested data: {data.dataRange.label}</span>
+          )}
+          <button
+            type="button"
+            onClick={() => setReloadToken((t) => t + 1)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            <ArrowsClockwise className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} /> Refresh
+          </button>
         </div>
       </div>
 
-      {/* FILTER CONTROL CARD (Cascading Filters) */}
       <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
-        <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-          <div className="flex items-center gap-2">
-            <Funnel className="h-4 w-4 text-indigo-600" />
-            <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-              Cascading Filter Configuration
-            </h2>
-          </div>
-          <span className="text-[11px] text-slate-400 font-medium">
-            Filters enforce dependent parameter validation
-          </span>
+        <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
+          <Funnel className="h-4 w-4 text-indigo-600" />
+          <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wider">Filters</h2>
         </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {/* 1. Date Range */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div>
-            <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1.5">
-              1. Date Range
-            </label>
-            <div className="relative">
-              <select
-                value={dateRange}
-                onChange={(e) => setDateRange(e.target.value)}
-                className="w-full bg-slate-50 hover:bg-white focus:bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition shadow-xs cursor-pointer"
-              >
-                <option value="Today">Today</option>
-                <option value="Last 7 Days">Last 7 Days</option>
-                <option value="Last 1 Month">Last 1 Month</option>
-                <option value="Last 3 Months">Last 3 Months</option>
-                <option value="Specific Range">Specific Date Range</option>
-              </select>
-            </div>
-            {dateRange === "Specific Range" && (
+            <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1.5">Date Range</label>
+            <select value={preset} onChange={(e) => setPreset(e.target.value as Preset)} className={selectClass}>
+              {PRESETS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+            </select>
+            {preset === "CUSTOM" && (
               <div className="flex items-center gap-1.5 mt-2">
-                <input
-                  type="date"
-                  value={customStartDate}
-                  onChange={(e) => setCustomStartDate(e.target.value)}
-                  className="w-1/2 text-[11px] border border-slate-300 rounded-lg p-1.5 font-mono"
-                />
+                <input type="date" value={customFrom} max={customTo || undefined} onChange={(e) => setCustomFrom(e.target.value)}
+                  className="w-1/2 text-[11px] border border-slate-300 rounded-lg p-1.5 font-mono" />
                 <span className="text-xs text-slate-400">to</span>
-                <input
-                  type="date"
-                  value={customEndDate}
-                  onChange={(e) => setCustomEndDate(e.target.value)}
-                  className="w-1/2 text-[11px] border border-slate-300 rounded-lg p-1.5 font-mono"
-                />
+                <input type="date" value={customTo} min={customFrom || undefined} onChange={(e) => setCustomTo(e.target.value)}
+                  className="w-1/2 text-[11px] border border-slate-300 rounded-lg p-1.5 font-mono" />
               </div>
             )}
           </div>
-
-          {/* 2. Product Name */}
           <div>
-            <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1.5">
-              2. Product Name
-            </label>
+            <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1.5">Equipment</label>
             <select
-              value={selectedProductCode}
-              onChange={(e) => setSelectedProductCode(e.target.value)}
-              className="w-full bg-slate-50 hover:bg-white focus:bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition shadow-xs cursor-pointer"
+              value={data?.selectedEquipmentId ?? equipmentId}
+              onChange={(e) => { setEquipmentId(e.target.value); setProductCode(""); setParameter(""); setSelectedKeys([]); }}
+              className={selectClass}
+              disabled={!data?.equipment.length}
             >
-              {MASTER_PRODUCTS.map((prod) => (
-                <option key={prod.productCode} value={prod.productCode}>
-                  {prod.productName} ({prod.productCode})
-                </option>
+              {(data?.equipment ?? []).map((eq) => (
+                <option key={eq.id} value={eq.id}>{eq.name}{eq.stageName ? ` · ${eq.stageName}` : ""} ({eq.id})</option>
               ))}
             </select>
           </div>
-
-          {/* 3. Recipe Name */}
           <div>
-            <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1.5">
-              3. Recipe Name
-            </label>
-            <select
-              value={selectedRecipeCode}
-              onChange={(e) => setSelectedRecipeCode(e.target.value)}
-              className="w-full bg-slate-50 hover:bg-white focus:bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition shadow-xs cursor-pointer"
-            >
-              {availableRecipes.map((rcp) => (
-                <option key={rcp.recipeCode} value={rcp.recipeCode}>
-                  {rcp.recipeName}
-                </option>
-              ))}
+            <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1.5">Product</label>
+            <select value={productCode} onChange={(e) => { setProductCode(e.target.value); setSelectedKeys([]); }} className={selectClass}>
+              <option value="">All products</option>
+              {productCode && !data?.productOptions.some((p) => p.code === productCode) && <option value={productCode}>{productCode}</option>}
+              {(data?.productOptions ?? []).map((p) => <option key={p.code} value={p.code}>{p.name}</option>)}
             </select>
           </div>
-
-          {/* 4. Batch Size */}
           <div>
-            <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1.5">
-              4. Batch Size
-            </label>
+            <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1.5">CPP Parameter</label>
             <select
-              value={selectedBatchSize}
-              onChange={(e) => setSelectedBatchSize(e.target.value)}
-              className="w-full bg-slate-50 hover:bg-white focus:bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition shadow-xs cursor-pointer"
+              value={data?.selectedParameter ?? parameter}
+              onChange={(e) => setParameter(e.target.value)}
+              className={selectClass}
+              disabled={!data?.parameters.length}
             >
-              {availableBatchSizes.map((size) => (
-                <option key={size} value={size}>
-                  {size}
-                </option>
+              {(data?.parameters ?? []).map((p) => (
+                <option key={p.code} value={p.code}>{p.name}{p.unit ? ` (${p.unit})` : ""}</option>
               ))}
             </select>
-          </div>
-
-          {/* 5. Equipment ID */}
-          <div>
-            <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1.5">
-              5. Equipment ID
-            </label>
-            <select
-              value={selectedEquipmentId}
-              onChange={(e) => setSelectedEquipmentId(e.target.value)}
-              className="w-full bg-slate-50 hover:bg-white focus:bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition shadow-xs cursor-pointer"
-            >
-              {availableEquipment.map((eq) => (
-                <option key={eq.id} value={eq.id}>
-                  {eq.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* 6. CPP Parameter (Single Select Dropdown) */}
-          <div className="col-span-1">
-            <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1.5">
-              6. CPP Parameter
-            </label>
-            <div className="relative">
-              <select
-                value={selectedParamCode}
-                onChange={(e) => setSelectedParamCode(e.target.value)}
-                className="w-full bg-slate-50 hover:bg-white focus:bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition shadow-xs cursor-pointer appearance-none pr-8"
-              >
-                {availableCppParams.map((p) => (
-                  <option key={p.code} value={p.code}>
-                    {p.name} ({p.unit})
-                  </option>
-                ))}
-              </select>
-              <CaretDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500" />
-            </div>
-            {currentParam && (
-              <div className="mt-1 flex items-center justify-between text-[10px] text-slate-500 font-mono">
-                <span>SP: <strong className="text-indigo-600">{currentParam.setpoint} {currentParam.unit}</strong></span>
-                <span>Limits: [{currentParam.lowerCritical} - {currentParam.upperCritical}]</span>
-              </div>
+            {!!data?.unavailableParameters.length && (
+              <p className="mt-1.5 text-[10px] text-slate-400" title={data.unavailableParameters.map((p) => p.name).join(", ")}>
+                {data.unavailableParameters.length} configured parameter(s) have no ingested values
+              </p>
             )}
-          </div>
-        </div>
-
-        {/* 7. Multi-Select Batches Drop-Down & Highlighted Chips */}
-        <div className="pt-3 border-t border-slate-100 space-y-3">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">
-                7. Batches for Comparison (Multi-Select):
-              </label>
-              <span className="text-[11px] text-slate-400">
-                ({selectedBatches.length} of {availableBatchNumbers.length} selected)
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={handleSelectAllBatches}
-                className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-700 transition cursor-pointer"
-              >
-                Select All
-              </button>
-              <span className="text-slate-300">&bull;</span>
-              <button
-                type="button"
-                onClick={handleClearBatches}
-                className="text-[11px] font-semibold text-slate-500 hover:text-slate-700 transition cursor-pointer"
-              >
-                Reset to First
-              </button>
-            </div>
-          </div>
-
-          <div className="flex flex-col sm:flex-row sm:items-start gap-3">
-            {/* Multi-Select Drop-down Trigger & Menu */}
-            <div className="relative shrink-0 w-full sm:w-72" ref={batchDropdownRef}>
-              <button
-                type="button"
-                onClick={() => setIsBatchDropdownOpen((prev) => !prev)}
-                className={`w-full flex items-center justify-between gap-2 px-3 py-2 bg-slate-50 hover:bg-white border rounded-xl text-xs font-semibold transition shadow-xs cursor-pointer ${
-                  isBatchDropdownOpen
-                    ? "border-indigo-500 ring-2 ring-indigo-500/20 bg-white"
-                    : "border-slate-300 text-slate-800"
-                }`}
-              >
-                <span className="truncate">
-                  {selectedBatches.length === 0
-                    ? "Select batches..."
-                    : `${selectedBatches.length} batch${selectedBatches.length > 1 ? "es" : ""} selected`}
-                </span>
-                <CaretDown
-                  className={`h-3.5 w-3.5 text-slate-500 transition-transform duration-200 shrink-0 ${
-                    isBatchDropdownOpen ? "rotate-180 text-indigo-600" : ""
-                  }`}
-                />
-              </button>
-
-              {/* Multi-Select Drop-Down Menu */}
-              {isBatchDropdownOpen && (
-                <div className="absolute left-0 top-full mt-1.5 w-full bg-white border border-slate-200 rounded-xl shadow-xl z-30 p-2.5 space-y-2 animate-in fade-in-50 duration-150">
-                  {/* Search inside Drop-down */}
-                  <div className="relative">
-                    <MagnifyingGlass className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-                    <input
-                      type="text"
-                      placeholder="Search batch..."
-                      value={batchSearchQuery}
-                      onChange={(e) => setBatchSearchQuery(e.target.value)}
-                      className="w-full pl-8 pr-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
-                    />
-                    {batchSearchQuery && (
-                      <button
-                        type="button"
-                        onClick={() => setBatchSearchQuery("")}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Batch Options with Checkboxes */}
-                  <div className="max-h-52 overflow-y-auto space-y-1 pr-1">
-                    {filteredAvailableBatches.length === 0 ? (
-                      <div className="py-3 text-center text-xs text-slate-400">
-                        No matching batches
-                      </div>
-                    ) : (
-                      filteredAvailableBatches.map((bNo) => {
-                        const isSelected = selectedBatches.includes(bNo);
-                        const colorIndex = selectedBatches.indexOf(bNo);
-                        const batchColor =
-                          colorIndex >= 0 ? BATCH_COLORS[colorIndex % BATCH_COLORS.length] : "#94a3b8";
-
-                        return (
-                          <button
-                            key={bNo}
-                            type="button"
-                            onClick={() => toggleBatchSelection(bNo)}
-                            className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer text-left ${
-                              isSelected
-                                ? "bg-indigo-50/70 text-slate-900"
-                                : "hover:bg-slate-50 text-slate-700"
-                            }`}
-                          >
-                            <div className="flex items-center gap-2">
-                              <div
-                                className={`w-4 h-4 rounded flex items-center justify-center border transition ${
-                                  isSelected
-                                    ? "bg-indigo-600 border-indigo-600 text-white"
-                                    : "border-slate-300 bg-white"
-                                }`}
-                              >
-                                {isSelected && <Check className="h-3 w-3" weight="bold" />}
-                              </div>
-                              <span
-                                className="h-2 w-2 rounded-full shrink-0"
-                                style={{ backgroundColor: batchColor }}
-                              />
-                              <span className="font-mono">{bNo}</span>
-                            </div>
-
-                            {isSelected && (
-                              <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider">
-                                Selected
-                              </span>
-                            )}
-                          </button>
-                        );
-                      })
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Selected Values Highlight as Chips */}
-            <div className="flex-1 min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                {selectedBatches.map((bNo) => {
-                  const colorIndex = selectedBatches.indexOf(bNo);
-                  const batchColor = BATCH_COLORS[colorIndex % BATCH_COLORS.length];
-
-                  return (
-                    <div
-                      key={bNo}
-                      className="inline-flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-xl text-xs font-bold border transition shadow-xs"
-                      style={{
-                        backgroundColor: `${batchColor}12`,
-                        borderColor: `${batchColor}40`,
-                        color: "#0f172a",
-                      }}
-                    >
-                      <span
-                        className="h-2.5 w-2.5 rounded-full shrink-0 shadow-xs"
-                        style={{ backgroundColor: batchColor }}
-                      />
-                      <span className="font-mono text-xs text-slate-800">{bNo}</span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (selectedBatches.length > 1) {
-                            setSelectedBatches(selectedBatches.filter((b) => b !== bNo));
-                          }
-                        }}
-                        className={`p-0.5 rounded-full transition ml-0.5 ${
-                          selectedBatches.length <= 1
-                            ? "text-slate-300 cursor-not-allowed"
-                            : "text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 cursor-pointer"
-                        }`}
-                        title={
-                          selectedBatches.length <= 1
-                            ? "At least one batch must remain selected"
-                            : `Remove ${bNo}`
-                        }
-                      >
-                        <X className="h-3 w-3" weight="bold" />
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
           </div>
         </div>
       </div>
 
-      {/* INTERACTIVE CPP TREND GRAPH */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+      {error && (
+        <div className="flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-semibold text-rose-700">
+          <WarningCircle className="h-4 w-4" /> {error}
+        </div>
+      )}
+
+      {data?.summary && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[
+            { label: "Batches in range", value: data.summary.batchCount, tone: "text-slate-900" },
+            { label: isReportSnapshots ? "Lot reports" : "Data points", value: data.summary.pointCount, tone: "text-slate-900" },
+            { label: "Warning excursions", value: data.summary.warningCount, tone: "text-amber-600" },
+            { label: "Critical excursions", value: data.summary.criticalCount, tone: "text-rose-600" },
+          ].map((card) => (
+            <div key={card.label} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">{card.label}</p>
+              <p className={`mt-1 text-2xl font-bold ${card.tone}`}>{card.value}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-              <span className="h-2.5 w-2.5 rounded-full bg-indigo-600" />
-              <span>{currentParam?.name} Comparison</span>
-              <span className="text-xs font-mono text-slate-500 font-normal">
-                [{currentParam?.unit}]
-              </span>
-            </h3>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Equipment: <strong className="text-slate-700 font-mono">{selectedEquipmentId}</strong> &bull; Recipe:{" "}
-              <strong className="text-slate-700 font-mono">{selectedRecipeCode}</strong> &bull; Setpoint:{" "}
-              <strong className="text-indigo-600 font-mono font-bold">{currentParam?.setpoint} {currentParam?.unit}</strong>
+            <h2 className="text-sm font-bold text-slate-900">
+              {currentParam ? `${currentParam.name}${unit ? ` (${unit})` : ""}` : "Parameter trend"}
+            </h2>
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              {commonLimits?.source ? `Limits: ${commonLimits.source}` : data?.limitsVary ? "Limits differ per batch/lot — shown per series" : "No configured limits for this parameter"}
+              {data?.fromDate && data?.toDate ? ` · ${data.fromDate} to ${data.toDate}` : ""}
             </p>
           </div>
-
-          {/* Chart Controls: Zoom, Legend, Reset */}
           <div className="flex items-center gap-2">
-            <div className="flex items-center bg-slate-100 rounded-xl p-0.5 border border-slate-200">
-              <button
-                type="button"
-                onClick={handleZoomOut}
-                disabled={zoomLevel <= 0.75}
-                title="Zoom Out"
-                className="p-1.5 text-slate-600 hover:text-slate-900 disabled:opacity-40 transition cursor-pointer"
-              >
-                <Minus className="h-3.5 w-3.5" />
-              </button>
-              <span className="px-2 text-[10px] font-mono font-bold text-slate-700">
-                {Math.round(zoomLevel * 100)}%
-              </span>
-              <button
-                type="button"
-                onClick={handleZoomIn}
-                disabled={zoomLevel >= 2.5}
-                title="Zoom In"
-                className="p-1.5 text-slate-600 hover:text-slate-900 disabled:opacity-40 transition cursor-pointer"
-              >
-                <Plus className="h-3.5 w-3.5" />
-              </button>
+            <div className="inline-flex rounded-xl border border-slate-200 p-0.5 text-[11px] font-semibold">
+              {([["elapsed", "Elapsed"], ["timeline", "Timeline"], ["index", "Sample #"]] as const).map(([mode, label]) => (
+                <button key={mode} type="button" onClick={() => setXAxis(mode)}
+                  className={`px-2.5 py-1 rounded-lg ${xAxis === mode ? "bg-indigo-600 text-white" : "text-slate-600 hover:bg-slate-50"}`}>
+                  {label}
+                </button>
+              ))}
             </div>
-
-            <button
-              type="button"
-              onClick={handleResetZoom}
-              className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 text-xs font-semibold transition cursor-pointer"
-            >
-              Reset Zoom
+            <button type="button" aria-label="Zoom out" onClick={() => setZoom((z) => Math.max(0.75, z - 0.25))} className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50"><Minus className="h-3.5 w-3.5" /></button>
+            <button type="button" aria-label="Zoom in" onClick={() => setZoom((z) => Math.min(2.5, z + 0.25))} className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50"><Plus className="h-3.5 w-3.5" /></button>
+            <button type="button" onClick={exportCsv} disabled={!visible.length}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+              <DownloadSimple className="h-3.5 w-3.5" /> CSV
             </button>
           </div>
         </div>
 
-        {/* Legend Chips (Batches + Tolerance Reference Lines) */}
-        <div className="flex flex-wrap items-center gap-3 pt-1 text-xs">
-          {seriesData.map((s) => (
-            <div key={s.batchNo} className="inline-flex items-center gap-1.5">
-              <span className="h-3 w-3 rounded-full" style={{ backgroundColor: s.color }} />
-              <span className="font-mono font-bold text-slate-800">{s.batchNo}</span>
+        {series.length > 0 && (
+          <div className="flex flex-wrap items-start gap-3">
+            <div ref={batchMenuRef} className="relative w-full sm:w-96">
+              <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1.5">
+                Batches ({selectedKeys.length} of {series.length} selected)
+              </label>
+              <button type="button" onClick={() => setBatchMenuOpen((o) => !o)} aria-expanded={batchMenuOpen}
+                className={`${selectClass} flex items-center justify-between text-left`}>
+                <span className="truncate">
+                  {selectedKeys.length === 0
+                    ? "Select batches…"
+                    : selectedKeys.length === series.length
+                      ? `All batches (${series.length})`
+                      : visible.slice(0, 3).map(seriesLabel).join(", ") + (visible.length > 3 ? ` +${visible.length - 3} more` : "")}
+                </span>
+                <CaretDown className={`h-3.5 w-3.5 shrink-0 text-slate-500 transition ${batchMenuOpen ? "rotate-180" : ""}`} />
+              </button>
+              {batchMenuOpen && (
+                <div className="absolute z-30 mt-1 w-full rounded-xl border border-slate-200 bg-white shadow-xl">
+                  <div className="p-2 border-b border-slate-100 space-y-2">
+                    <div className="relative">
+                      <MagnifyingGlass className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                      <input autoFocus value={batchSearch} onChange={(e) => setBatchSearch(e.target.value)}
+                        placeholder="Search batch, lot or product…"
+                        className="w-full rounded-lg border border-slate-300 bg-slate-50 py-1.5 pl-8 pr-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                    </div>
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-semibold">
+                      <button type="button" onClick={() => setSelectedKeys((prev) => Array.from(new Set([...prev, ...filteredSeries.map((s) => s.key)])))}
+                        className="text-indigo-600 hover:underline">
+                        Select {batchSearch || excursionsOnly ? `matching (${filteredSeries.length})` : "all"}
+                      </button>
+                      <button type="button" onClick={() => setSelectedKeys(data?.defaultSelection ?? [])} className="text-slate-600 hover:underline">Latest 6</button>
+                      <button type="button" onClick={() => setSelectedKeys([])} className="text-rose-600 hover:underline">Clear</button>
+                      <label className="ml-auto inline-flex items-center gap-1 text-slate-600 cursor-pointer">
+                        <input type="checkbox" checked={excursionsOnly} onChange={(e) => setExcursionsOnly(e.target.checked)} className="accent-indigo-600" />
+                        With excursions only
+                      </label>
+                    </div>
+                  </div>
+                  <ul className="max-h-72 overflow-y-auto py-1">
+                    {filteredSeries.length === 0 && <li className="px-3 py-3 text-xs text-slate-500">No batches match.</li>}
+                    {filteredSeries.map((s) => {
+                      const active = selectedKeys.includes(s.key);
+                      return (
+                        <li key={s.key}>
+                          <label className={`flex cursor-pointer items-center gap-2 px-3 py-1.5 text-xs hover:bg-slate-50 ${active ? "bg-indigo-50/50" : ""}`}>
+                            <input type="checkbox" checked={active} onChange={() => toggleKey(s.key)} className="accent-indigo-600" />
+                            <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: colorByKey.get(s.key) }} />
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate font-mono font-semibold text-slate-800">{seriesLabel(s)}</span>
+                              <span className="block truncate text-[10px] text-slate-500">
+                                {s.productName || s.productCode || "—"} · {fmtTime(s.startAt)} · {s.stats.count} pts
+                              </span>
+                            </span>
+                            {(s.stats.criticalCount > 0 || s.stats.warningCount > 0) && (
+                              <Warning className={`h-3.5 w-3.5 shrink-0 ${s.stats.criticalCount ? "text-rose-500" : "text-amber-500"}`} weight="fill" />
+                            )}
+                          </label>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
             </div>
-          ))}
-
-          <span className="text-slate-300">|</span>
-
-          {/* Reference Line Indicators */}
-          <div className="inline-flex items-center gap-1.5 text-[11px] text-slate-600 font-medium">
-            <span className="h-0.5 w-4 bg-indigo-500 border-t border-dashed border-indigo-700" />
-            <span>Target Setpoint ({currentParam?.setpoint} {currentParam?.unit})</span>
-          </div>
-
-          <div className="inline-flex items-center gap-1.5 text-[11px] text-amber-700 font-medium">
-            <span className="h-0.5 w-4 bg-amber-500" />
-            <span>Warning Limits (±{currentParam?.upperWarning})</span>
-          </div>
-
-          <div className="inline-flex items-center gap-1.5 text-[11px] text-rose-700 font-medium">
-            <span className="h-0.5 w-4 bg-rose-500" />
-            <span>Critical Limits (±{currentParam?.upperCritical})</span>
-          </div>
-        </div>
-
-        {/* SVG CHART CONTAINER */}
-        <div className="overflow-x-auto border border-slate-200 rounded-xl bg-slate-900/95 p-2 shadow-inner relative">
-          <svg
-            width={svgWidth}
-            height={svgHeight}
-            className="select-none block font-sans"
-            onMouseLeave={() => setHoveredPoint(null)}
-          >
-            {/* Grid Lines */}
-            {yTicks.map((tick) => {
-              const y = getYCoord(tick);
-              return (
-                <g key={tick}>
-                  <line
-                    x1={paddingLeft}
-                    y1={y}
-                    x2={svgWidth - paddingRight}
-                    y2={y}
-                    stroke="#334155"
-                    strokeDasharray="3 3"
-                    strokeWidth="1"
-                  />
-                  <text
-                    x={paddingLeft - 10}
-                    y={y + 4}
-                    textAnchor="end"
-                    fill="#94a3b8"
-                    fontSize="10"
-                    fontFamily="monospace"
-                  >
-                    {tick}
-                  </text>
-                </g>
-              );
-            })}
-
-            {/* Critical Limits Band / Lines */}
-            {currentParam && (
-              <>
-                {/* Upper Critical Limit Line */}
-                <line
-                  x1={paddingLeft}
-                  y1={getYCoord(currentParam.upperCritical)}
-                  x2={svgWidth - paddingRight}
-                  y2={getYCoord(currentParam.upperCritical)}
-                  stroke="#ef4444"
-                  strokeWidth="1.5"
-                  strokeDasharray="4 2"
-                />
-                <text
-                  x={svgWidth - paddingRight + 5}
-                  y={getYCoord(currentParam.upperCritical) + 3}
-                  fill="#ef4444"
-                  fontSize="9"
-                  fontFamily="monospace"
-                  fontWeight="bold"
-                >
-                  UCL {currentParam.upperCritical}
-                </text>
-
-                {/* Upper Warning Limit Line */}
-                <line
-                  x1={paddingLeft}
-                  y1={getYCoord(currentParam.upperWarning)}
-                  x2={svgWidth - paddingRight}
-                  y2={getYCoord(currentParam.upperWarning)}
-                  stroke="#f59e0b"
-                  strokeWidth="1"
-                  strokeDasharray="3 3"
-                />
-                <text
-                  x={svgWidth - paddingRight + 5}
-                  y={getYCoord(currentParam.upperWarning) + 3}
-                  fill="#f59e0b"
-                  fontSize="9"
-                  fontFamily="monospace"
-                >
-                  UWL {currentParam.upperWarning}
-                </text>
-
-                {/* Ideal Setpoint Line (Dashed) */}
-                <line
-                  x1={paddingLeft}
-                  y1={getYCoord(currentParam.setpoint)}
-                  x2={svgWidth - paddingRight}
-                  y2={getYCoord(currentParam.setpoint)}
-                  stroke="#818cf8"
-                  strokeWidth="2"
-                  strokeDasharray="6 4"
-                />
-                <text
-                  x={svgWidth - paddingRight + 5}
-                  y={getYCoord(currentParam.setpoint) + 3}
-                  fill="#818cf8"
-                  fontSize="9"
-                  fontFamily="monospace"
-                  fontWeight="bold"
-                >
-                  SP {currentParam.setpoint}
-                </text>
-
-                {/* Lower Warning Limit Line */}
-                <line
-                  x1={paddingLeft}
-                  y1={getYCoord(currentParam.lowerWarning)}
-                  x2={svgWidth - paddingRight}
-                  y2={getYCoord(currentParam.lowerWarning)}
-                  stroke="#f59e0b"
-                  strokeWidth="1"
-                  strokeDasharray="3 3"
-                />
-                <text
-                  x={svgWidth - paddingRight + 5}
-                  y={getYCoord(currentParam.lowerWarning) + 3}
-                  fill="#f59e0b"
-                  fontSize="9"
-                  fontFamily="monospace"
-                >
-                  LWL {currentParam.lowerWarning}
-                </text>
-
-                {/* Lower Critical Limit Line */}
-                <line
-                  x1={paddingLeft}
-                  y1={getYCoord(currentParam.lowerCritical)}
-                  x2={svgWidth - paddingRight}
-                  y2={getYCoord(currentParam.lowerCritical)}
-                  stroke="#ef4444"
-                  strokeWidth="1.5"
-                  strokeDasharray="4 2"
-                />
-                <text
-                  x={svgWidth - paddingRight + 5}
-                  y={getYCoord(currentParam.lowerCritical) + 3}
-                  fill="#ef4444"
-                  fontSize="9"
-                  fontFamily="monospace"
-                  fontWeight="bold"
-                >
-                  LCL {currentParam.lowerCritical}
-                </text>
-              </>
+            {visible.length > 0 && (
+              <div className="flex flex-1 flex-wrap items-center gap-1.5 pt-6">
+                {visible.slice(0, 12).map((s) => (
+                  <span key={s.key} className="inline-flex items-center gap-1 rounded-full border bg-white px-2 py-0.5 text-[10px] font-mono font-semibold"
+                    style={{ borderColor: colorByKey.get(s.key), color: colorByKey.get(s.key) }}>
+                    {seriesLabel(s)}
+                    <button type="button" aria-label={`Remove ${seriesLabel(s)}`} onClick={() => toggleKey(s.key)} className="hover:opacity-60">
+                      <X className="h-2.5 w-2.5" weight="bold" />
+                    </button>
+                  </span>
+                ))}
+                {visible.length > 12 && <span className="text-[10px] font-semibold text-slate-500">+{visible.length - 12} more</span>}
+                {visible.length > 20 && (
+                  <span className="text-[10px] text-amber-600">Many batches selected — the chart may be crowded.</span>
+                )}
+              </div>
             )}
+          </div>
+        )}
 
-            {/* X-Axis Ticks (Elapsed Minutes) */}
-            {seriesData[0]?.points.map((pt, idx) => {
-              if (idx % 4 !== 0 && idx !== seriesData[0].points.length - 1) return null;
-              const x = getXCoord(idx);
-              return (
-                <g key={pt.elapsedMin}>
-                  <line
-                    x1={x}
-                    y1={paddingTop + chartAreaHeight}
-                    x2={x}
-                    y2={paddingTop + chartAreaHeight + 5}
-                    stroke="#475569"
-                    strokeWidth="1"
-                  />
-                  <text
-                    x={x}
-                    y={paddingTop + chartAreaHeight + 18}
-                    textAnchor="middle"
-                    fill="#94a3b8"
-                    fontSize="10"
-                    fontFamily="monospace"
-                  >
-                    {pt.timeLabel}
-                  </text>
+        <div className="relative overflow-x-auto rounded-xl border border-slate-100 bg-slate-50/40">
+          {loading && !data && <div className="h-[380px] flex items-center justify-center text-xs text-slate-500">Loading CPP trends…</div>}
+          {!loading && !visible.length && (
+            <div className="h-[380px] flex flex-col items-center justify-center gap-2 text-center px-6">
+              <Info className="h-6 w-6 text-slate-400" />
+              <p className="text-xs font-semibold text-slate-600">
+                {preset === "CUSTOM" && !query ? "Select both start and end dates." : data?.message || (series.length ? "Select at least one batch to plot." : "No data for the selected filters.")}
+              </p>
+            </div>
+          )}
+          {domain && visible.length > 0 && (
+            <svg width={svgWidth} height={svgHeight} className={loading ? "opacity-60" : ""} onMouseLeave={() => setHover(null)}>
+              {yTicks.map((tick) => (
+                <g key={`y${tick}`}>
+                  <line x1={pad.left} x2={svgWidth - pad.right} y1={sy(tick)} y2={sy(tick)} stroke="#e2e8f0" />
+                  <text x={pad.left - 8} y={sy(tick) + 3} textAnchor="end" className="fill-slate-500 text-[10px]">{fmt(tick, 2)}</text>
                 </g>
-              );
-            })}
+              ))}
+              {xTicks.map((tick) => (
+                <text key={`x${tick}`} x={sx(tick)} y={svgHeight - pad.bottom + 18} textAnchor="middle" className="fill-slate-500 text-[10px]">{xTickLabel(tick)}</text>
+              ))}
+              <text x={pad.left + plotW / 2} y={svgHeight - 8} textAnchor="middle" className="fill-slate-400 text-[10px] font-semibold">
+                {xAxis === "timeline" ? "Date (plant time)" : xAxis === "index" ? (isReportSnapshots ? "Lot report #" : "Sample #") : "Elapsed from batch start"}
+              </text>
+              <text transform={`translate(14 ${pad.top + plotH / 2}) rotate(-90)`} textAnchor="middle" className="fill-slate-400 text-[10px] font-semibold">
+                {currentParam?.name}{unit ? ` (${unit})` : ""}
+              </text>
 
-            {/* Series Polylines for each batch */}
-            {seriesData.map((series) => {
-              const polyPoints = series.points
-                .map((pt, idx) => `${getXCoord(idx)},${getYCoord(pt.value)}`)
-                .join(" ");
-
-              return (
-                <g key={series.batchNo}>
-                  <polyline
-                    fill="none"
-                    stroke={series.color}
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    points={polyPoints}
-                  />
-
-                  {/* Interactive Points */}
-                  {series.points.map((pt, idx) => {
-                    const cx = getXCoord(idx);
-                    const cy = getYCoord(pt.value);
-                    const isBreach = pt.status !== "NORMAL";
-
-                    return (
-                      <g key={idx}>
-                        <circle
-                          cx={cx}
-                          cy={cy}
-                          r={isBreach ? 4.5 : 3}
-                          fill={isBreach ? (pt.status === "CRITICAL" ? "#ef4444" : "#f59e0b") : series.color}
-                          stroke="#ffffff"
-                          strokeWidth="1.5"
-                          className="transition-transform hover:scale-150 cursor-pointer"
-                          onMouseEnter={() => {
-                            setHoveredPoint({
-                              batchNo: series.batchNo,
-                              point: pt,
-                              x: cx,
-                              y: cy,
-                              color: series.color,
-                            });
-                          }}
-                        />
-                      </g>
-                    );
-                  })}
+              {limitLines.filter((l) => typeof l.value === "number").map((l) => (
+                <g key={l.label}>
+                  <line x1={pad.left} x2={svgWidth - pad.right} y1={sy(l.value as number)} y2={sy(l.value as number)} stroke={l.color} strokeDasharray={l.dash} strokeWidth={1.25} />
+                  <text x={svgWidth - pad.right - 4} y={sy(l.value as number) - 4} textAnchor="end" className="text-[10px] font-bold" fill={l.color}>{l.label} {fmt(l.value)}</text>
                 </g>
-              );
-            })}
-          </svg>
+              ))}
 
-          {/* Interactive Tooltip Overlay */}
-          {hoveredPoint && (
-            <div
-              className="absolute z-20 pointer-events-none p-3 rounded-xl bg-slate-800 text-white shadow-xl border border-slate-700 text-xs space-y-1"
-              style={{
-                left: `${Math.min(hoveredPoint.x + 15, svgWidth - 180)}px`,
-                top: `${Math.max(hoveredPoint.y - 60, 10)}px`,
-              }}
-            >
-              <div className="flex items-center gap-2 border-b border-slate-700 pb-1 font-mono font-bold">
-                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: hoveredPoint.color }} />
-                <span>{hoveredPoint.batchNo}</span>
-                <span className="text-slate-400 font-normal">({hoveredPoint.point.timeLabel})</span>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-slate-400">Value:</span>
-                <strong className="font-mono text-white text-sm">
-                  {hoveredPoint.point.value} {currentParam?.unit}
-                </strong>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-slate-400">Setpoint:</span>
-                <span className="font-mono text-indigo-300">
-                  {currentParam?.setpoint} {currentParam?.unit}
-                </span>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-slate-400">Status:</span>
-                <span
-                  className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                    hoveredPoint.point.status === "NORMAL"
-                      ? "bg-emerald-950 text-emerald-300 border border-emerald-800"
-                      : hoveredPoint.point.status === "WARNING"
-                      ? "bg-amber-950 text-amber-300 border border-amber-800"
-                      : "bg-rose-950 text-rose-300 border border-rose-800"
-                  }`}
-                >
-                  {hoveredPoint.point.status}
-                </span>
-              </div>
+              {data?.limitsVary && visible.map((s) => {
+                const color = colorByKey.get(s.key);
+                return s.points.map((p, i) => {
+                  const lim = p.limits ?? s.limits;
+                  const x = sx(xOf(p, i));
+                  return [lim?.lowerCritical, lim?.upperCritical].filter((v): v is number => typeof v === "number").map((v, j) => (
+                    <line key={`${s.key}-${i}-${j}`} x1={x - 8} x2={x + 8} y1={sy(v)} y2={sy(v)} stroke={color} strokeWidth={2} opacity={0.55} />
+                  ));
+                });
+              })}
+
+              {visible.map((s) => {
+                const color = colorByKey.get(s.key) ?? BATCH_COLORS[0];
+                const path = s.points.map((p, i) => `${i ? "L" : "M"}${sx(xOf(p, i))},${sy(p.value)}`).join(" ");
+                return (
+                  <g key={s.key}>
+                    {currentParam?.hasRange && s.points.map((p, i) =>
+                      typeof p.min === "number" && typeof p.max === "number" ? (
+                        <line key={`r${i}`} x1={sx(xOf(p, i))} x2={sx(xOf(p, i))} y1={sy(p.min)} y2={sy(p.max)} stroke={color} strokeWidth={1} opacity={0.4} />
+                      ) : null,
+                    )}
+                    <path d={path} fill="none" stroke={color} strokeWidth={2} />
+                    {s.points.map((p, i) => {
+                      const x = sx(xOf(p, i));
+                      const y = sy(p.value);
+                      const ring = p.status === "CRITICAL" ? "#e11d48" : p.status === "WARNING" ? "#d97706" : color;
+                      return (
+                        <circle key={i} cx={x} cy={y} r={p.status === "OK" || p.status === "NO_LIMITS" ? 3.5 : 5}
+                          fill={p.status === "OK" || p.status === "NO_LIMITS" ? color : "#fff"} stroke={ring} strokeWidth={2}
+                          className="cursor-pointer" onMouseEnter={() => setHover({ series: s, point: p, x, y, color })} />
+                      );
+                    })}
+                  </g>
+                );
+              })}
+            </svg>
+          )}
+          {hover && (
+            <div className="pointer-events-none absolute z-10 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] shadow-lg"
+              style={{ left: Math.min(hover.x + 12, svgWidth - 220), top: Math.max(hover.y - 70, 4) }}>
+              <p className="font-mono font-bold" style={{ color: hover.color }}>{seriesLabel(hover.series)}</p>
+              {hover.point.label && <p className="text-slate-500">{hover.point.label}</p>}
+              <p className="text-slate-500">{fmtTime(hover.point.t)} · {fmtElapsed(hover.point.elapsedMin)}</p>
+              <p className="mt-1 font-semibold text-slate-900">
+                {fmt(hover.point.value)} {unit}
+                {typeof hover.point.min === "number" && typeof hover.point.max === "number" && (
+                  <span className="font-normal text-slate-500"> (min {fmt(hover.point.min)} · max {fmt(hover.point.max)})</span>
+                )}
+              </p>
+              <span className={`mt-1 inline-block rounded-full border px-2 py-0.5 text-[10px] font-bold ${STATUS_STYLE[hover.point.status]}`}>
+                {hover.point.status.replace("_", " ")}
+              </span>
             </div>
           )}
         </div>
       </div>
 
-      {/* STATISTICAL COMPARISON TABLE */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
-        <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-          <div>
-            <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
-              <SlidersHorizontal className="h-4 w-4 text-indigo-600" />
-              Batch Statistical Comparison & Limits Adherence
-            </h3>
-            <p className="text-[11px] text-slate-400 mt-0.5">
-              Comparative statistics for {currentParam?.name} across all selected batches
-            </p>
+      {visible.length > 0 && (
+        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+          <div className="px-5 py-3 border-b border-slate-100 flex items-center gap-2">
+            <CheckCircle className="h-4 w-4 text-indigo-600" />
+            <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wider">Batch statistics</h2>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-xs">
+              <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500">
+                <tr>
+                  {["Batch", "Product", "Started", isReportSnapshots ? "Lots" : "Points", "Mean", "Min", "Max", "SD", "Limits (LCL–UCL)", "In limits", "Warn", "Crit", "Cpk"].map((h) => (
+                    <th key={h} className="px-3 py-2 text-left font-bold whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {visible.map((s) => (
+                  <tr key={s.key} className="hover:bg-slate-50">
+                    <td className="px-3 py-2 font-mono font-semibold whitespace-nowrap" style={{ color: colorByKey.get(s.key) }}>{seriesLabel(s)}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">{s.productName || "—"}</td>
+                    <td className="px-3 py-2 whitespace-nowrap text-slate-500">{fmtTime(s.startAt)}</td>
+                    <td className="px-3 py-2">{s.stats.count}</td>
+                    <td className="px-3 py-2">{fmt(s.stats.mean)}</td>
+                    <td className="px-3 py-2">{fmt(s.stats.min)}</td>
+                    <td className="px-3 py-2">{fmt(s.stats.max)}</td>
+                    <td className="px-3 py-2">{fmt(s.stats.sd, 3)}</td>
+                    <td className="px-3 py-2 whitespace-nowrap text-slate-500">
+                      {s.limits ? `${fmt(s.limits.lowerCritical)} – ${fmt(s.limits.upperCritical)}` : "—"}
+                    </td>
+                    <td className="px-3 py-2">{s.stats.inLimitPct === null || s.stats.inLimitPct === undefined ? "—" : `${fmt(s.stats.inLimitPct, 1)}%`}</td>
+                    <td className={`px-3 py-2 font-semibold ${s.stats.warningCount ? "text-amber-600" : "text-slate-400"}`}>{s.stats.warningCount}</td>
+                    <td className={`px-3 py-2 font-semibold ${s.stats.criticalCount ? "text-rose-600" : "text-slate-400"}`}>{s.stats.criticalCount}</td>
+                    <td className={`px-3 py-2 font-semibold ${typeof s.stats.cpk === "number" ? (s.stats.cpk >= 1.33 ? "text-emerald-600" : s.stats.cpk >= 1 ? "text-amber-600" : "text-rose-600") : "text-slate-400"}`}>
+                      {fmt(s.stats.cpk)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
-
-        <div className="overflow-x-auto border border-slate-200 rounded-xl">
-          <table className="w-full text-left text-xs text-slate-700">
-            <thead className="bg-slate-50 text-[11px] font-bold text-slate-600 uppercase tracking-wider border-b border-slate-200">
-              <tr>
-                <th className="py-2.5 px-3.5">Batch No.</th>
-                <th className="py-2.5 px-3.5 text-right">Setpoint</th>
-                <th className="py-2.5 px-3.5 text-right">Min Value</th>
-                <th className="py-2.5 px-3.5 text-right">Max Value</th>
-                <th className="py-2.5 px-3.5 text-right">Mean (Avg)</th>
-                <th className="py-2.5 px-3.5 text-center">Tolerance Breaches</th>
-                <th className="py-2.5 px-3.5 text-center">Outcome</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 font-mono">
-              {seriesData.map((s) => (
-                <tr key={s.batchNo} className="hover:bg-slate-50 transition">
-                  <td className="py-2.5 px-3.5 font-bold text-slate-900 flex items-center gap-2">
-                    <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: s.color }} />
-                    <span>{s.batchNo}</span>
-                  </td>
-                  <td className="py-2.5 px-3.5 text-right text-slate-600 font-bold">
-                    {currentParam?.setpoint} {currentParam?.unit}
-                  </td>
-                  <td className="py-2.5 px-3.5 text-right text-slate-800">
-                    {s.min} {currentParam?.unit}
-                  </td>
-                  <td className="py-2.5 px-3.5 text-right text-slate-800">
-                    {s.max} {currentParam?.unit}
-                  </td>
-                  <td className="py-2.5 px-3.5 text-right font-bold text-indigo-600">
-                    {s.mean} {currentParam?.unit}
-                  </td>
-                  <td className="py-2.5 px-3.5 text-center">
-                    {s.breaches === 0 ? (
-                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                        <CheckCircle className="h-3.5 w-3.5 text-emerald-600" weight="fill" />
-                        0 Breaches
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
-                        <WarningCircle className="h-3.5 w-3.5 text-amber-600" weight="fill" />
-                        {s.breaches} Breaches
-                      </span>
-                    )}
-                  </td>
-                  <td className="py-2.5 px-3.5 text-center font-sans">
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                      In Specification
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      )}
     </div>
   );
 }

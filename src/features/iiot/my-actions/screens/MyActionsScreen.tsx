@@ -135,8 +135,12 @@ export default function MyActionsScreen() {
       if (myActionsList && myActionsList.length > 0) {
         const extracted: MyActionItem[] = [];
         const initialCache: Record<string, AllowedWorkflowAction[]> = {};
+        const seenIds = new Set<string>();
 
         for (const item of myActionsList) {
+          if (!item.id || seenIds.has(item.id)) continue;
+          seenIds.add(item.id);
+
           const itemActions = deduplicateAllowedActions(item.allowedActions || []);
           initialCache[item.id] = itemActions;
 
@@ -697,10 +701,10 @@ export default function MyActionsScreen() {
                   </td>
                 </tr>
               ) : (
-                paginatedItems.map((item) => {
+                paginatedItems.map((item, index) => {
                   return (
                     <tr
-                      key={item.id}
+                      key={item.id ? `${item.id}-${index}` : `row-${index}`}
                       className="transition hover:bg-slate-50/80"
                     >
                       <td className="py-2.5 px-3 font-mono font-medium text-slate-900">

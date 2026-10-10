@@ -828,8 +828,8 @@ export default function DeferredBatchesScreen() {
                   </td>
                 </tr>
               ) : (
-                paginatedItems.map((item) => (
-                  <tr key={item.id} className="hover:bg-slate-50/80 transition group">
+                paginatedItems.map((item, index) => (
+                  <tr key={item.id ? `${item.id}-${index}` : `row-${index}`} className="hover:bg-slate-50/80 transition group">
                     <td className="py-3 px-4 font-mono font-medium text-slate-900">
                       <div className="font-bold text-slate-900">{item.batchNo}</div>
                       <div className="text-[11px] text-slate-500 font-sans">{item.lotNo}</div>

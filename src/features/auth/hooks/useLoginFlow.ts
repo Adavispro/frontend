@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ApiError } from "@/api";
 import { initiateLogin, login } from "../api";
 import { invalidateLoginContext } from "./useCurrentUser";
+import { sessionInactivityManager } from "@/services/session/sessionInactivityManager";
 import {
   firstSchemaError,
   loginInitiateRequestSchema,
@@ -152,11 +153,8 @@ export function useLoginFlow() {
       }
 
       await login(parsedRequest.data);
-      invalidateLoginContext();
-      if (typeof window !== "undefined") {
-        window.localStorage.clear();
-        window.sessionStorage.clear();
-      }
+      sessionInactivityManager.resetSession();
+      invalidateLoginContext({ refetch: true });
       router.push(ROUTES.modules);
       router.refresh();
     } catch (error) {

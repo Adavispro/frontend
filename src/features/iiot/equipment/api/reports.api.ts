@@ -18,6 +18,8 @@ const IIOT_PROXY_ROOT = "/api/iiot";
 interface PagedFetchOptions {
   limit?: number;
   maxPages?: number;
+  requireComplete?: boolean;
+  skipPlantSelection?: boolean;
   cursorField?: string;
   cursorQueryParam?: string;
 }
@@ -30,10 +32,11 @@ async function getIiotResource<TSchema extends z.ZodTypeAny>(
   schema: TSchema,
   query?: QueryParams,
   signal?: AbortSignal,
+  skipPlantSelection = false,
 ): Promise<z.infer<TSchema>> {
   const response = await apiClient<BackendApiResponse<unknown>>(
     withQuery(resourcePath(path), query),
-    { signal },
+    { signal, skipPlantSelection },
   );
 
   return parseApiData(
@@ -81,6 +84,7 @@ async function getPagedIiotResource<TSchema extends z.ZodArray<z.ZodTypeAny>>(
         ...(cursorField && cursorValue ? { [cursorQueryParam]: cursorValue } : {}),
       },
       signal,
+      options.skipPlantSelection,
     );
 
     const first = page[0] ?? null;
@@ -88,6 +92,7 @@ async function getPagedIiotResource<TSchema extends z.ZodArray<z.ZodTypeAny>>(
     const pageSignature = `${page.length}:${JSON.stringify(first)}:${JSON.stringify(last)}`;
 
     if (index > 0 && pageSignature === previousPageSignature) {
+      if (options.requireComplete) throw new Error("The IIOT service repeated a page; complete OEE data could not be loaded.");
       break;
     }
     previousPageSignature = pageSignature;
@@ -97,6 +102,9 @@ async function getPagedIiotResource<TSchema extends z.ZodArray<z.ZodTypeAny>>(
     if (page.length < pageSize) {
       break;
     }
+    if (options.requireComplete && index === maxPages - 1) {
+      throw new Error("The IIOT report exceeded the pagination limit; narrow the data scope before calculating OEE.");
+    }
 
     if (!cursorField) {
       offset += pageSize;
@@ -104,7 +112,13 @@ async function getPagedIiotResource<TSchema extends z.ZodArray<z.ZodTypeAny>>(
     }
 
     const lastRow = page[page.length - 1] as Record<string, unknown> | undefined;
-    const lastCursorRaw = lastRow?.[cursorField];
+    const lastCursorRaw =
+      lastRow?.[cursorField] ??
+      lastRow?.occurred_time ??
+      lastRow?.event_time ??
+      lastRow?.timestamp ??
+      lastRow?.observedAt ??
+      lastRow?.eventAt;
     const lastCursorTime = new Date(String(lastCursorRaw ?? "")).getTime();
     if (!Number.isFinite(lastCursorTime)) {
       break;
@@ -123,12 +137,14 @@ async function getPagedIiotResource<TSchema extends z.ZodArray<z.ZodTypeAny>>(
 export const getEquipmentLiveStatuses = (
   query: QueryParams = {},
   signal?: AbortSignal,
+  options: { skipPlantSelection?: boolean } = {},
 ) =>
   getIiotResource(
     "equipment-live-status",
     equipmentLiveStatusListSchema,
     query,
     signal,
+    options.skipPlantSelection,
   );
 
 export const getEquipmentLiveStatus = (
@@ -249,12 +265,14 @@ export const getCriticalParameters = (
 export const getCriticalParameterLimits = (
   query: QueryParams = {},
   signal?: AbortSignal,
+  options: { skipPlantSelection?: boolean } = {},
 ) =>
   getIiotResource(
     "critical-parameter-limits",
     criticalParameterLimitListSchema,
     query,
     signal,
+    options.skipPlantSelection,
   );
 
 export const acknowledgeAlarmEvent = (
@@ -694,7 +712,9 @@ export const downloadBatchPdfBlob = async (
   const downloadUrl = window.URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = downloadUrl;
-  link.download = `Batch_Dossier_${batchNo}${lotNo ? `_${lotNo}` : ""}.pdf`;
+  const disposition = response.headers.get("Content-Disposition");
+  const serverFileName = disposition?.match(/filename="([^"]+)"/)?.[1];
+  link.download = serverFileName || `Batch_Dossier_${batchNo}${lotNo ? `_${lotNo}` : ""}.pdf`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
@@ -899,4 +919,3 @@ export async function getIiotTopology(signal?: AbortSignal) {
   }
   return { plants: [], blocks: [], areas: [], rooms: [] };
 }
-

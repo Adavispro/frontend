@@ -422,24 +422,64 @@ export const normalizeAlarmRows = (
   records: AlarmEventRecord[],
 ): AlarmRow[] =>
   records
-    .filter((record) => text(record.event?.eventCategory, "").toUpperCase() === "ALARM")
-    .map((record) => ({
-      id: text((record as Record<string, unknown>)._id, ""),
-      occurredAtIso: text(record.eventAt, ""),
-      date: formatDate(record.eventAt),
-      metric: text(record.event?.eventCode ?? record.event?.eventText),
-      params: text(record.source?.tableName),
-      batchNo: text(record.meta?.batchNo),
-      time: formatTimeMultiline(record.eventAt),
-      severity: normalizeSeverity(record.event?.severity),
-      alarm: text(record.event?.eventText),
-      currentValue: "-",
-      threshold: "-",
-      status: normalizeAlarmStatus(record.event?.eventState),
-      acknowledgedBy: text(record.event?.acknowledgedBy),
-      acknowledgedAt: formatDateTime(record.event?.acknowledgedAt),
-      requiresAcknowledge: normalizeAlarmStatus(record.event?.eventState) === "Active",
-    }));
+    .filter((record) => {
+      const rec = record as Record<string, unknown>;
+      const cat = text(record.event?.eventCategory || rec.eventCategory || rec.category || rec.event_category, "").toUpperCase();
+      if (cat === "ALARM") return true;
+      if (rec.alarm_name || rec.alarmName || rec.Alarm_Name) return true;
+      return cat !== "EVENT";
+    })
+    .map((record) => {
+      const rec = record as Record<string, unknown>;
+      const meta = (rec.meta || {}) as Record<string, unknown>;
+      const ev = (rec.event || {}) as Record<string, unknown>;
+      const src = (rec.source || {}) as Record<string, unknown>;
+      const timeStr = text(
+        rec.occurred_time ||
+        rec.Occurred_Time ||
+        rec.occurredTime ||
+        rec.event_time ||
+        rec.eventAt ||
+        rec.timestamp ||
+        meta.occurred_time ||
+        meta.event_time ||
+        ev.occurred_time ||
+        ev.occurredTime ||
+        ev.eventAt,
+        ""
+      );
+      const alarmName = text(
+        rec.alarm_name ||
+        rec.Alarm_Name ||
+        rec.alarmName ||
+        meta.alarm_name ||
+        meta.alarmName ||
+        ev.alarm_name ||
+        ev.alarmName ||
+        ev.eventText ||
+        rec.description ||
+        rec.msg_text ||
+        "ALARM"
+      );
+      const statusRaw = rec.status || ev.eventState || "Active";
+      return {
+        id: text(rec._id, ""),
+        occurredAtIso: timeStr,
+        date: formatDate(timeStr),
+        metric: text(ev.eventCode ?? alarmName),
+        params: text(src.tableName || meta.equipmentCode || meta.equipment_code),
+        batchNo: text(meta.batchNo || rec.batchNo),
+        time: formatTimeMultiline(timeStr),
+        severity: normalizeSeverity(rec.severity || ev.severity),
+        alarm: alarmName,
+        currentValue: "-",
+        threshold: "-",
+        status: normalizeAlarmStatus(statusRaw),
+        acknowledgedBy: text(rec.acknowledgedBy || ev.acknowledgedBy || "-"),
+        acknowledgedAt: formatDateTime(rec.acknowledgedAt || ev.acknowledgedAt || ""),
+        requiresAcknowledge: normalizeAlarmStatus(statusRaw) === "Active",
+      };
+    });
 
 const normalizeEventType = (value: unknown): EventType => {
   const eventCode = text(value, "").toUpperCase();
@@ -450,20 +490,42 @@ export const normalizeEventRows = (
   records: AlarmEventRecord[],
 ): EventRow[] =>
   records
-    .filter((record) => text(record.event?.eventCategory, "").toUpperCase() !== "ALARM")
-    .map((record) => ({
-      occurredAtIso: text(record.eventAt, ""),
-      date: formatDate(record.eventAt),
-      metric: text(record.event?.eventCode ?? record.event?.eventText),
-      params: text(record.source?.tableName),
-      batchNo: text(record.meta?.batchNo),
-      time: formatTimeMultiline(record.eventAt),
-      eventType: normalizeEventType(record.event?.eventCode),
-      severity: normalizeEventSeverity(record.event?.severity),
-      source: text(record.source?.tableName),
-      description: text(record.event?.eventText),
-      acknowledgedBy: "-",
-    }));
+    .filter((record) => {
+      const rec = record as Record<string, unknown>;
+      const cat = text(record.event?.eventCategory || rec.eventCategory || rec.category || rec.event_category, "").toUpperCase();
+      if (cat === "EVENT") return true;
+      if (rec.action || rec.actionName || rec.object_id) return true;
+      return false;
+    })
+    .map((record) => {
+      const rec = record as Record<string, unknown>;
+      const meta = (rec.meta || {}) as Record<string, unknown>;
+      const ev = (rec.event || {}) as Record<string, unknown>;
+      const src = (rec.source || {}) as Record<string, unknown>;
+      const timeStr = text(
+        rec.dt ||
+        rec.time_stamp ||
+        rec.event_time ||
+        rec.eventAt ||
+        rec.timestamp ||
+        meta.event_time ||
+        ev.eventAt,
+        ""
+      );
+      return {
+        occurredAtIso: timeStr,
+        date: formatDate(timeStr),
+        metric: text(ev.eventCode ?? rec.object_id ?? ev.eventText),
+        params: text(src.tableName || meta.equipmentCode || meta.equipment_code),
+        batchNo: text(meta.batchNo || rec.batchNo),
+        time: formatTimeMultiline(timeStr),
+        eventType: normalizeEventType(ev.eventCode || rec.action),
+        severity: normalizeEventSeverity(rec.severity || ev.severity),
+        source: text(src.tableName || rec.object_id || "Equipment Event"),
+        description: text(rec.description || rec.actionName || ev.eventText || "Equipment operation event"),
+        acknowledgedBy: text(rec.user_id || rec.userId || rec.userName || "-"),
+      };
+    });
 
 export const normalizeBatchSummary = (summaries: BatchSummary[]) => {
   const latest = [...summaries]

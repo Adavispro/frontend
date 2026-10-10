@@ -30,11 +30,6 @@ import type {
   CppRecord,
 } from "@/features/iiot/equipment/schemas/reports.schema";
 import { resolveEquipmentInfo } from "@/features/iiot/utils/equipment-resolver";
-import { RMG_ALARM_SUMMARY_MOCK } from "../batch-details/data/rmgMockData";
-import { FBD_ALARM_SUMMARY_MOCK } from "../batch-details/data/fbdMockData";
-import { BLE_ALARM_SUMMARY_MOCK } from "../batch-details/data/bleMockData";
-import { COMP_ALARM_SUMMARY_MOCK } from "../batch-details/data/compMockData";
-import { COAT_ALARM_SUMMARY_MOCK } from "../batch-details/data/coatMockData";
 
 export interface BatchDetailModalProps {
   isOpen: boolean;
@@ -174,19 +169,10 @@ export default function BatchDetailModal({
         ]);
 
         if (auditRes.status === "fulfilled") setAuditEvents(auditRes.value);
-        const eqInfo = resolveEquipmentInfo(equipmentCode);
-        if (eqInfo.type === "RMG") {
-          setAlarms(RMG_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[]);
-        } else if (eqInfo.type === "FBD") {
-          setAlarms(FBD_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[]);
-        } else if (eqInfo.type === "BLE") {
-          setAlarms(BLE_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[]);
-        } else if (eqInfo.type === "COMP") {
-          setAlarms(COMP_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[]);
-        } else if (eqInfo.type === "COAT") {
-          setAlarms(COAT_ALARM_SUMMARY_MOCK as unknown as AlarmEventRecord[]);
-        } else if (alarmsRes.status === "fulfilled") {
-          setAlarms(alarmsRes.value);
+        if (alarmsRes.status === "fulfilled") {
+          setAlarms(alarmsRes.value || []);
+        } else {
+          setAlarms([]);
         }
         if (cppRes.status === "fulfilled") setCppData(cppRes.value);
       } finally {
@@ -258,39 +244,98 @@ export default function BatchDetailModal({
     {
       key: "alarmName",
       header: "Alarm Name",
-      render: (row) =>
-        toText(
-          (row as Record<string, unknown>).alarmName ||
-            (row as Record<string, unknown>).alarm_name ||
-            row.message ||
-            "-",
-        ),
+      render: (row) => {
+        const r = row as Record<string, unknown>;
+        const meta = (r.meta || {}) as Record<string, unknown>;
+        const ev = (r.event || {}) as Record<string, unknown>;
+        return toText(
+          r.alarm_name ||
+          r.Alarm_Name ||
+          r.alarmName ||
+          meta.alarm_name ||
+          meta.alarmName ||
+          r.description ||
+          r.msg_text ||
+          r.message ||
+          ev.alarm_name ||
+          ev.alarmName ||
+          ev.text ||
+          "-"
+        );
+      },
     },
     {
       key: "occurredTime",
       header: "Occured Time",
-      render: (row) =>
-        toDisplayDate(
-          (row as Record<string, unknown>).occurredTime ||
-            (row as Record<string, unknown>).occurred_time ||
-            row.eventAt,
-        ),
+      render: (row) => {
+        const r = row as Record<string, unknown>;
+        const meta = (r.meta || {}) as Record<string, unknown>;
+        const ev = (r.event || {}) as Record<string, unknown>;
+        const t = toText(
+          r.occurred_time ||
+          r.Occurred_Time ||
+          r.occurredTime ||
+          r.event_time ||
+          r.eventAt ||
+          r.timestamp ||
+          meta.occurred_time ||
+          meta.event_time ||
+          ev.occurred_time ||
+          ev.occurredTime ||
+          ""
+        );
+        return t ? toDisplayDate(t) : "-";
+      },
     },
     {
       key: "resolvedTime",
       header: "Resolved Time",
-      render: (row) =>
-        toDisplayDate(
-          (row as Record<string, unknown>).resolvedTime ||
-            (row as Record<string, unknown>).resolved_time ||
-            "-",
-        ),
+      render: (row) => {
+        const r = row as Record<string, unknown>;
+        const meta = (r.meta || {}) as Record<string, unknown>;
+        const ev = (r.event || {}) as Record<string, unknown>;
+        const t = toText(
+          r.resolved_time ||
+          r.Resolved_Time ||
+          r.resolvedTime ||
+          r.resolvedAt ||
+          r.recovery_time ||
+          meta.resolved_time ||
+          ev.resolved_time ||
+          ev.resolvedTime ||
+          ""
+        );
+        return t && t !== "-" ? toDisplayDate(t) : "-";
+      },
     },
     {
       key: "duration",
       header: "Duration (HH:MM:SS)",
-      render: (row) =>
-        toText((row as Record<string, unknown>).duration || "-"),
+      render: (row) => {
+        const r = row as Record<string, unknown>;
+        const meta = (r.meta || {}) as Record<string, unknown>;
+        const ev = (r.event || {}) as Record<string, unknown>;
+        const d = toText(
+          r.duration ||
+          r.Duration ||
+          r.duration_sec ||
+          r.durationSec ||
+          meta.duration ||
+          ev.duration ||
+          ""
+        );
+        if (d && d !== "-") {
+          if (/^\d+$/.test(d)) {
+            const diffSec = Number(d);
+            const hrs = Math.floor(diffSec / 3600);
+            const mins = Math.floor((diffSec % 3600) / 60);
+            const secs = diffSec % 60;
+            return `${String(hrs).padStart(2, "0")}:${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+          }
+          return d;
+        }
+        return "-";
+      },
     },
   ];
 
