@@ -1,0 +1,14 @@
+@'
+import win32com.client
+
+conn = win32com.client.Dispatch("ADODB.Connection")
+try:
+    conn.Open(
+        r"Provider=Microsoft.ACE.OLEDB.16.0;"
+        r"Data Source=C:\Data\SawcData.mdb;Mode=Read;"
+    )
+    print("SUCCESS: MDB driver is available and the file opens.")
+finally:
+    if conn.State:
+        conn.Close()
+'@ | python -
